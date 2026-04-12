@@ -1,12 +1,19 @@
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import urllib.parse
+from dotenv import load_dotenv
 
 # Find the project root (2 levels up from app/core)
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
 env_path = os.path.join(PROJECT_ROOT, ".env")
 
+# CRITICAL FIX: Explicitly load and override environment variables from the .env file.
+# This prevents stale or corrupted system-level variables from polluting the settings.
+load_dotenv(env_path, override=True)
+
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=env_path, env_file_encoding='utf-8', extra='ignore')
+
     PROJECT_NAME: str = "AlphaEarth Training Management API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/ae"
@@ -34,10 +41,6 @@ class Settings(BaseSettings):
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         encoded_password = urllib.parse.quote_plus(self.POSTGRES_PASSWORD)
         return f"postgresql://{self.POSTGRES_USER}:{encoded_password}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-
-    class Config:
-        env_file = env_path
-        extra = "ignore"
 
 settings = Settings()
 
