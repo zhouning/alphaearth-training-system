@@ -34,8 +34,8 @@ class DataFusionPipeline:
     """
     AlphaEarth 核心预处理管线：支持公开与私有卫星数据的时空融合、裁切与 10m 归一化。
     """
-    def __init__(self, work_dir: str = "D:/adk/data_agent/weights/raw_data"):
-        self.work_dir = work_dir
+    def __init__(self, work_dir: str = None):
+        self.work_dir = work_dir or settings.RAW_DATA_DIR
         os.makedirs(self.work_dir, exist_ok=True)
         self.patch_size = 128
         self.target_res = 10.0 # AlphaEarth 要求的 10 米分辨率

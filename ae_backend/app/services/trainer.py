@@ -193,7 +193,9 @@ class AlphaEarthTrainer:
         # We only pass trainable parameters to the optimizer (backbone is frozen)
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         self.optimizer = optim.Adam(trainable_params, lr=1e-3)
-        self.dataset = RealPatchDataset("D:/adk/data_agent/weights/raw_data/dataset_" + dataset_id)
+        
+        dataset_path = os.path.join(settings.RAW_DATA_DIR, "dataset_" + dataset_id) if not dataset_id.startswith('memory_') else dataset_id
+        self.dataset = RealPatchDataset(dataset_path)
         self.dataloader = DataLoader(self.dataset, batch_size=16, shuffle=True)
         
     async def _send_ws(self, msg_type, **kwargs):
@@ -316,7 +318,7 @@ class AlphaEarthTrainer:
                 self._update_db_status(JobStatus.TRAINING, metrics=all_metrics, current_epoch=epoch)
 
         # Save weights
-        weight_path = f"D:/adk/data_agent/weights/alphaearth_local_{self.job_id}.pt"
+        weight_path = os.path.join(settings.WEIGHTS_DIR, f"alphaearth_local_{self.job_id}.pt")
         os.makedirs(os.path.dirname(weight_path), exist_ok=True)
         torch.save(self.model.state_dict(), weight_path)
         

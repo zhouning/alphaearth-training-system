@@ -95,7 +95,8 @@ def evaluate_model(model_id: str, db: Session = Depends(get_db)):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PrithviAlphaEarthEncoder().to(device)
     
-    weight_path = f"D:/adk/data_agent/weights/alphaearth_local_{model_record.job_id}.pt"
+    from app.core.config import settings
+    weight_path = os.path.join(settings.WEIGHTS_DIR, f"alphaearth_local_{model_record.job_id}.pt")
     if os.path.exists(weight_path):
         try:
             model.load_state_dict(torch.load(weight_path, map_location=device, weights_only=True))
@@ -107,7 +108,8 @@ def evaluate_model(model_id: str, db: Session = Depends(get_db)):
     model.eval()
     
     # Load dataset
-    dataset = RealPatchDataset("D:/adk/data_agent/weights/raw_data/dataset_" + job.dataset_id)
+    dataset_path = os.path.join(settings.RAW_DATA_DIR, "dataset_" + job.dataset_id) if not job.dataset_id.startswith('memory_') else job.dataset_id
+    dataset = RealPatchDataset(dataset_path)
     dataloader = DataLoader(dataset, batch_size=16, shuffle=False)
     
     loss_fn_rec = torch.nn.MSELoss()
