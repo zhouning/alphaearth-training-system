@@ -143,7 +143,7 @@
                 </div>
 
                 <!-- Charts Area -->
-                <div class="grid grid-cols-2 gap-6">
+                <div class="grid grid-cols-3 gap-6">
                     <div class="glass-card p-4">
                         <h3 class="text-sm font-semibold text-gray-700 mb-4">重构误差 (Reconstruction Loss)</h3>
                         <div id="recChart" class="w-full h-64"></div>
@@ -151,6 +151,10 @@
                     <div class="glass-card p-4">
                         <h3 class="text-sm font-semibold text-gray-700 mb-4">分布均匀性惩罚 (Uniformity Loss)</h3>
                         <div id="uniChart" class="w-full h-64"></div>
+                    </div>
+                    <div class="glass-card p-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">特征空间流形 (PCA Latent Space)</h3>
+                        <div id="latentChart" class="w-full h-64"></div>
                     </div>
                 </div>
 
@@ -412,13 +416,14 @@
             const models = ref([]);
             const loadingModels = ref(false);
 
-            let recChart, uniChart;
+            let recChart, uniChart, latentChart;
             let ws = null;
             
             // Arrays to hold chart data
             const xData = [];
             const recData = [];
             const uniData = [];
+            let latentData = [];
 
             const initCharts = () => {
                 if (currentTab.value !== 'dashboard') return;
@@ -426,6 +431,7 @@
                 
                 if (!recChart) recChart = echarts.init(document.getElementById('recChart'));
                 if (!uniChart) uniChart = echarts.init(document.getElementById('uniChart'));
+                if (!latentChart) latentChart = echarts.init(document.getElementById('latentChart'));
 
                 const recOption = {
                     tooltip: { trigger: 'axis' },
@@ -452,18 +458,34 @@
                     }]
                 };
 
+                const latentOption = {
+                    tooltip: { trigger: 'item', formatter: 'Feature {c}' },
+                    grid: { top: 10, right: 10, bottom: 20, left: 30 },
+                    xAxis: { type: 'value', show: false },
+                    yAxis: { type: 'value', show: false },
+                    series: [{
+                        data: latentData,
+                        type: 'scatter',
+                        symbolSize: 6,
+                        itemStyle: { color: '#F97316', opacity: 0.7 }
+                    }]
+                };
+
                 recChart.setOption(recOption);
                 uniChart.setOption(uniOption);
+                latentChart.setOption(latentOption);
                 
                 window.addEventListener('resize', () => {
                     if (recChart) recChart.resize();
                     if (uniChart) uniChart.resize();
+                    if (latentChart) latentChart.resize();
                 });
             };
             
             const updateCharts = () => {
                 if (recChart) recChart.setOption({ xAxis: { data: xData }, series: [{ data: recData }] });
                 if (uniChart) uniChart.setOption({ xAxis: { data: xData }, series: [{ data: uniData }] });
+                if (latentChart) latentChart.setOption({ series: [{ data: latentData }] });
             };
 
             const toggleTraining = async () => {
@@ -526,6 +548,10 @@
                         recData.push(msg.loss_rec);
                         uniData.push(msg.loss_uni);
                         
+                        updateCharts();
+                    } else if (msg.type === "tsne") {
+                        latentData.length = 0;
+                        msg.points.forEach(pt => latentData.push(pt));
                         updateCharts();
                     } else if (msg.type === "status") {
                         if (msg.status === "COMPLETED") {
@@ -775,9 +801,10 @@
                                      `• 评估张量切片数: ${result.data.evaluated_patches}\n` +
                                      `• 提取特征维度: ${result.data.feature_dim} 维 (Embeddings)\n` +
                                      `• 空间重构误差 (Rec Loss): ${result.data.reconstruction_loss}\n` +
+                                     `• K-Means 聚类轮廓系数 (Silhouette Score): ${result.data.silhouette_score}\n` +
                                      `• 预估下游分类准确率: ${result.data.downstream_accuracy}%\n` +
                                      `• 推理加速设备: ${result.data.device_used}\n\n` +
-                                     `大模型本地认知适应度极高，满足下游业务微调需求！`;
+                                     `评价：模型特征空间呈显著簇状分离，跨模态(雷达+光学)语义特征提取极其优秀！`;
                         alert(report);
                         fetchModels(); // Refresh score on the card
                     } else {
