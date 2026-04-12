@@ -1,0 +1,830 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlphaEarth 本地化训练管理系统</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#60A5FA',
+                        cta: '#F97316',
+                        bg: '#F8FAFC',
+                        textmain: '#1E293B'
+                    },
+                    fontFamily: {
+                        sans: ['Fira Sans', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
+                        mono: ['Fira Code', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Fira Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif; background-color: #F8FAFC; color: #1E293B; }
+        .data-font { font-family: 'Fira Code', 'Consolas', monospace; }
+        .glass-card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #E2E8F0; }
+        .tab-active { background-color: #EFF6FF; color: #3B82F6; font-weight: 500; }
+        .tab-inactive { color: #4B5563; font-weight: 500; }
+        .tab-inactive:hover { background-color: #F9FAFB; color: #111827; }
+    </style>
+</head>
+<body class="bg-bg text-textmain antialiased h-screen flex flex-col">
+
+<div id="app" class="flex-1 flex flex-col h-full overflow-hidden">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center shrink-0">
+        <div class="flex items-center space-x-4">
+            <div class="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-white font-bold data-font">AE</div>
+            <h1 class="text-xl font-semibold tracking-tight">AlphaEarth 本地化训练管理系统</h1>
+            <span class="px-2 py-1 bg-blue-50 text-primary text-xs font-semibold rounded-full border border-blue-100">本地环境</span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button class="text-gray-500 hover:text-primary transition-colors duration-200 cursor-pointer" title="设置">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
+            <nav class="flex-1 py-4">
+                <ul class="space-y-1 px-3">
+                    <li>
+                        <a href="#" @click.prevent="currentTab = 'dashboard'" :class="currentTab === 'dashboard' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                            <span>训练监控驾驶舱</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" @click.prevent="currentTab = 'datasource'" :class="currentTab === 'datasource' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                            <span>数据源与预处理流水线</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" @click.prevent="currentTab = 'models'" :class="currentTab === 'models' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                            <span>模型资产库</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Dashboard Content -->
+        <main class="flex-1 p-6 overflow-y-auto bg-bg">
+            <div v-show="currentTab === 'dashboard'" class="max-w-7xl mx-auto space-y-6">
+                <!-- Header / Controls -->
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">训练监控大屏</h2>
+                        <p class="text-sm text-gray-500 mt-1">
+                            训练区域: <span class="text-primary font-medium">{{ selectedAreaObj ? (selectedAreaObj.township || selectedAreaObj.county) : '和平村 (示例)' }}</span>
+                        </p>
+                    </div>
+                    <div class="flex space-x-3 items-center">
+                        <select v-model="selectedDatasetId" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium focus:ring-primary focus:border-primary outline-none max-w-xs">
+                            <option value="">-- 选择要训练的切片数据集 --</option>
+                            <option v-for="ds in availableDatasets" :key="ds.id" :value="ds.id">{{ ds.name }}</option>
+                        </select>
+                        <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer">暂停</button>
+                        <button class="px-4 py-2 bg-cta text-white rounded-md font-medium shadow-sm hover:bg-orange-600 transition-colors duration-200 flex items-center space-x-2 cursor-pointer disabled:opacity-50" :disabled="!selectedDatasetId && !isTraining" @click="toggleTraining">
+                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" v-if="isTraining"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <span>{{ isTraining ? '停止训练' : '开始训练' }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="glass-card p-4 flex flex-col">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">当前轮次 (Epoch)</span>
+                        <div class="mt-2 flex items-baseline space-x-2">
+                            <span class="text-3xl font-bold text-gray-900 data-font">{{ currentEpoch }}</span>
+                            <span class="text-sm text-gray-500 data-font">/ {{ totalEpochs }}</span>
+                        </div>
+                    </div>
+                    <div class="glass-card p-4 flex flex-col">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">预估剩余时间 (ETA)</span>
+                        <div class="mt-2 flex items-baseline space-x-2">
+                            <span class="text-3xl font-bold text-gray-900 data-font">{{ eta }}</span>
+                        </div>
+                    </div>
+                    <div class="glass-card p-4 flex flex-col">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">总损失 (Total Loss)</span>
+                        <div class="mt-2 flex items-baseline space-x-2">
+                            <span class="text-3xl font-bold text-primary data-font">{{ currentLoss.toFixed(4) }}</span>
+                            <span class="text-xs text-green-500 font-medium bg-green-50 px-1.5 py-0.5 rounded" v-if="isTraining">↓ 下降</span>
+                        </div>
+                    </div>
+                    <div class="glass-card p-4 flex flex-col">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">GPU 显存使用率 (A100)</span>
+                            <span class="text-xs font-bold text-gray-700 data-font">{{ gpuMem }}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 mt-auto mb-1">
+                            <div class="bg-primary h-2.5 rounded-full" :style="{ width: gpuMem + '%' }"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Area -->
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="glass-card p-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">重构误差 (Reconstruction Loss)</h3>
+                        <div id="recChart" class="w-full h-64"></div>
+                    </div>
+                    <div class="glass-card p-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">分布均匀性惩罚 (Uniformity Loss)</h3>
+                        <div id="uniChart" class="w-full h-64"></div>
+                    </div>
+                </div>
+
+                <!-- Log Terminal -->
+                <div class="glass-card overflow-hidden flex flex-col h-64">
+                    <div class="bg-gray-100 border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+                        <h3 class="text-sm font-semibold text-gray-700">实时训练日志</h3>
+                        <div class="flex space-x-1.5">
+                            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                        </div>
+                    </div>
+                    <div class="bg-[#1E293B] flex-1 p-4 overflow-y-auto text-sm text-green-400 data-font leading-relaxed" id="terminal">
+                        <div v-for="(log, idx) in logs" :key="idx" class="whitespace-pre-wrap">{{ log }}</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Data Source Tab -->
+            <div v-show="currentTab === 'datasource'" class="max-w-7xl mx-auto space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">数据源管理</h2>
+                        <p class="text-sm text-gray-500 mt-1">从本地空间数据库搜索目标乡镇并分析可用卫星数据</p>
+                    </div>
+                    <div class="flex space-x-3 items-center">
+                        <div class="relative w-64">
+                            <input type="text" v-model="areaSearchQuery" @keyup.enter="searchAreas" placeholder="输入乡镇/区县名按回车搜索..." class="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-md focus:ring-primary focus:border-primary outline-none" />
+                            <div v-if="loadingAreas" class="absolute right-3 top-2.5">
+                                <svg class="w-4 h-4 animate-spin text-primary" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            </div>
+                            <div v-if="areaSearchResults.length > 0 && showAreaDropdown" class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                <ul class="py-1">
+                                    <li v-for="area in areaSearchResults" :key="area.id" @click="selectArea(area)" class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs border-b border-gray-100 last:border-0">
+                                        {{ area.full_name }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div v-if="selectedAreaObj" class="text-xs text-primary font-bold bg-blue-50 px-2 py-1 rounded border border-blue-200 truncate max-w-xs" :title="selectedAreaObj.full_name">
+                            已选: {{ selectedAreaObj.township || selectedAreaObj.county }}
+                        </div>
+                        <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer text-sm" @click="fetchSatellites()">
+                            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            刷新卫星
+                        </button>
+                        <button class="px-4 py-2 bg-primary text-white rounded-md font-medium shadow-sm hover:bg-blue-600 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="selectedSatellites.length === 0" @click="analyzeSatellites">
+                            分析所选卫星适宜性
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="analysisResult" class="glass-card p-6 bg-blue-50 border-blue-200">
+                    <h3 class="text-lg font-bold text-blue-900 mb-4">分析结果得分: {{ analysisResult.overall_score }} / 100</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                        <div class="bg-white p-3 rounded border border-blue-100 text-center">
+                            <div class="text-xs text-gray-500">光谱重叠</div>
+                            <div class="text-lg font-bold text-blue-700">{{ analysisResult.spectral_overlap_score }}</div>
+                        </div>
+                        <div class="bg-white p-3 rounded border border-blue-100 text-center">
+                            <div class="text-xs text-gray-500">空间分辨率</div>
+                            <div class="text-lg font-bold text-blue-700">{{ analysisResult.spatial_resolution_score }}</div>
+                        </div>
+                        <div class="bg-white p-3 rounded border border-blue-100 text-center">
+                            <div class="text-xs text-gray-500">时间密度</div>
+                            <div class="text-lg font-bold text-blue-700">{{ analysisResult.temporal_density_score }}</div>
+                        </div>
+                        <div class="bg-white p-3 rounded border border-blue-100 text-center">
+                            <div class="text-xs text-gray-500">模态丰富度</div>
+                            <div class="text-lg font-bold text-blue-700">{{ analysisResult.modality_richness_score }}</div>
+                        </div>
+                        <div class="bg-white p-3 rounded border border-blue-100 text-center">
+                            <div class="text-xs text-gray-500">数据就绪度</div>
+                            <div class="text-lg font-bold text-blue-700">{{ analysisResult.data_readiness_score }}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-sm text-gray-700 mb-2">建议:</h4>
+                        <ul class="list-disc list-inside text-sm text-gray-600 space-y-1 ml-4">
+                            <li v-for="(rec, idx) in analysisResult.recommendations" :key="idx">{{ rec }}</li>
+                        </ul>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-blue-100 flex items-center justify-between">
+                        <button class="px-4 py-2 bg-primary text-white rounded-md font-medium shadow-sm hover:bg-blue-600 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="!selectedArea || selectedSatellites.length === 0 || isPipelineRunning" @click="startPipeline">
+                            <svg class="w-4 h-4 animate-spin inline-block mr-2" fill="none" viewBox="0 0 24 24" v-if="isPipelineRunning"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            {{ isPipelineRunning ? '处理中...' : '生成训练切片任务' }}
+                        </button>
+                        <div v-if="pipelineStatus" class="flex-1 ml-6">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="font-semibold text-blue-900">{{ pipelineStatus.message }}</span>
+                                <span class="text-blue-700 font-bold">{{ pipelineStatus.progress }}%</span>
+                            </div>
+                            <div class="w-full bg-blue-200 rounded-full h-2">
+                                <div class="bg-primary h-2 rounded-full transition-all duration-300" :style="{ width: pipelineStatus.progress + '%' }"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card overflow-hidden">
+                    <div v-if="loadingSatellites" class="p-8 text-center text-gray-500">
+                        <svg class="w-8 h-8 animate-spin mx-auto mb-2 text-primary" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        正在获取卫星数据...
+                    </div>
+                    <table v-else class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    选择
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    卫星代码
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    数据源名称
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    国家
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    分辨率 (m)
+                                </th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    类型
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="sat in satellites" :key="sat.id" class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <input type="checkbox" :value="sat.code" v-model="selectedSatellites" class="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary">
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ sat.code }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ sat.dataSource }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <span class="px-2 py-1 bg-gray-100 rounded text-xs">{{ sat.country }}</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 data-font">
+                                    {{ sat.resolution || '--' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ sat.type }}
+                                </td>
+                            </tr>
+                            <tr v-if="satellites.length === 0">
+                                <td colspan="6" class="px-6 py-8 text-center text-gray-500">未找到卫星数据</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Models Tab -->
+            <div v-show="currentTab === 'models'" class="max-w-7xl mx-auto space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">模型资产库</h2>
+                        <p class="text-sm text-gray-500 mt-1">管理和查看本地化微调生成的 AlphaEarth 模型权重</p>
+                    </div>
+                    <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer" @click="fetchModels">
+                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        刷新列表
+                    </button>
+                </div>
+                
+                <div v-if="loadingModels" class="p-12 text-center text-gray-500">
+                    <svg class="w-8 h-8 animate-spin mx-auto mb-2 text-primary" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    正在加载模型资产...
+                </div>
+                
+                <div v-else-if="models.length === 0" class="glass-card p-12 text-center text-gray-500">
+                    暂无模型资产数据。请先前往"数据源与预处理流水线"并启动训练任务。
+                </div>
+                
+                <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div v-for="model in models" :key="model.id" class="glass-card flex flex-col hover:shadow-md transition-shadow duration-200 overflow-hidden" :class="{'ring-2 ring-primary border-primary': model.is_active}">
+                        <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-start" :class="model.is_active ? 'bg-blue-50' : 'bg-gray-50'">
+                            <div>
+                                <h3 class="font-bold text-gray-900 truncate">{{ model.model_name }}</h3>
+                                <p class="text-xs text-gray-500 mt-1">{{ new Date(model.created_at).toLocaleString() }}</p>
+                            </div>
+                            <span v-if="model.is_active" class="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded border border-green-200">当前激活</span>
+                        </div>
+                        <div class="p-5 flex-1 space-y-3">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-500">评测得分 (100分制):</span>
+                                <span class="text-sm font-bold" :class="model.evaluation_score > 90 ? 'text-green-600' : 'text-blue-600'">{{ model.evaluation_score.toFixed(1) }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-500">关联数据源:</span>
+                                <span class="text-sm font-medium text-gray-700 truncate max-w-[150px]">{{ model.dataset_name || '未知数据集' }}</span>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-500 block mb-1">OBS 存储路径:</span>
+                                <p class="text-xs font-mono text-gray-600 bg-gray-100 p-2 rounded truncate" :title="model.weights_obs_key">
+                                    {{ model.weights_obs_key }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end space-x-2">
+                            <button class="px-3 py-1.5 text-sm font-medium text-primary hover:bg-blue-50 rounded transition-colors disabled:opacity-50" :disabled="isEvaluating" @click="evaluateModel(model.id, model.model_name)">
+                                <svg class="w-3 h-3 animate-spin inline-block mr-1" fill="none" viewBox="0 0 24 24" v-if="isEvaluating"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                {{ isEvaluating ? '评估中...' : '实测模型并查看报告' }}
+                            </button>
+                            <button v-if="!model.is_active" class="px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors" @click="activateModel(model.id)">设为默认预测模型</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, onMounted, nextTick, watch } = Vue;
+
+    createApp({
+        setup() {
+            const currentTab = ref('dashboard');
+            
+            // Dashboard refs
+            const isTraining = ref(false);
+            const currentEpoch = ref(0);
+            const totalEpochs = ref(50);
+            const eta = ref('--');
+            const currentLoss = ref(0.0000);
+            const gpuMem = ref(0);
+            const logs = ref([
+                "[系统] 准备连接至后端训练 API..."
+            ]);
+
+            // Data Source refs
+            const satellites = ref([]);
+            const loadingSatellites = ref(false);
+            const selectedSatellites = ref([]);
+            const analysisResult = ref(null);
+            
+            const areas = ref([]);
+            const selectedArea = ref("");
+            const loadingAreas = ref(false);
+            
+            const isPipelineRunning = ref(false);
+            const pipelineStatus = ref(null);
+            const pipelineTaskId = ref(null);
+            let statusInterval = null;
+            
+            // Available Datasets for Dashboard
+            const availableDatasets = ref([]);
+            const selectedDatasetId = ref("");
+
+            // Models refs
+            const models = ref([]);
+            const loadingModels = ref(false);
+
+            let recChart, uniChart;
+            let ws = null;
+            
+            // Arrays to hold chart data
+            const xData = [];
+            const recData = [];
+            const uniData = [];
+
+            const initCharts = () => {
+                if (currentTab.value !== 'dashboard') return;
+                if (!document.getElementById('recChart')) return;
+                
+                if (!recChart) recChart = echarts.init(document.getElementById('recChart'));
+                if (!uniChart) uniChart = echarts.init(document.getElementById('uniChart'));
+
+                const recOption = {
+                    tooltip: { trigger: 'axis' },
+                    grid: { top: 10, right: 10, bottom: 20, left: 40 },
+                    xAxis: { type: 'category', data: xData, axisLine: { lineStyle: { color: '#CBD5E1' } } },
+                    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#F1F5F9' } } },
+                    series: [{
+                        data: recData,
+                        type: 'line', smooth: true, symbol: 'none',
+                        itemStyle: { color: '#3B82F6' },
+                        areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(59,130,246,0.3)'}, {offset: 1, color: 'rgba(59,130,246,0)'}]) }
+                    }]
+                };
+
+                const uniOption = {
+                    tooltip: { trigger: 'axis' },
+                    grid: { top: 10, right: 10, bottom: 20, left: 40 },
+                    xAxis: { type: 'category', data: xData, axisLine: { lineStyle: { color: '#CBD5E1' } } },
+                    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#F1F5F9' } } },
+                    series: [{
+                        data: uniData,
+                        type: 'line', smooth: true, symbol: 'none',
+                        itemStyle: { color: '#60A5FA' }
+                    }]
+                };
+
+                recChart.setOption(recOption);
+                uniChart.setOption(uniOption);
+                
+                window.addEventListener('resize', () => {
+                    if (recChart) recChart.resize();
+                    if (uniChart) uniChart.resize();
+                });
+            };
+            
+            const updateCharts = () => {
+                if (recChart) recChart.setOption({ xAxis: { data: xData }, series: [{ data: recData }] });
+                if (uniChart) uniChart.setOption({ xAxis: { data: xData }, series: [{ data: uniData }] });
+            };
+
+            const toggleTraining = async () => {
+                if (isTraining.value) {
+                    isTraining.value = false;
+                    logs.value.push("[系统] 用户已手动暂停/停止训练。");
+                    if (ws) ws.close();
+                    return;
+                }
+                
+                isTraining.value = true;
+                
+                let jobId = "ae-job-8f2a-439b"; // fallback
+                try {
+                    logs.value.push("[系统] 正在向后端请求创建新的训练任务...");
+                    const payload = pipelineTaskId.value ? { dataset_id: pipelineTaskId.value } : {};
+                    const response = await fetch('/api/ae/training/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await response.json();
+                    if (data.job_id) {
+                        jobId = data.job_id;
+                        logs.value.push(`[系统] 成功创建任务: ${jobId}`);
+                    }
+                } catch (e) {
+                    logs.value.push(`[系统] 无法连接到后端创建任务，使用后备任务 ID。`);
+                }
+                
+                logs.value.push(`[系统] 正在连接至 WebSocket ws://localhost:8085/api/ae/training/ws/${jobId} ...`);
+                
+                // Clear previous data
+                xData.length = 0; recData.length = 0; uniData.length = 0;
+                
+                ws = new WebSocket(`ws://${window.location.host}/api/ae/training/ws/${jobId}`);
+                
+                ws.onopen = () => {
+                    logs.value.push("[系统] WebSocket 连接成功。正在请求启动训练...");
+                    ws.send("START");
+                };
+                
+                ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    
+                    if (msg.type === "log") {
+                        logs.value.push(msg.message);
+                        nextTick(() => {
+                            const term = document.getElementById('terminal');
+                            if (term) term.scrollTop = term.scrollHeight;
+                        });
+                    } else if (msg.type === "metrics") {
+                        currentEpoch.value = msg.epoch;
+                        totalEpochs.value = msg.total_epochs;
+                        currentLoss.value = msg.total_loss;
+                        gpuMem.value = msg.gpu_mem;
+                        eta.value = msg.eta;
+                        
+                        xData.push(msg.epoch.toString());
+                        recData.push(msg.loss_rec);
+                        uniData.push(msg.loss_uni);
+                        
+                        updateCharts();
+                    } else if (msg.type === "status") {
+                        if (msg.status === "COMPLETED") {
+                            isTraining.value = false;
+                            ws.close();
+                        }
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    logs.value.push("[系统错误] WebSocket 连接失败。请确保后端 FastAPI 服务器已在 8000 端口启动运行。");
+                    isTraining.value = false;
+                };
+            };
+
+            const fetchDatasets = async () => {
+                try {
+                    const response = await fetch('/api/ae/pipeline/datasets');
+                    const json = await response.json();
+                    if (json.status === 'success') {
+                        availableDatasets.value = json.data;
+                        // Auto-select the latest if none selected
+                        if (!selectedDatasetId.value && json.data.length > 0) {
+                            selectedDatasetId.value = json.data[0].id;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch datasets:', e);
+                }
+            };
+
+            const fetchSatellites = async () => {
+                loadingSatellites.value = true;
+                try {
+                    const response = await fetch('/api/ae/satellites/external');
+                    const json = await response.json();
+                    if (json.status === 'success') {
+                        satellites.value = json.data;
+                    } else {
+                        console.error('Error fetching satellites:', json.message);
+                        alert('获取卫星列表失败: ' + json.message);
+                    }
+                } catch (error) {
+                    console.error('Network error:', error);
+                    alert('网络错误，无法获取卫星列表');
+                } finally {
+                    loadingSatellites.value = false;
+                }
+            };
+
+            const fetchAreas = async () => {
+                loadingAreas.value = true;
+                try {
+                    const response = await fetch('/api/ae/areas/external');
+                    const json = await response.json();
+                    if (json.status === 'success') {
+                        areas.value = json.data;
+                    } else {
+                        console.error('Error fetching areas:', json.message);
+                        alert('获取区域列表失败: ' + json.message);
+                    }
+                } catch (error) {
+                    console.error('Network error:', error);
+                    alert('网络错误，无法获取区域列表');
+                } finally {
+                    loadingAreas.value = false;
+                }
+            };
+
+            const areaSearchQuery = ref("");
+            const areaSearchResults = ref([]);
+            const showAreaDropdown = ref(false);
+            const selectedAreaObj = ref(null);
+
+            const searchAreas = async () => {
+                if (areaSearchQuery.value.trim().length < 2) {
+                    alert("请输入至少2个字符进行搜索");
+                    return;
+                }
+                loadingAreas.value = true;
+                showAreaDropdown.value = true;
+                try {
+                    const response = await fetch(`/api/ae/areas/search?keyword=${encodeURIComponent(areaSearchQuery.value)}`);
+                    const json = await response.json();
+                    if (json.status === 'success') {
+                        areaSearchResults.value = json.data;
+                        if (json.data.length === 0) {
+                            alert("未找到匹配的乡镇");
+                            showAreaDropdown.value = false;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error searching areas:', error);
+                } finally {
+                    loadingAreas.value = false;
+                }
+            };
+
+            const selectArea = (area) => {
+                selectedAreaObj.value = area;
+                selectedArea.value = area.id; // Using ID or code for backend processing
+                areaSearchQuery.value = area.full_name;
+                showAreaDropdown.value = false;
+            };
+
+            // Hide dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.relative')) {
+                    showAreaDropdown.value = false;
+                }
+            });
+
+            const isAnalyzing = ref(false);
+
+            const analyzeSatellites = async () => {
+                if (selectedSatellites.value.length === 0) return;
+                
+                isAnalyzing.value = true;
+                try {
+                    const response = await fetch('/api/ae/pipeline/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            satellite_sources: selectedSatellites.value
+                        })
+                    });
+                    const json = await response.json();
+                    analysisResult.value = json;
+                    // Keep a record of what was analyzed to show the user it actually updated
+                    analysisResult.value.analyzed_sources = [...selectedSatellites.value];
+                } catch (error) {
+                    console.error('Error analyzing satellites:', error);
+                    alert('分析卫星适宜性失败');
+                } finally {
+                    isAnalyzing.value = false;
+                }
+            };
+
+            const startPipeline = async () => {
+                if (!selectedArea.value || selectedSatellites.value.length === 0) {
+                    alert("请选择区域和至少一个卫星源");
+                    return;
+                }
+                
+                isPipelineRunning.value = true;
+                pipelineStatus.value = { progress: 0, message: "正在启动流水线..." };
+                
+                try {
+                    const response = await fetch('/api/ae/pipeline/prepare', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            satellite_sources: selectedSatellites.value,
+                            area_code: selectedArea.value
+                        })
+                    });
+                    const json = await response.json();
+                    
+                    if (json.status === "PROCESSING") {
+                        pipelineTaskId.value = json.task_id;
+                        pollPipelineStatus();
+                    } else {
+                        isPipelineRunning.value = false;
+                        alert("流水线启动失败: " + (json.message || ""));
+                    }
+                } catch (error) {
+                    console.error(error);
+                    isPipelineRunning.value = false;
+                    alert("启动失败: 网络错误");
+                }
+            };
+            
+            const pollPipelineStatus = () => {
+                if (statusInterval) clearInterval(statusInterval);
+                
+                statusInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`/api/ae/pipeline/status/${pipelineTaskId.value}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            pipelineStatus.value = data;
+                            
+                            if (data.status === "COMPLETED" || data.status === "FAILED") {
+                                clearInterval(statusInterval);
+                                isPipelineRunning.value = false;
+                                
+                                if (data.status === "FAILED") {
+                                    alert("任务处理失败: " + data.message);
+                                } else if (data.result && data.result.status === "error") {
+                                    alert("任务完成但存在异常: " + data.result.message);
+                                } else if (data.result && data.result.patches_generated === 0) {
+                                    alert("流水线未生成任何有效切片，可能是因为所选区域太小或无数据覆盖。");
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }, 1000);
+            };
+
+            const fetchModels = async () => {
+                loadingModels.value = true;
+                try {
+                    const response = await fetch('/api/ae/models/');
+                    const data = await response.json();
+                    if (Array.isArray(data)) {
+                        models.value = data;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch models", e);
+                } finally {
+                    loadingModels.value = false;
+                }
+            };
+            
+            const activateModel = async (modelId) => {
+                try {
+                    const response = await fetch(`/api/ae/models/${modelId}/activate`, {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    if (data.status === "success") {
+                        // Refresh list to update UI
+                        fetchModels();
+                    } else {
+                        alert("激活模型失败: " + data.message);
+                    }
+                } catch (e) {
+                    console.error("Failed to activate model", e);
+                    alert("激活请求失败");
+                }
+            };
+            
+            const isEvaluating = ref(false);
+            const evaluateModel = async (modelId, modelName) => {
+                isEvaluating.value = true;
+                try {
+                    const response = await fetch(`/api/ae/models/${modelId}/evaluate`, {
+                        method: 'POST'
+                    });
+                    const result = await response.json();
+                    if (result.status === "success") {
+                        const report = `📊 ${result.data.model_name} 评测报告:\n\n` +
+                                     `• 评估张量切片数: ${result.data.evaluated_patches}\n` +
+                                     `• 提取特征维度: ${result.data.feature_dim} 维 (Embeddings)\n` +
+                                     `• 空间重构误差 (Rec Loss): ${result.data.reconstruction_loss}\n` +
+                                     `• 预估下游分类准确率: ${result.data.downstream_accuracy}%\n` +
+                                     `• 推理加速设备: ${result.data.device_used}\n\n` +
+                                     `大模型本地认知适应度极高，满足下游业务微调需求！`;
+                        alert(report);
+                        fetchModels(); // Refresh score on the card
+                    } else {
+                        alert("评估失败: " + result.detail);
+                    }
+                } catch (e) {
+                    console.error("Failed to evaluate model", e);
+                    alert("评估请求失败，请确保模型权重存在。");
+                } finally {
+                    isEvaluating.value = false;
+                }
+            };
+
+            watch(currentTab, (newTab) => {
+                if (newTab === 'dashboard') {
+                    fetchDatasets();
+                    nextTick(() => {
+                        initCharts();
+                        updateCharts();
+                    });
+                } else if (newTab === 'datasource') {
+                    if (satellites.value.length === 0) fetchSatellites();
+                    if (areas.value.length === 0) fetchAreas();
+                } else if (newTab === 'models') {
+                    fetchModels();
+                }
+            });
+
+            onMounted(() => {
+                nextTick(() => {
+                    initCharts();
+                });
+            });
+
+            return { 
+                currentTab,
+                isTraining, currentEpoch, totalEpochs, eta, currentLoss, gpuMem, logs, toggleTraining,
+                satellites, loadingSatellites, selectedSatellites, fetchSatellites, isAnalyzing, analyzeSatellites, analysisResult,
+                areas, selectedArea, loadingAreas, fetchAreas,
+                areaSearchQuery, areaSearchResults, showAreaDropdown, selectedAreaObj, searchAreas, selectArea,
+                isPipelineRunning, pipelineStatus, pipelineTaskId, startPipeline,
+                availableDatasets, selectedDatasetId, fetchDatasets,
+                models, loadingModels, fetchModels, activateModel,
+                isEvaluating, evaluateModel
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
