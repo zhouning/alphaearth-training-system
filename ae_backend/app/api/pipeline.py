@@ -13,6 +13,7 @@ tasks_db = {}
 class PrepareRequest(BaseModel):
     satellite_sources: List[str]
     area_code: str
+    in_memory: bool = False
 
 @router.post("/analyze", response_model=DataSourceEvaluation)
 async def analyze_data_sources(request: DataSourceRequest):
@@ -65,7 +66,7 @@ async def analyze_data_sources(request: DataSourceRequest):
         recommendations=recommendations
     )
 
-def background_prepare_task(task_id: str, area_code: str, data_sources: List[str]):
+def background_prepare_task(task_id: str, area_code: str, data_sources: List[str], in_memory: bool = False):
     pipeline = DataFusionPipeline()
     
     def update_callback(progress: int, message: str):
@@ -77,7 +78,7 @@ def background_prepare_task(task_id: str, area_code: str, data_sources: List[str
         
     try:
         tasks_db[task_id] = {"status": "PROCESSING", "progress": 0, "message": "任务已启动"}
-        result = pipeline.prepare_dataset(area_code, data_sources, update_callback=update_callback)
+        result = pipeline.prepare_dataset(area_code, data_sources, in_memory=in_memory, update_callback=update_callback)
         
         if isinstance(result, dict) and result.get("status") == "error":
             tasks_db[task_id] = {
@@ -111,7 +112,8 @@ async def prepare_dataset(request: PrepareRequest, background_tasks: BackgroundT
         background_prepare_task, 
         task_id=task_id,
         area_code=request.area_code, 
-        data_sources=request.satellite_sources
+        data_sources=request.satellite_sources,
+        in_memory=request.in_memory
     )
     
     return {
@@ -123,13 +125,16 @@ async def prepare_dataset(request: PrepareRequest, background_tasks: BackgroundT
     }
 
 import os
+from app.core.memory import IN_MEMORY_DATASETS
+import time
 
 @router.get("/datasets")
 async def list_available_datasets():
     """
-    列出所有已生成的有效训练数据集 (包含 .pt 文件的目录)
+    列出所有已生成的有效训练数据集 (包含 .pt 文件的目录或内存数据集)
     """
-    work_dir = "D:/adk/data_agent/weights/raw_data"
+    from app.core.config import settings
+    work_dir = settings.RAW_DATA_DIR
     datasets = []
     
     if os.path.exists(work_dir):
@@ -143,9 +148,17 @@ async def list_available_datasets():
                     mtime = os.path.getmtime(item_path)
                     datasets.append({
                         "id": item,
-                        "name": f"数据集 {item[-8:]} ({len(pt_files)} 个切片)",
+                        "name": f"数据集 {item[-8:]} ({len(pt_files)} 切片) [磁盘]",
                         "mtime": mtime
                     })
+                    
+    # Add in-memory datasets
+    for mem_id, tensors in IN_MEMORY_DATASETS.items():
+        datasets.append({
+            "id": f"memory_{mem_id}",
+            "name": f"数据集 {mem_id[-8:]} ({len(tensors)} 切片) [内存直通 🚀]",
+            "mtime": time.time()  # always float them to top
+        })
                     
     # Sort by modification time, newest first
     datasets.sort(key=lambda x: x["mtime"], reverse=True)

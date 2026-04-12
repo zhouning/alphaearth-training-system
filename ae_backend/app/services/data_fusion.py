@@ -117,7 +117,7 @@ class DataFusionPipeline:
         except Exception as e:
             logger.error(f"OBS 同步失败: {e}")
 
-    def prepare_dataset(self, area_code: str, data_sources: list, update_callback=None) -> dict:
+    def prepare_dataset(self, area_code: str, data_sources: list, in_memory: bool = False, update_callback=None) -> dict:
         """
         核心调度流：处理包含公开或私有来源的混合数据源
         data_sources: 来源列表，例如 ["Sentinel-2", "D:/private_data/local_gf2_2023.tif"]
@@ -225,25 +225,36 @@ class DataFusionPipeline:
         # --- 3. 融合、堆叠与滑动切片生成 Tensor ---
         if update_callback: update_callback(75, f"正在读取真实的 {len(aligned_files)} 个源波段，执行辐射归一化，切割为 128x128 张量...")
         if aligned_files:
-            logger.info(f"[{job_id}] 开始对真实影像进行切片...")
+            logger.info(f"[{job_id}] 开始对真实影像进行切片 (in_memory={in_memory})...")
             
             # Real slicing computation
-            tensor_count = self._fuse_and_slice(aligned_files, output_dir)
+            tensor_count, total_time, throughput = self._fuse_and_slice(aligned_files, output_dir, in_memory=in_memory, job_id=job_id)
             
             if tensor_count == 0:
                 if update_callback: update_callback(100, "裁剪区域内无足够有效的 128x128 像素块。")
                 return {"status": "error", "message": "目标区域（行政区）的范围在影像内太小，无法切出一个完整的 128x128 训练张量。请尝试选择更大的行政区或市级单位。"}
             
             # --- 4. 同步至华为云 OBS ---
-            if update_callback: update_callback(85, "开始将模型张量推送到华为云 OBS 对象存储...")
-            self._upload_to_obs(output_dir, job_id, update_callback)
+            if not in_memory:
+                if update_callback: update_callback(85, "开始将模型张量推送到华为云 OBS 对象存储...")
+                self._upload_to_obs(output_dir, job_id, update_callback)
+            else:
+                logger.info(f"[{job_id}] 内存直通模式已开启，跳过对象存储上传以消解网络 I/O。")
             
-            if update_callback: update_callback(100, f"处理完毕。已成功向数据湖注入 {tensor_count} 个真实的模型切片。")
+            if update_callback: 
+                msg = f"处理完毕。已生成 {tensor_count} 个模型切片。"
+                if in_memory:
+                    msg += f" (内存直通 🚀 吞吐量: {throughput:.1f} patches/sec, 耗时: {total_time:.2f}s)"
+                update_callback(100, msg)
+                
             return {
                 "status": "success", 
                 "job_id": job_id, 
                 "patches_generated": tensor_count, 
-                "obs_path": f"obs://{settings.HUAWEI_OBS_BUCKET}/alphaearth/datasets/dataset_{job_id}/"
+                "throughput": throughput,
+                "total_time": total_time,
+                "in_memory": in_memory,
+                "obs_path": f"obs://{settings.HUAWEI_OBS_BUCKET}/alphaearth/datasets/dataset_{job_id}/" if not in_memory else "InMemory"
             }
         else:
             if update_callback: update_callback(100, "未能找到任何有效的本地或公开数据。")
@@ -367,12 +378,18 @@ class DataFusionPipeline:
                 logger.error(f"影像 {src_path} 缺少空间参考 (CRS=None，且无 RPC 附属文件)。")
                 raise ValueError("影像缺乏必须的空间坐标系(CRS)或RPC信息，无法根据行政区边界进行精准裁切！")
 
-    def _fuse_and_slice(self, aligned_files, output_dir):
+    def _fuse_and_slice(self, aligned_files, output_dir, in_memory=False, job_id=None):
         """
         将多个对齐好的影像进行通道堆叠 (Channel Stacking)，
         应用 AlphaEarth log(x+1)/10 辐射归一化，并切成 128x128 张量。
         """
+        from app.core.memory import IN_MEMORY_DATASETS
+        import time
+        
         patch_count = 0
+        start_time = time.time()
+        memory_tensors = []
+        
         with rasterio.open(aligned_files[0]) as src:
             H, W = src.shape
             stride = 128
@@ -402,7 +419,18 @@ class DataFusionPipeline:
                     patch = (patch - mean) / std
                     
                     tensor = torch.tensor(patch, dtype=torch.float32)
-                    torch.save(tensor, os.path.join(output_dir, f"patch_{patch_count:04d}.pt"))
+                    
+                    if in_memory:
+                        memory_tensors.append(tensor)
+                    else:
+                        torch.save(tensor, os.path.join(output_dir, f"patch_{patch_count:04d}.pt"))
+                        
                     patch_count += 1
                     
-        return patch_count
+        if in_memory and job_id:
+            IN_MEMORY_DATASETS[job_id] = memory_tensors
+            
+        total_time = time.time() - start_time
+        throughput = patch_count / max(total_time, 0.001)
+        
+        return patch_count, total_time, throughput
