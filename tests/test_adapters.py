@@ -1,5 +1,6 @@
 import pytest
 import torch
+import torch.nn as nn
 from geoadapter.adapters.base import ModalityAdapter
 from geoadapter.adapters.geo_adapter import GeoAdapter
 from geoadapter.adapters.zero_pad import ZeroPadAdapter
@@ -54,3 +55,52 @@ class TestZeroPadAdapter:
         out = adapter(x)
         assert torch.allclose(out[0, :3], x[0])
         assert torch.allclose(out[0, 3:], torch.zeros(3, 4, 4))
+
+
+from geoadapter.adapters.lora import inject_lora, remove_lora
+from geoadapter.adapters.bitfit import configure_bitfit
+from geoadapter.adapters.houlsby import inject_houlsby_adapters
+
+
+class TestLoRA:
+    def test_inject_and_remove(self):
+        block = nn.TransformerEncoderLayer(d_model=768, nhead=12, batch_first=True)
+        original_params = sum(p.numel() for p in block.parameters())
+        inject_lora(block, rank=8, target_modules=["self_attn"])
+        lora_params = sum(p.numel() for p in block.parameters() if p.requires_grad)
+        assert lora_params > 0
+        assert lora_params < original_params
+
+    def test_forward_unchanged_shape(self):
+        block = nn.TransformerEncoderLayer(d_model=768, nhead=12, batch_first=True)
+        inject_lora(block, rank=8, target_modules=["self_attn"])
+        x = torch.randn(2, 16, 768)
+        out = block(x)
+        assert out.shape == (2, 16, 768)
+
+
+class TestBitFit:
+    def test_only_biases_trainable(self):
+        block = nn.TransformerEncoderLayer(d_model=768, nhead=12, batch_first=True)
+        configure_bitfit(block)
+        for name, p in block.named_parameters():
+            if "bias" in name:
+                assert p.requires_grad, f"{name} should be trainable"
+            else:
+                assert not p.requires_grad, f"{name} should be frozen"
+
+
+class TestHoulsby:
+    def test_inject_adds_params(self):
+        block = nn.TransformerEncoderLayer(d_model=768, nhead=12, batch_first=True)
+        before = sum(p.numel() for p in block.parameters())
+        inject_houlsby_adapters(block, bottleneck_dim=64)
+        after = sum(p.numel() for p in block.parameters())
+        assert after > before
+
+    def test_forward_shape(self):
+        block = nn.TransformerEncoderLayer(d_model=768, nhead=12, batch_first=True)
+        inject_houlsby_adapters(block, bottleneck_dim=64)
+        x = torch.randn(2, 16, 768)
+        out = block(x)
+        assert out.shape == (2, 16, 768)
