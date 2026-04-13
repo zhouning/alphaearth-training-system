@@ -1,1 +1,2 @@
 from .embedding_viz import compute_tsne, compute_umap, extract_channel_attention_weights
+from .attention_viz import plot_channel_attention_heatmap

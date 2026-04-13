@@ -172,7 +172,7 @@ class AlphaEarthTrainer:
         self._update_db_status(JobStatus.TRAINING)
         
         await self._send_ws("log", message=f"[系统] 计算设备: {self.device.type.upper()}")
-        await self._send_ws("log", message=f"[系统] 模型结构: LocalAlphaEarthEncoder (STP Architecture)")
+        await self._send_ws("log", message=f"[系统] 模型结构: Prithvi-100M + GeoAdapter (PEFT)")
         await asyncio.sleep(1)
         
         loss_fn_rec = nn.MSELoss()
