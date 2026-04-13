@@ -47,8 +47,22 @@ class PrithviBackbone(nn.Module):
 
         self._freeze_all()
 
+    # Prithvi checkpoint key -> PyTorch TransformerEncoderLayer key
+    _KEY_MAP = {
+        "attn.qkv.weight": "self_attn.in_proj_weight",
+        "attn.qkv.bias": "self_attn.in_proj_bias",
+        "attn.proj.weight": "self_attn.out_proj.weight",
+        "attn.proj.bias": "self_attn.out_proj.bias",
+        "mlp.fc1.weight": "linear1.weight",
+        "mlp.fc1.bias": "linear1.bias",
+        "mlp.fc2.weight": "linear2.weight",
+        "mlp.fc2.bias": "linear2.bias",
+        "patch_embed.proj.weight": "patch_embed.weight",
+        "patch_embed.proj.bias": "patch_embed.bias",
+    }
+
     def _load_checkpoint(self, path: str):
-        """Load Prithvi-100M weights, squeezing Conv3d temporal dim."""
+        """Load Prithvi-100M weights with full key remapping."""
         try:
             ckpt = torch.load(path, map_location="cpu", weights_only=True)
             state = ckpt.get("model", ckpt)
@@ -58,16 +72,24 @@ class PrithviBackbone(nn.Module):
             if pe_key in state and state[pe_key].dim() == 5:
                 state[pe_key] = state[pe_key].squeeze(2)
 
-            # Map keys and load what matches
             own_state = self.state_dict()
             loaded = 0
-            for k, v in state.items():
-                mapped = k.replace("encoder.", "", 1) if k.startswith("encoder.") else k
-                if mapped in own_state and own_state[mapped].shape == v.shape:
-                    own_state[mapped] = v
+            for ckpt_key, tensor in state.items():
+                # Strip "encoder." prefix
+                key = ckpt_key.replace("encoder.", "", 1) if ckpt_key.startswith("encoder.") else ckpt_key
+
+                # Remap block-level keys: blocks.N.attn.qkv.weight -> blocks.N.self_attn.in_proj_weight
+                for prithvi_suffix, torch_suffix in self._KEY_MAP.items():
+                    if key.endswith(prithvi_suffix):
+                        key = key[: -len(prithvi_suffix)] + torch_suffix
+                        break
+
+                if key in own_state and own_state[key].shape == tensor.shape:
+                    own_state[key] = tensor
                     loaded += 1
+
             self.load_state_dict(own_state, strict=False)
-            logger.info(f"Loaded {loaded} tensors from Prithvi checkpoint")
+            logger.info(f"Loaded {loaded}/{len(own_state)} tensors from Prithvi checkpoint")
         except Exception as e:
             logger.warning(f"Could not load Prithvi weights: {e}")
 
