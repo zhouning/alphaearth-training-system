@@ -1,2 +1,2 @@
 from .prithvi import PrithviBackbone
-from .heads import ClassificationHead, MultiLabelHead
+from .heads import ClassificationHead, MultiLabelHead, SegmentationHead

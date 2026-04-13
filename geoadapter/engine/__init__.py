@@ -1,2 +1,2 @@
 from .trainer import PEFTTrainer
-from .evaluator import compute_classification_metrics, compute_multilabel_metrics
+from .evaluator import compute_classification_metrics, compute_multilabel_metrics, compute_segmentation_metrics

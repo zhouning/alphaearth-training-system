@@ -15,3 +15,15 @@ def compute_multilabel_metrics(y_true, y_scores):
     return {
         "mAP": average_precision_score(y_true, y_scores, average="macro"),
     }
+
+
+def compute_segmentation_metrics(y_true, y_pred):
+    """Compute mean IoU for semantic segmentation."""
+    classes = np.unique(np.concatenate([y_true.flatten(), y_pred.flatten()]))
+    ious = []
+    for c in classes:
+        intersection = np.sum((y_true == c) & (y_pred == c))
+        union = np.sum((y_true == c) | (y_pred == c))
+        if union > 0:
+            ious.append(intersection / union)
+    return {"mIoU": np.mean(ious) if ious else 0.0}

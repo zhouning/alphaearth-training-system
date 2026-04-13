@@ -13,19 +13,36 @@ class PEFTTrainer:
         adapter: ModalityAdapter | None,
         head: nn.Module,
         lr: float = 1e-3,
+        lr_peft: float | None = None,
+        epochs: int = 50,
+        task: str = "classification",
         device: str = "cpu",
     ):
         self.backbone = backbone.to(device)
         self.adapter = adapter.to(device) if adapter else None
         self.head = head.to(device)
         self.device = device
+        self.task = task
 
-        params = list(head.parameters())
-        if adapter:
-            params += [p for p in adapter.parameters() if p.requires_grad]
-        params += [p for p in backbone.parameters() if p.requires_grad]
-        self.optimizer = torch.optim.AdamW(params, lr=lr)
-        self.criterion = nn.CrossEntropyLoss()
+        # Differential learning rates
+        head_params = list(head.parameters())
+        adapter_params = [p for p in (adapter.parameters() if adapter else []) if p.requires_grad]
+        backbone_params = [p for p in backbone.parameters() if p.requires_grad]
+
+        param_groups = [{"params": head_params, "lr": lr}]
+        if adapter_params:
+            param_groups.append({"params": adapter_params, "lr": lr})
+        if backbone_params:
+            param_groups.append({"params": backbone_params, "lr": lr_peft or lr})
+
+        self.optimizer = torch.optim.AdamW(param_groups, weight_decay=0.01)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=epochs)
+
+        # Task-specific loss
+        if task == "multilabel":
+            self.criterion = nn.BCEWithLogitsLoss()
+        else:
+            self.criterion = nn.CrossEntropyLoss()
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> float:
         x, y = x.to(self.device), y.to(self.device)
@@ -38,6 +55,10 @@ class PEFTTrainer:
         loss.backward()
         self.optimizer.step()
         return loss.item()
+
+    def step_scheduler(self):
+        """Call at end of each epoch."""
+        self.scheduler.step()
 
     @torch.no_grad()
     def predict(self, x: torch.Tensor) -> torch.Tensor:

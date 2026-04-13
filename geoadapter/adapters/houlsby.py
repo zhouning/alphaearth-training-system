@@ -19,7 +19,14 @@ class HoulsbyBottleneck(nn.Module):
 
 def inject_houlsby_adapters(block: nn.Module, bottleneck_dim: int = 64):
     """Wrap the forward of a TransformerEncoderLayer to insert adapter after FFN."""
-    adapter = HoulsbyBottleneck(d_model=768, bottleneck_dim=bottleneck_dim)
+    # Detect d_model from the block's layer norm
+    d_model = 768
+    if hasattr(block, "norm1"):
+        d_model = block.norm1.normalized_shape[0]
+    elif hasattr(block, "self_attn") and hasattr(block.self_attn, "embed_dim"):
+        d_model = block.self_attn.embed_dim
+
+    adapter = HoulsbyBottleneck(d_model=d_model, bottleneck_dim=bottleneck_dim)
     original_forward = block.forward
 
     def new_forward(src, *args, **kwargs):

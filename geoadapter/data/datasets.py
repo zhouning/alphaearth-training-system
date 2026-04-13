@@ -10,7 +10,7 @@ class ModalityConfig:
     """Defines which bands to select and how to label them."""
 
     PRESETS = {
-        "s2_full": {"indices": list(range(13)), "c_in": 13, "name": "Sentinel-2 Full"},
+        "s2_full": {"indices": list(range(10)), "c_in": 10, "name": "Sentinel-2 (B2-B12)"},
         "rgb": {"indices": [3, 2, 1], "c_in": 3, "name": "RGB (B4,B3,B2)"},
         "rgb_sar": {"indices": [3, 2, 1], "c_in": 4, "name": "RGB + SAR VV"},
         "gf2": {"indices": [3, 2, 1, 7], "c_in": 4, "name": "GF-2 (B,G,R,NIR)"},

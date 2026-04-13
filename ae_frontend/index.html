@@ -467,8 +467,8 @@
                 const latentOption = {
                     tooltip: { trigger: 'item', formatter: 'Feature {c}' },
                     grid: { top: 10, right: 10, bottom: 20, left: 30 },
-                    xAxis: { type: 'value', show: false },
-                    yAxis: { type: 'value', show: false },
+                    xAxis: { type: 'value', splitLine: { show: false }, axisLine: { lineStyle: { color: '#CBD5E1' } } },
+                    yAxis: { type: 'value', splitLine: { show: false }, axisLine: { lineStyle: { color: '#CBD5E1' } } },
                     series: [{
                         data: latentData,
                         type: 'scatter',
@@ -556,8 +556,7 @@
                         
                         updateCharts();
                     } else if (msg.type === "tsne") {
-                        latentData.length = 0;
-                        msg.points.forEach(pt => latentData.push(pt));
+                        latentData = [...msg.points];
                         updateCharts();
                     } else if (msg.type === "status") {
                         if (msg.status === "COMPLETED") {
