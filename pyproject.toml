@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "geoadapter"
+version = "0.1.0"
+description = "Modality-aware PEFT for geospatial foundation models"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "torchvision",
+    "timm>=0.9",
+    "rasterio>=1.3",
+    "numpy",
+    "pyyaml",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+bench = ["torchgeo>=0.5", "matplotlib", "seaborn", "umap-learn"]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
