@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 from geoadapter.models.prithvi import PrithviBackbone
 from geoadapter.adapters.geo_adapter import GeoAdapter as GeoAdapterModule
+from geoadapter.adapters.zero_pad import ZeroPadAdapter
+from geoadapter.adapters.lora import inject_lora
+from geoadapter.adapters.bitfit import configure_bitfit
+from geoadapter.adapters.houlsby import inject_houlsby_adapters
 
 class RealPatchDataset(Dataset):
     """
@@ -78,26 +82,46 @@ class RealPatchDataset(Dataset):
         return tensor
 
 class PrithviAlphaEarthEncoder(nn.Module):
-    """Wrapper using geoadapter's PrithviBackbone + GeoAdapter.
+    """Prithvi-100M backbone with configurable PEFT method.
 
-    Maintains the same interface (forward returns rec, z) for backward
-    compatibility with AlphaEarthTrainer.
+    Supported peft_method values:
+      - "linear_probe": frozen backbone + zero-pad + head only
+      - "bitfit": unfreeze all bias params
+      - "lora": inject LoRA (rank=8) into attention layers
+      - "houlsby": inject Houlsby bottleneck adapters (dim=64)
+      - "geoadapter": residual input-stage adapter (experimental)
     """
 
-    def __init__(self, weight_path=None, in_channels=5, hidden_dim=64):
+    SUPPORTED_METHODS = ("linear_probe", "bitfit", "lora", "houlsby", "geoadapter")
+
+    def __init__(self, weight_path=None, in_channels=5, hidden_dim=64, peft_method="linear_probe"):
         super().__init__()
         self.embed_dim = 768
+        self.peft_method = peft_method
 
-        # Use geoadapter's modality adapter
-        self.modality_adapter = GeoAdapterModule(in_channels=in_channels, out_channels=6)
-
-        # Use geoadapter's full Prithvi backbone (12 layers)
+        # Backbone (frozen by default)
         self.backbone = PrithviBackbone(
             pretrained=bool(weight_path),
             checkpoint_path=weight_path,
         )
 
-        # Fine-tuning head (trainable)
+        # Input adapter
+        if peft_method == "geoadapter":
+            self.modality_adapter = GeoAdapterModule(in_channels=in_channels, out_channels=6)
+        else:
+            self.modality_adapter = ZeroPadAdapter(in_channels=in_channels, out_channels=6)
+
+        # Apply backbone-level PEFT
+        if peft_method == "bitfit":
+            configure_bitfit(self.backbone)
+        elif peft_method == "lora":
+            for block in self.backbone.blocks:
+                inject_lora(block, rank=8)
+        elif peft_method == "houlsby":
+            for block in self.backbone.blocks:
+                inject_houlsby_adapters(block, bottleneck_dim=64)
+
+        # Fine-tuning head (always trainable)
         self.finetune_head = nn.Sequential(
             nn.Linear(self.embed_dim, 256),
             nn.ReLU(),
@@ -128,16 +152,17 @@ class PrithviAlphaEarthEncoder(nn.Module):
         return rec, z
 
 class AlphaEarthTrainer:
-    def __init__(self, job_id: str, dataset_id: str, ws_manager=None, epochs=50):
+    def __init__(self, job_id: str, dataset_id: str, ws_manager=None, epochs=50, peft_method="linear_probe"):
         self.job_id = job_id
         self.dataset_id = dataset_id
         self.ws_manager = ws_manager
         self.epochs = epochs
+        self.peft_method = peft_method
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         # Load the Prithvi-100M foundation model weights
         prithvi_weights = "D:/adk/AlphaEarth-System/data/weights/prithvi/Prithvi_100M.pt"
-        self.model = PrithviAlphaEarthEncoder(weight_path=prithvi_weights).to(self.device)
+        self.model = PrithviAlphaEarthEncoder(weight_path=prithvi_weights, peft_method=peft_method).to(self.device)
         
         # We only pass trainable parameters to the optimizer (backbone is frozen)
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
@@ -172,7 +197,9 @@ class AlphaEarthTrainer:
         self._update_db_status(JobStatus.TRAINING)
         
         await self._send_ws("log", message=f"[系统] 计算设备: {self.device.type.upper()}")
-        await self._send_ws("log", message=f"[系统] 模型结构: Prithvi-100M + GeoAdapter (PEFT)")
+        await self._send_ws("log", message=f"[系统] 模型结构: Prithvi-100M + {self.peft_method}")
+        n_trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        await self._send_ws("log", message=f"[系统] PEFT 方法: {self.peft_method} | 可训练参数: {n_trainable:,}")
         await asyncio.sleep(1)
         
         loss_fn_rec = nn.MSELoss()

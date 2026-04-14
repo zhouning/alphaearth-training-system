@@ -101,6 +101,13 @@
                             <option value="">-- 选择要训练的切片数据集 --</option>
                             <option v-for="ds in availableDatasets" :key="ds.id" :value="ds.id">{{ ds.name }}</option>
                         </select>
+                        <select v-model="selectedPeftMethod" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium focus:ring-primary focus:border-primary outline-none">
+                            <option value="linear_probe">Linear Probe (7.7K params)</option>
+                            <option value="bitfit">BitFit (111K params)</option>
+                            <option value="lora">LoRA r=8 (155K params)</option>
+                            <option value="houlsby">Houlsby Adapter (1.2M params)</option>
+                            <option value="geoadapter">GeoAdapter (experimental)</option>
+                        </select>
                         <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer">暂停</button>
                         <button class="px-4 py-2 bg-cta text-white rounded-md font-medium shadow-sm hover:bg-orange-600 transition-colors duration-200 flex items-center space-x-2 cursor-pointer disabled:opacity-50" :disabled="!selectedDatasetId && !isTraining" @click="toggleTraining">
                             <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" v-if="isTraining"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -417,6 +424,7 @@
             // Available Datasets for Dashboard
             const availableDatasets = ref([]);
             const selectedDatasetId = ref("");
+            const selectedPeftMethod = ref("linear_probe");
 
             // Models refs
             const models = ref([]);
@@ -507,7 +515,11 @@
                 let jobId = "ae-job-8f2a-439b"; // fallback
                 try {
                     logs.value.push("[系统] 正在向后端请求创建新的训练任务...");
-                    const payload = pipelineTaskId.value ? { dataset_id: pipelineTaskId.value } : {};
+                    const payload = {
+                        dataset_id: pipelineTaskId.value || undefined,
+                        peft_method: selectedPeftMethod.value,
+                    };
+                    logs.value.push(`[系统] PEFT 方法: ${selectedPeftMethod.value}`);
                     const response = await fetch('/api/ae/training/start', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -853,7 +865,7 @@
                 areas, selectedArea, loadingAreas, fetchAreas,
                 areaSearchQuery, areaSearchResults, showAreaDropdown, selectedAreaObj, searchAreas, selectArea,
                 isPipelineRunning, pipelineStatus, pipelineTaskId, startPipeline, inMemoryMode,
-                availableDatasets, selectedDatasetId, fetchDatasets,
+                availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
                 isEvaluating, evaluateModel
             };

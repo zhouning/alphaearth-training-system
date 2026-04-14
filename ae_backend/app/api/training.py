@@ -32,17 +32,19 @@ manager = ConnectionManager()
 
 class TrainingRequest(BaseModel):
     dataset_id: str = None
+    peft_method: str = "linear_probe"  # linear_probe | bitfit | lora | houlsby | geoadapter
 
-async def run_training_job(job_id: str, dataset_id: str):
+async def run_training_job(job_id: str, dataset_id: str, peft_method: str):
     # Wait for the client to establish a WebSocket connection
     await asyncio.sleep(1.0)
-    trainer = AlphaEarthTrainer(job_id=job_id, dataset_id=dataset_id, ws_manager=manager, epochs=50)
+    trainer = AlphaEarthTrainer(job_id=job_id, dataset_id=dataset_id, ws_manager=manager, epochs=50, peft_method=peft_method)
     await trainer.run()
 
 @router.post("/start")
 async def start_training(request: TrainingRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     job_id = str(uuid.uuid4())
     ds_id = request.dataset_id if request.dataset_id else job_id
+    peft = request.peft_method if request.peft_method in ("linear_probe", "bitfit", "lora", "houlsby", "geoadapter") else "linear_probe"
     
     # Ensure Dataset exists to satisfy Foreign Key
     existing_ds = db.query(AeDataset).filter(AeDataset.id == ds_id).first()
@@ -56,16 +58,14 @@ async def start_training(request: TrainingRequest, background_tasks: BackgroundT
         id=job_id,
         status=JobStatus.PENDING,
         dataset_id=ds_id,
-        hyperparameters={"epochs": 50, "learning_rate": 1e-3, "batch_size": 16}
+        hyperparameters={"epochs": 50, "learning_rate": 1e-3, "batch_size": 16, "peft_method": peft}
     )
     db.add(new_job)
     db.commit()
-    
-    # FastAPI will automatically run this async background task ON THE MAIN EVENT LOOP 
-    # immediately AFTER it successfully sends the HTTP response back to the user.
-    background_tasks.add_task(run_training_job, job_id=job_id, dataset_id=ds_id)
-    
-    return {"message": "Training started", "job_id": job_id, "dataset_id": ds_id}
+
+    background_tasks.add_task(run_training_job, job_id=job_id, dataset_id=ds_id, peft_method=peft)
+
+    return {"message": "Training started", "job_id": job_id, "dataset_id": ds_id, "peft_method": peft}
 
 @router.websocket("/ws/{job_id}")
 async def websocket_endpoint(websocket: WebSocket, job_id: str):
