@@ -34,6 +34,28 @@ class TestGeoAdapter:
         assert hasattr(adapter, "channel_proj")
         assert hasattr(adapter, "channel_attn")
         assert hasattr(adapter, "spatial_refine")
+        assert hasattr(adapter, "residual_scale")
+
+    def test_initial_output_equals_zero_pad(self):
+        """At init (residual_scale=0), GeoAdapter should equal ZeroPadAdapter."""
+        adapter = GeoAdapter(in_channels=3, out_channels=6)
+        zp = ZeroPadAdapter(in_channels=3, out_channels=6)
+        x = torch.randn(2, 3, 32, 32)
+        with torch.no_grad():
+            out_ga = adapter(x)
+            out_zp = zp(x)
+        assert torch.allclose(out_ga, out_zp, atol=1e-6), \
+            f"Initial GeoAdapter should equal ZeroPad, max diff={( out_ga - out_zp).abs().max():.6f}"
+
+    def test_initial_output_equals_truncate_for_superset(self):
+        """For c_in > c_out, initial output should truncate (same as ZeroPad)."""
+        adapter = GeoAdapter(in_channels=10, out_channels=6)
+        zp = ZeroPadAdapter(in_channels=10, out_channels=6)
+        x = torch.randn(2, 10, 32, 32)
+        with torch.no_grad():
+            out_ga = adapter(x)
+            out_zp = zp(x)
+        assert torch.allclose(out_ga, out_zp, atol=1e-6)
 
 
 class TestZeroPadAdapter:
