@@ -4,17 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AlphaEarth Local Fine-Tuning MLOps Platform — an end-to-end system for parameter-efficient fine-tuning (PEFT) of geospatial foundation models (Prithvi-100M) on heterogeneous satellite imagery. Two-service architecture: FastAPI+PyTorch backend (`ae_backend/`) and Vue 3 single-page dashboard (`ae_frontend/`). Supports multi-modal data fusion (Sentinel-1/2 SAR+optical via GEE, local high-res GF/ZY .tif), zero-copy tensor pipelining (in-memory dataset bypass), real-time WebSocket training monitoring, and Huawei Cloud OBS model asset management.
+Geo-MLOps: PEFT Benchmark Platform for Geospatial Foundation Models — a systematic evaluation platform for parameter-efficient fine-tuning of Prithvi-100M on heterogeneous satellite inputs. Two-service architecture: FastAPI+PyTorch backend (`ae_backend/`) and Vue 3 dashboard (`ae_frontend/`). The `geoadapter/` package is an independent Python library (zero FastAPI dependency) containing 5 PEFT method implementations, Prithvi-100M backbone loader (149/149 weights), unified training engine, and benchmark runner.
 
-Research context: Papers 9/10/11 — MLOps pipeline architecture, multi-modal data fusion, and transfer learning for geospatial foundation models.
+75 experiments completed on EuroSAT (5 methods x 5 modalities x 3 seeds). Key findings: LoRA fails on Prithvi's fused-QKV architecture; Houlsby adapter dominates (+16-23%); input-stage adaptation (GeoAdapter) does not work — negative result documented in `docs/Experiment_Results_Analysis.md`.
+
+Research context: Pivoted from "GeoAdapter as method contribution" to "PEFT benchmark with negative results." Paper target: GIScience & Remote Sensing or CVPR EarthVision Workshop.
 
 ## Commands
 
 ### Run backend
 ```bash
 cd ae_backend
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8085 --reload
+pip install -e ../.  # install geoadapter package
+uvicorn app.main:app --host 127.0.0.1 --port 8087
 ```
 
 ### Run with Docker
