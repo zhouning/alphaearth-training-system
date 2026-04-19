@@ -1,0 +1,77 @@
+[
+  {
+    "peft_method": "linear_probe",
+    "best_val_acc": 0.695,
+    "weighted_f1": 0.6683,
+    "macro_f1": 0.4287,
+    "trainable_params": 3987,
+    "label_source": "real",
+    "class_names": [
+      "建筑",
+      "水体",
+      "耕地",
+      "裸地",
+      "道路"
+    ],
+    "per_class_f1": {
+      "建筑": 0.6471,
+      "水体": 0.25,
+      "耕地": 0.7466,
+      "裸地": 0.5,
+      "道路": 0.0
+    },
+    "n_train": 1034,
+    "n_val": 259,
+    "epochs": 10
+  },
+  {
+    "peft_method": "bitfit",
+    "best_val_acc": 0.6216,
+    "weighted_f1": 0.5073,
+    "macro_f1": 0.3499,
+    "trainable_params": 106899,
+    "label_source": "real",
+    "class_names": [
+      "建筑",
+      "水体",
+      "耕地",
+      "裸地",
+      "道路"
+    ],
+    "per_class_f1": {
+      "建筑": 0.5823,
+      "水体": 0.2727,
+      "耕地": 0.535,
+      "裸地": 0.3596,
+      "道路": 0.0
+    },
+    "n_train": 1034,
+    "n_val": 259,
+    "epochs": 10
+  },
+  {
+    "peft_method": "houlsby",
+    "best_val_acc": 0.7027,
+    "weighted_f1": 0.6425,
+    "macro_f1": 0.4251,
+    "trainable_params": 1193619,
+    "label_source": "real",
+    "class_names": [
+      "建筑",
+      "水体",
+      "耕地",
+      "裸地",
+      "道路"
+    ],
+    "per_class_f1": {
+      "建筑": 0.6917,
+      "水体": 0.2143,
+      "耕地": 0.6844,
+      "裸地": 0.5349,
+      "道路": 0.0
+    },
+    "n_train": 1034,
+    "n_val": 259,
+    "epochs": 10
+  }
+]

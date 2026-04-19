@@ -20,6 +20,15 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+def resolve_dataset_path(dataset_id: str) -> str:
+    if dataset_id.startswith('memory_'):
+        return dataset_id
+    if dataset_id == 'linhe_patches':
+        return os.path.join(settings.DATA_DIR, 'linhe_patches')
+    return os.path.join(settings.RAW_DATA_DIR, 'dataset_' + dataset_id)
+
+
 from geoadapter.models.prithvi import PrithviBackbone
 from geoadapter.adapters.geo_adapter import GeoAdapter as GeoAdapterModule
 from geoadapter.adapters.zero_pad import ZeroPadAdapter
@@ -49,8 +58,12 @@ class RealPatchDataset(Dataset):
                 logger.error(f"In-memory dataset {job_id} not found.")
         else:
             if os.path.exists(data_dir_or_id):
-                self.files = sorted([f for f in os.listdir(data_dir_or_id) if f.endswith('.pt')])
-            
+                import glob
+                self.files = sorted(
+                    glob.glob(os.path.join(data_dir_or_id, "**", "*.pt"), recursive=True) +
+                    glob.glob(os.path.join(data_dir_or_id, "**", "*.npz"), recursive=True)
+                )
+
     def __len__(self):
         if self.in_memory_tensors is not None:
             return max(1, len(self.in_memory_tensors))
@@ -64,10 +77,18 @@ class RealPatchDataset(Dataset):
         else:
             if not self.files:
                 return torch.zeros(5, self.patch_size, self.patch_size)
-                
-            file_path = os.path.join(self.data_dir_or_id, self.files[idx % len(self.files)])
+
+            file_path = self.files[idx % len(self.files)]
             try:
-                tensor = torch.load(file_path, weights_only=True)
+                if file_path.endswith('.npz'):
+                    arr = np.load(file_path)["rgb"]
+                    if arr.ndim == 3 and arr.shape[2] <= 10:
+                        arr = arr.transpose(2, 0, 1)
+                    tensor = torch.from_numpy(arr.copy()).float()
+                    if tensor.max() > 1.0:
+                        tensor = tensor / 255.0
+                else:
+                    tensor = torch.load(file_path, weights_only=True)
             except Exception as e:
                 logger.error(f"Failed to load tensor {file_path}: {e}")
                 return torch.zeros(5, self.patch_size, self.patch_size)
@@ -168,7 +189,7 @@ class AlphaEarthTrainer:
         trainable_params = [p for p in self.model.parameters() if p.requires_grad]
         self.optimizer = optim.Adam(trainable_params, lr=1e-3)
         
-        dataset_path = os.path.join(settings.RAW_DATA_DIR, "dataset_" + dataset_id) if not dataset_id.startswith('memory_') else dataset_id
+        dataset_path = resolve_dataset_path(dataset_id)
         self.dataset = RealPatchDataset(dataset_path)
         self.dataloader = DataLoader(self.dataset, batch_size=16, shuffle=True)
         

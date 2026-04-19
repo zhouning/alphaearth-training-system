@@ -8,7 +8,7 @@ from typing import List, Optional
 import datetime
 import os
 import torch
-from app.services.trainer import PrithviAlphaEarthEncoder, RealPatchDataset
+from app.services.trainer import PrithviAlphaEarthEncoder, RealPatchDataset, resolve_dataset_path
 from torch.utils.data import DataLoader
 
 router = APIRouter()
@@ -93,37 +93,46 @@ def evaluate_model(model_id: str, db: Session = Depends(get_db)):
         
     # Load model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = PrithviAlphaEarthEncoder().to(device)
-    
+
     from app.core.config import settings
     weight_path = os.path.join(settings.WEIGHTS_DIR, f"alphaearth_local_{model_record.job_id}.pt")
-    if os.path.exists(weight_path):
-        try:
-            model.load_state_dict(torch.load(weight_path, map_location=device, weights_only=True))
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to load weights: {e}")
-    else:
+    if not os.path.exists(weight_path):
         raise HTTPException(status_code=404, detail="Model weight file missing on disk")
-        
+
+    try:
+        ckpt = torch.load(weight_path, map_location=device, weights_only=False)
+        is_linhe_ckpt = isinstance(ckpt, dict) and "backbone" in ckpt
+        if is_linhe_ckpt:
+            model = PrithviAlphaEarthEncoder(in_channels=5).to(device)
+            model.backbone.load_state_dict(ckpt["backbone"], strict=False)
+        else:
+            model = PrithviAlphaEarthEncoder().to(device)
+            model.load_state_dict(ckpt)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load weights: {e}")
+
     model.eval()
-    
+
     # Load dataset
-    dataset_path = os.path.join(settings.RAW_DATA_DIR, "dataset_" + job.dataset_id) if not job.dataset_id.startswith('memory_') else job.dataset_id
+    dataset_path = resolve_dataset_path(job.dataset_id)
     dataset = RealPatchDataset(dataset_path)
     dataloader = DataLoader(dataset, batch_size=16, shuffle=False)
-    
-    loss_fn_rec = torch.nn.MSELoss()
+
     total_rec_loss = 0.0
-    
     all_embeddings = []
-    
+
     with torch.no_grad():
         for batch_x in dataloader:
             batch_x = batch_x.to(device)
-            rec, z = model(batch_x)
-            l_rec = loss_fn_rec(rec, batch_x)
-            total_rec_loss += l_rec.item()
-            # Extract features for clustering
+            try:
+                rec, z = model(batch_x)
+                total_rec_loss += torch.nn.MSELoss()(rec, batch_x).item()
+            except Exception:
+                x_adapted = model.modality_adapter(batch_x)
+                features = model.backbone(x_adapted)
+                z = model.proj(model.finetune_head(features))
             all_embeddings.append(z.cpu().numpy())
             
     avg_rec = total_rec_loss / max(1, len(dataloader))

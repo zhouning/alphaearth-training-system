@@ -136,7 +136,7 @@ async def list_available_datasets():
     from app.core.config import settings
     work_dir = settings.RAW_DATA_DIR
     datasets = []
-    
+
     if os.path.exists(work_dir):
         for item in os.listdir(work_dir):
             item_path = os.path.join(work_dir, item)
@@ -151,7 +151,16 @@ async def list_available_datasets():
                         "name": f"数据集 {item[-8:]} ({len(pt_files)} 切片) [磁盘]",
                         "mtime": mtime
                     })
-                    
+
+    # Linhe patch dataset (exists-only discovery via parquet index file)
+    linhe_index = os.path.join(settings.DATA_DIR, "linhe_patches", "_index.parquet")
+    if os.path.exists(linhe_index):
+        datasets.append({
+            "id": "linhe_patches",
+            "name": "临河样例数据 [RGB->Prithvi PEFT]",
+            "mtime": os.path.getmtime(linhe_index)
+        })
+
     # Add in-memory datasets
     for mem_id, tensors in IN_MEMORY_DATASETS.items():
         datasets.append({
@@ -159,7 +168,7 @@ async def list_available_datasets():
             "name": f"数据集 {mem_id[-8:]} ({len(tensors)} 切片) [内存直通 🚀]",
             "mtime": time.time()  # always float them to top
         })
-                    
+
     # Sort by modification time, newest first
     datasets.sort(key=lambda x: x["mtime"], reverse=True)
     return {"status": "success", "data": datasets}

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
-from app.api import pipeline, training, satellites, areas, models
+from app.api import pipeline, training, satellites, areas, models, labels
 from app.core.config import settings
 
 app = FastAPI(
@@ -43,9 +43,14 @@ app.include_router(
     tags=["areas"]
 )
 app.include_router(
-    models.router, 
-    prefix=f"{settings.API_V1_STR}/models", 
+    models.router,
+    prefix=f"{settings.API_V1_STR}/models",
     tags=["models"]
+)
+app.include_router(
+    labels.router,
+    prefix=f"{settings.API_V1_STR}/labels",
+    tags=["labels"],
 )
 
 # Mount frontend static files
