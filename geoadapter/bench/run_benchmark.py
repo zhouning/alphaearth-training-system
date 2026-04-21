@@ -23,7 +23,7 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
     from geoadapter.adapters.houlsby import inject_houlsby_adapters
     from geoadapter.data.datasets import ModalityConfig
     from geoadapter.engine.trainer import PEFTTrainer
-    from geoadapter.engine.evaluator import compute_classification_metrics
+    from geoadapter.engine.evaluator import compute_classification_metrics, compute_multilabel_metrics
     import numpy as np
 
     torch.manual_seed(seed)
@@ -33,7 +33,10 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
     epochs = global_cfg["experiment"]["epochs"]
     batch_size = global_cfg["experiment"]["batch_size"]
 
-    backbone = PrithviBackbone(pretrained=global_cfg["prithvi"]["pretrained"])
+    backbone = PrithviBackbone(
+        pretrained=global_cfg["prithvi"]["pretrained"],
+        checkpoint_path=global_cfg["prithvi"].get("checkpoint"),
+    )
 
     peft = method_cfg.get("peft")
     if peft == "lora":
@@ -44,18 +47,32 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
     elif peft == "houlsby":
         for block in backbone.blocks:
             inject_houlsby_adapters(block, bottleneck_dim=method_cfg.get("bottleneck_dim", 64))
+    elif peft == "full_finetune":
+        for p in backbone.parameters():
+            p.requires_grad_(True)
+    elif peft == "lora_split_qkv":
+        from geoadapter.adapters.lora import split_qkv_and_inject_lora
+        for block in backbone.blocks:
+            split_qkv_and_inject_lora(block, rank=method_cfg.get("rank", 8))
 
     if method_cfg["adapter"] == "geo_adapter":
         adapter = GeoAdapter(in_channels=cfg_m.c_in, out_channels=6)
     else:
         adapter = ZeroPadAdapter(in_channels=cfg_m.c_in, out_channels=6)
 
-    head = ClassificationHead(in_dim=768, num_classes=10)
+    task_type = global_cfg["experiment"].get("task", "classification")
+    num_classes = global_cfg["experiment"].get("num_classes", 10)
+    if task_type == "multilabel":
+        from geoadapter.models.heads import MultiLabelHead
+        head = MultiLabelHead(in_dim=768, num_classes=num_classes)
+    else:
+        head = ClassificationHead(in_dim=768, num_classes=num_classes)
     trainer = PEFTTrainer(
         backbone, adapter, head,
         lr=global_cfg["training"]["lr"],
         lr_peft=global_cfg["training"].get("lr_peft"),
         epochs=epochs,
+        task=task_type,
         device=device,
     )
 
@@ -70,17 +87,27 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
     train_loader = None
     val_loader = None
     try:
-        from geoadapter.data.datasets import load_eurosat
         ds_root = global_cfg["experiment"]["dataset_root"]
-        train_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="train")
-        val_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="test")
+        dataset_name = global_cfg["experiment"].get("dataset", "eurosat")
+        max_samples = global_cfg["experiment"].get("max_samples")
+        if dataset_name == "bigearthnet":
+            from geoadapter.data.datasets import load_bigearthnet
+            train_ds = load_bigearthnet(root=ds_root, modality=modality_cfg["preset"], split="train", max_samples=max_samples)
+            val_ds = load_bigearthnet(root=ds_root, modality=modality_cfg["preset"], split="test", max_samples=max_samples)
+        else:
+            from geoadapter.data.datasets import load_eurosat
+            train_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="train")
+            val_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="test")
         train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2)
         val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
-        print(f"  [{tag}] Loaded real dataset: {len(train_ds)} train, {len(val_ds)} val")
+        print(f"  [{tag}] Loaded {dataset_name}: {len(train_ds)} train, {len(val_ds)} val")
     except Exception as e:
         print(f"  [{tag}] Dataset not available ({e}), using synthetic data")
         x_syn = torch.randn(64, cfg_m.c_in, 64, 64)
-        y_syn = torch.randint(0, 10, (64,))
+        if task_type == "multilabel":
+            y_syn = torch.randint(0, 2, (64, num_classes)).float()
+        else:
+            y_syn = torch.randint(0, num_classes, (64,))
         train_loader = DataLoader(TensorDataset(x_syn, y_syn), batch_size=batch_size)
 
     # Training loop
@@ -100,15 +127,25 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
     metrics = {"method": method_cfg["name"], "modality": modality_cfg["preset"],
                "seed": seed, "trainable_params": n_trainable}
     if val_loader:
-        all_preds, all_labels = [], []
-        for batch_x, batch_y in val_loader:
-            logits = trainer.predict(batch_x)
-            preds = logits.argmax(dim=1).cpu().numpy()
-            all_preds.extend(preds)
-            all_labels.extend(batch_y.numpy())
-        eval_metrics = compute_classification_metrics(np.array(all_labels), np.array(all_preds))
-        metrics.update(eval_metrics)
-        print(f"  [{tag}] OA={eval_metrics['overall_accuracy']:.4f} F1={eval_metrics['macro_f1']:.4f}")
+        if task_type == "multilabel":
+            all_scores, all_labels = [], []
+            for batch_x, batch_y in val_loader:
+                logits = trainer.predict(batch_x)
+                all_scores.append(logits.sigmoid().cpu().numpy())
+                all_labels.append(batch_y.cpu().numpy())
+            eval_metrics = compute_multilabel_metrics(np.vstack(all_labels), np.vstack(all_scores))
+            metrics.update(eval_metrics)
+            print(f"  [{tag}] mAP={eval_metrics['mAP']:.4f}")
+        else:
+            all_preds, all_labels = [], []
+            for batch_x, batch_y in val_loader:
+                logits = trainer.predict(batch_x)
+                preds = logits.argmax(dim=1).cpu().numpy()
+                all_preds.extend(preds)
+                all_labels.extend(batch_y.numpy())
+            eval_metrics = compute_classification_metrics(np.array(all_labels), np.array(all_preds))
+            metrics.update(eval_metrics)
+            print(f"  [{tag}] OA={eval_metrics['overall_accuracy']:.4f} F1={eval_metrics['macro_f1']:.4f}")
 
     return metrics
 

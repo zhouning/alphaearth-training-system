@@ -36,6 +36,25 @@ def load_eurosat(root: str, modality: str = "s2_full", split: str = "train"):
     return _BandSubset(ds, cfg.indices, key="image")
 
 
+def load_bigearthnet(root: str, modality: str = "s2_full", split: str = "train", max_samples: int = None):
+    """Load BigEarthNet-S2 (19-class simplified) via torchgeo with modality selection."""
+    try:
+        from torchgeo.datasets import BigEarthNet
+    except ImportError:
+        raise ImportError("Install torchgeo: pip install geoadapter[bench]")
+
+    cfg = ModalityConfig(modality)
+    ds = BigEarthNet(root=root, split=split, bands="s2", num_classes=19, download=True)
+    ds = _BandSubset(ds, cfg.indices, key="image")
+    if max_samples and len(ds) > max_samples:
+        from torch.utils.data import Subset
+        import numpy as np
+        rng = np.random.RandomState(42)
+        indices = rng.choice(len(ds), max_samples, replace=False)
+        ds = Subset(ds, indices.tolist())
+    return ds
+
+
 class _BandSubset(Dataset):
     """Wraps a torchgeo dataset to select specific bands."""
 
@@ -53,4 +72,6 @@ class _BandSubset(Dataset):
         if self.indices is not None:
             img = img[self.indices]
         label = sample.get("label", sample.get("labels", 0))
+        if hasattr(label, "float") and label.dim() > 0:
+            label = label.float()
         return img, label

@@ -1,0 +1,25 @@
+experiment:
+  name: eurosat_full_finetune
+  dataset: eurosat
+  dataset_root: ./data/eurosat
+  epochs: 50
+  batch_size: 32
+  seeds: [42]
+
+modalities:
+  - preset: s2_full
+
+methods:
+  - name: full_finetune
+    adapter: zero_pad
+    peft: full_finetune
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-5
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: null
