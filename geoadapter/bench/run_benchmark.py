@@ -161,7 +161,6 @@ def main():
     cfg = load_config(args.config)
     if args.epochs is not None:
         cfg["experiment"]["epochs"] = args.epochs
-    results = []
 
     combos = list(itertools.product(cfg["methods"], cfg["modalities"], cfg["experiment"]["seeds"]))
     print(f"Total experiments: {len(combos)}")
@@ -171,11 +170,29 @@ def main():
             print(f"  {method['name']} x {modality['preset']} x seed={seed}")
         return
 
+    output_path = Path(args.output)
+    results = []
+    done_keys = set()
+    if output_path.exists():
+        try:
+            results = json.loads(output_path.read_text())
+            done_keys = {(r["method"], r["modality"], r["seed"]) for r in results}
+            print(f"Resuming from {output_path}: {len(done_keys)} experiments already completed")
+        except Exception as e:
+            print(f"WARN: could not parse existing output ({e}), starting fresh")
+            results = []
+            done_keys = set()
+
     for method, modality, seed in combos:
+        key = (method["name"], modality["preset"], seed)
+        if key in done_keys:
+            print(f"  SKIP {method['name']}|{modality['preset']}|seed={seed} (already done)")
+            continue
         result = run_single_experiment(method, modality, cfg, seed)
         results.append(result)
+        output_path.write_text(json.dumps(results, indent=2))
+        print(f"  -> appended to {output_path} ({len(results)}/{len(combos)})")
 
-    Path(args.output).write_text(json.dumps(results, indent=2))
     print(f"Results saved to {args.output}")
 
 

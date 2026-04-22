@@ -1,0 +1,30 @@
+experiment:
+  name: bigearthnet_lora
+  dataset: bigearthnet
+  dataset_root: ./data/bigearthnet
+  task: multilabel
+  num_classes: 19
+  epochs: 15
+  batch_size: 64
+  max_samples: 30000
+  seeds: [42, 123, 456]
+
+modalities:
+  - preset: s2_full
+  - preset: rgb
+
+methods:
+  - name: lora_r8
+    adapter: zero_pad
+    peft: lora
+    rank: 8
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: null
