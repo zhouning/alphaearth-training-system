@@ -36,15 +36,24 @@ def load_eurosat(root: str, modality: str = "s2_full", split: str = "train"):
     return _BandSubset(ds, cfg.indices, key="image")
 
 
-def load_bigearthnet(root: str, modality: str = "s2_full", split: str = "train", max_samples: int = None):
-    """Load BigEarthNet-S2 (19-class simplified) via torchgeo with modality selection."""
+def load_bigearthnet(root: str, modality: str = "s2_full", split: str = "train",
+                     max_samples: int = None, download: bool = True):
+    """Load BigEarthNet-S2 (19-class simplified) via torchgeo with modality selection.
+
+    Args:
+        root: Dataset root directory (will download ~32GB compressed on first use).
+        modality: Band selection preset from ModalityConfig.
+        split: One of 'train', 'val', 'test'.
+        max_samples: If set, randomly subsample to this many examples.
+        download: Whether to auto-download if missing.
+    """
     try:
         from torchgeo.datasets import BigEarthNet
     except ImportError:
         raise ImportError("Install torchgeo: pip install geoadapter[bench]")
 
     cfg = ModalityConfig(modality)
-    ds = BigEarthNet(root=root, split=split, bands="s2", num_classes=19, download=True)
+    ds = BigEarthNet(root=root, split=split, bands="s2", num_classes=19, download=download)
     ds = _BandSubset(ds, cfg.indices, key="image")
     if max_samples and len(ds) > max_samples:
         from torch.utils.data import Subset

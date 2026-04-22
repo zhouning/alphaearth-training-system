@@ -1,12 +1,13 @@
 experiment:
   name: bigearthnet_linear_probe
   dataset: bigearthnet
-  dataset_root: ./data/bigearthnet
+  dataset_root: /content/bigearthnet
   task: multilabel
   num_classes: 19
   epochs: 15
   batch_size: 64
-  max_samples: 30000
+  max_samples: 10000
+  val_max_samples: 5000
   seeds: [42, 123, 456]
 
 modalities:

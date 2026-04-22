@@ -3,6 +3,7 @@ import argparse
 import yaml
 import json
 import itertools
+import gc
 from pathlib import Path
 
 
@@ -90,10 +91,11 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
         ds_root = global_cfg["experiment"]["dataset_root"]
         dataset_name = global_cfg["experiment"].get("dataset", "eurosat")
         max_samples = global_cfg["experiment"].get("max_samples")
+        val_max_samples = global_cfg["experiment"].get("val_max_samples", max_samples)
         if dataset_name == "bigearthnet":
             from geoadapter.data.datasets import load_bigearthnet
             train_ds = load_bigearthnet(root=ds_root, modality=modality_cfg["preset"], split="train", max_samples=max_samples)
-            val_ds = load_bigearthnet(root=ds_root, modality=modality_cfg["preset"], split="test", max_samples=max_samples)
+            val_ds = load_bigearthnet(root=ds_root, modality=modality_cfg["preset"], split="test", max_samples=val_max_samples)
         else:
             from geoadapter.data.datasets import load_eurosat
             train_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="train")
@@ -192,6 +194,13 @@ def main():
         results.append(result)
         output_path.write_text(json.dumps(results, indent=2))
         print(f"  -> appended to {output_path} ({len(results)}/{len(combos)})")
+        gc.collect()
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
 
     print(f"Results saved to {args.output}")
 
