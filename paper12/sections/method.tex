@@ -1,0 +1,44 @@
+\section{Experimental Setup}
+
+\subsection{Foundation Model}
+We use Prithvi-100M~\cite{jakubik2023prithvi} as the shared backbone in all experiments. Prithvi-100M is an 86M-parameter Vision Transformer~\cite{dosovitskiy2021vit} pre-trained on remote sensing imagery using a masked autoencoding objective~\cite{he2022mae}. In our implementation, the backbone consists of a 12-layer transformer encoder with embedding dimension 768, 12 attention heads, and an input patch embedding layer adapted for six expected input channels. Unless otherwise noted, the backbone is frozen and only PEFT parameters and task heads are updated.
+
+A key architectural detail is that Prithvi's attention uses a fused QKV projection pattern inherited through PyTorch's \texttt{nn.MultiheadAttention}, where query, key, and value weights are stored as a single \texttt{in\_proj\_weight} parameter. This detail turns out to be crucial for interpreting LoRA results.
+
+\subsection{PEFT Methods}
+We evaluate seven adaptation strategies:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Linear Probe}: frozen backbone with a trainable classification head.
+    \item \textbf{BitFit}~\cite{zaken2022bitfit}: unfreezes only bias parameters throughout the backbone.
+    \item \textbf{LoRA (r=8)}~\cite{hu2022lora}: standard low-rank adaptation inserted into attention projections.
+    \item \textbf{LoRA Split-QKV (r=8)}: diagnostic variant that explicitly splits fused QKV into separate query, key, and value linear layers before injecting LoRA.
+    \item \textbf{Houlsby Adapters (d=64)}~\cite{houlsby2019adapter}: bottleneck adapters inserted after each transformer block.
+    \item \textbf{GeoAdapter v2}: residual input-stage modality adapter.
+    \item \textbf{Full Fine-Tuning}: unfreezes all backbone parameters (EuroSAT only) to establish the performance ceiling.
+\end{itemize}
+
+The trainable parameter counts range from 7.7K for EuroSAT linear probing to 86.2M for full fine-tuning.
+
+\subsection{Modality Configurations}
+We define five input configurations on EuroSAT to stress-test adaptation under heterogeneous spectral settings:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{s2\_full}: all 10 Sentinel-2 bands (B2--B12).
+    \item \textbf{rgb}: visible subset (B4, B3, B2).
+    \item \textbf{rgb\_sar}: RGB plus a simulated extra channel.
+    \item \textbf{gf2}: a 4-band high-resolution optical proxy (B, G, R, NIR).
+    \item \textbf{sar\_only}: 2-band extreme out-of-distribution configuration.
+\end{itemize}
+
+Because Prithvi expects six channels, all non-matching inputs are bridged either by zero-padding or by GeoAdapter. The zero-padding setup is not merely a preprocessing trick; it is part of the evaluation, since it reveals whether different PEFT methods can exploit partially missing or mismatched channels.
+
+For BigEarthNet-S2, we evaluate two configurations: \texttt{s2\_full} and \texttt{rgb}. This is sufficient to test whether the main EuroSAT conclusions transfer to a second dataset and a multi-label task.
+
+\subsection{Datasets}
+\textbf{EuroSAT}~\cite{helber2019eurosat} is used as the primary benchmark. It contains 27K Sentinel-2 image patches at 64\,$\times$\,64 resolution across 10 land-use classes. We use three random seeds and report mean and standard deviation across runs.
+
+\textbf{BigEarthNet-S2}~\cite{sumbul2019bigearthnet} is used for cross-dataset validation. To keep experiments tractable on Colab A100 hardware, we use a 10K/5K train/validation subsample from the 19-class simplified multi-label setting. Evaluation uses mean Average Precision (mAP).
+
+\subsection{Training Protocol}
+All experiments are run on Google Colab Pro+ with an NVIDIA A100 40GB GPU. EuroSAT experiments use 50 epochs; BigEarthNet experiments use 15 epochs. The optimizer is AdamW~\cite{loshchilov2019adamw} with cosine annealing~\cite{loshchilov2017sgdr}. We use a batch size of 64 in standard PEFT runs, and batch size 32 for full fine-tuning to avoid memory overflow. Differential learning rates are used where appropriate: PEFT parameters receive a lower learning rate than the task head.
+
+For EuroSAT, we report Overall Accuracy (OA) and macro F1. For BigEarthNet-S2, we report mAP. Results are aggregated over three seeds whenever possible; the full fine-tuning ceiling is reported as a single run.

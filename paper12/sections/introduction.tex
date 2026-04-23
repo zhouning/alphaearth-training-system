@@ -1,0 +1,21 @@
+\section{Introduction}
+
+Geospatial foundation models (GeoFMs) have recently emerged as a promising paradigm for Earth observation analysis. Models such as Prithvi-100M~\cite{jakubik2023prithvi}, SatMAE~\cite{cong2022satmae}, Scale-MAE~\cite{reed2023scalemae}, and related self-supervised transformers~\cite{hong2024spectralgpt} suggest that large-scale pre-training on satellite imagery can yield transferable representations for downstream remote sensing tasks. At the same time, practitioners increasingly face adaptation problems that differ substantially from the homogeneous settings used during pre-training. Real-world inputs may contain different band subsets, missing channels, alternative sensor combinations, or strongly out-of-distribution modality configurations.
+
+In mainstream natural language processing and computer vision, parameter-efficient fine-tuning (PEFT) methods are widely used to adapt large pre-trained models at low cost. LoRA~\cite{hu2022lora}, adapters~\cite{houlsby2019adapter}, BitFit~\cite{zaken2022bitfit}, and prompt-style tuning methods~\cite{lester2021prompt,jia2022vpt} have become standard choices because they often approach full fine-tuning performance with far fewer trainable parameters. This success naturally raises the question of whether the same PEFT rankings hold for geospatial foundation models.
+
+We argue that this assumption is non-trivial for at least three reasons. First, geospatial foundation models often operate on heterogeneous multi-band inputs rather than fixed RGB inputs. Second, remote sensing pre-training objectives, especially masked autoencoding on spectral-spatial data, differ from the language modeling and image classification setups where PEFT methods are most established. Third, implementation details that are harmless in conventional vision backbones can become critical in GeoFMs, especially when architectural components such as fused attention projections interact with adaptation layers.
+
+Despite the practical importance of this problem, current literature lacks a systematic benchmark of PEFT methods under heterogeneous geospatial input settings. Existing studies often evaluate only one or two adaptation strategies, focus on a single downstream task, or treat PEFT as an implementation detail rather than the object of study. As a result, practitioners still lack clear guidance on which PEFT method to choose when adapting a model such as Prithvi-100M to non-standard remote sensing inputs.
+
+This paper addresses that gap through a controlled empirical study on Prithvi-100M. We benchmark seven adaptation strategies across five modality configurations on EuroSAT, then validate the main findings on BigEarthNet-S2. Beyond reporting final scores, we include a full fine-tuning ceiling and a diagnostic split-QKV LoRA ablation to identify the root causes of LoRA failure. Across 100 total experiments, we show that PEFT rankings from mainstream NLP and vision do not transfer directly to geospatial foundation models.
+
+Our main contributions are as follows:
+\begin{enumerate}[leftmargin=1.5em]
+    \item We present the first systematic benchmark of PEFT methods on Prithvi-100M under heterogeneous input settings, covering 100 experiments across EuroSAT and BigEarthNet-S2.
+    \item We show that LoRA fails on Prithvi-100M for two compounding reasons: naive implementations miss fused QKV projections, and corrected low-rank adaptation remains suboptimal even after this issue is fixed.
+    \item We demonstrate that Houlsby adapters consistently dominate all other PEFT methods across both datasets, achieving 94.5\% of full fine-tuning performance with only 1.4\% of the trainable parameters.
+    \item We confirm across datasets that modality selection has a larger practical impact than PEFT selection: richer spectral inputs consistently outperform reduced-band alternatives.
+    \item We provide a negative result for standalone input-stage adaptation (GeoAdapter), clarifying its failure modes and limitations.
+    \item We release a reproducible Geo-MLOps benchmarking framework for geospatial PEFT experimentation.
+\end{enumerate}

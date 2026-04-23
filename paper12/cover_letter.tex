@@ -1,0 +1,41 @@
+\documentclass[11pt]{letter}
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage[hidelinks]{hyperref}
+
+\signature{[Author Name]}
+\address{[Affiliation] \\ [Address]}
+
+\begin{document}
+
+\begin{letter}{%
+  Program Chairs \\
+  CVPR 2026 EarthVision Workshop \\
+}
+
+\opening{Dear Program Chairs,}
+
+We are pleased to submit our manuscript, ``How Well Do PEFT Methods Adapt Geospatial Foundation Models to Heterogeneous Inputs? A Systematic Evaluation on Prithvi-100M,'' for consideration at the CVPR 2026 EarthVision Workshop.
+
+\textbf{Summary.}
+The paper presents the first systematic benchmark of parameter-efficient fine-tuning (PEFT) methods on a geospatial foundation model under heterogeneous input settings. We evaluate seven adaptation strategies across five modality configurations on EuroSAT and validate the main findings on BigEarthNet-S2, totaling 100 experiments. Three principal findings emerge:
+
+\begin{enumerate}
+    \item LoRA, the most popular PEFT method in NLP and vision, fails on Prithvi-100M due to a compounding implementation trap (fused QKV projections) and an intrinsic low-rank mismatch. We provide a diagnostic split-QKV ablation that isolates these two causes.
+    \item Houlsby adapters consistently dominate all other PEFT methods, reaching 94.5\% of the full fine-tuning ceiling with only 1.4\% of the trainable parameters.
+    \item Modality selection has a larger practical impact than PEFT method selection: richer spectral inputs outperform reduced-band alternatives across all methods and datasets.
+\end{enumerate}
+
+\textbf{Relevance to EarthVision.}
+The paper directly addresses a practical gap in the geospatial AI community: practitioners routinely apply PEFT methods to remote sensing backbones without knowing whether the rankings established in NLP and vision transfer. Our negative result on LoRA, in particular, has immediate implications for anyone adapting Prithvi-100M or similar fused-QKV architectures. The benchmark framework and per-seed results are released for reproducibility.
+
+\textbf{Novelty and contribution.}
+While individual PEFT methods have been applied to remote sensing models, no prior work provides a controlled, multi-method, multi-modality benchmark with diagnostic ablations. The fused-QKV trap we identify is, to our knowledge, undocumented in the geospatial literature and affects any LoRA implementation targeting \texttt{nn.MultiheadAttention}-based backbones.
+
+\textbf{Confirmation.}
+This manuscript has not been published or submitted elsewhere. All authors have approved the submission.
+
+\closing{Sincerely,}
+
+\end{letter}
+\end{document}

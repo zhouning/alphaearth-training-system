@@ -1,0 +1,44 @@
+[
+  {
+    "method": "houlsby",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 1204243,
+    "mAP": 0.4927403749268424
+  },
+  {
+    "method": "houlsby",
+    "modality": "s2_full",
+    "seed": 123,
+    "trainable_params": 1204243,
+    "mAP": 0.48149081671198807
+  },
+  {
+    "method": "houlsby",
+    "modality": "s2_full",
+    "seed": 456,
+    "trainable_params": 1204243,
+    "mAP": 0.4978507373217504
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 1204243,
+    "mAP": 0.4531115837631405
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 1204243,
+    "mAP": 0.45833030664576285
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 1204243,
+    "mAP": 0.45586330783132295
+  }
+]

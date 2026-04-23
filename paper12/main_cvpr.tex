@@ -1,0 +1,59 @@
+% CVPR 2026 / EarthVision Workshop adaptation of the Paper 12 draft.
+%
+% Usage:
+%   Place official CVPR style files (cvpr.sty, cvpr_eso.sty, ieeenat_fullname.bst)
+%   in this directory, then compile with pdflatex+bibtex+pdflatex+pdflatex.
+%   Anonymous submission: \cvprfinalcopy is commented out below.
+%
+% Tested target: CVPR 2026 author kit template. If submitting to the
+% EarthVision workshop, replace the class options as instructed by the
+% workshop call for papers.
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+\usepackage{cvpr}          % provided by CVPR author kit
+\usepackage{times}
+\usepackage{epsfig}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage[breaklinks=true,bookmarks=false]{hyperref}
+
+% Toggle for the camera-ready (de-anonymized) version.
+% \cvprfinalcopy
+
+\def\cvprPaperID{****}
+\def\httilde{\mbox{\tt\raisebox{-.5ex}{\symbol{126}}}}
+
+\ifcvprfinal\pagestyle{empty}\fi
+\setcounter{page}{1}
+
+\begin{document}
+
+\title{How Well Do PEFT Methods Adapt Geospatial Foundation Models to Heterogeneous Inputs? A Systematic Evaluation on Prithvi-100M}
+
+\author{Anonymous CVPR submission\\
+Paper ID \cvprPaperID}
+
+\maketitle
+
+\input{sections/abstract}
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/method}
+\input{sections/results}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+{\small
+\bibliographystyle{ieeenat_fullname}
+\bibliography{references}
+}
+
+\input{sections/appendix}
+
+\end{document}
