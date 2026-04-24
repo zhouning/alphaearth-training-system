@@ -93,11 +93,29 @@ def load_sen1floods11(root: str, modality: str = "s2_floods", split: str = "trai
     try:
         from torchgeo.datasets import Sen1Floods11
     except ImportError:
-        raise ImportError("Install torchgeo: pip install geoadapter[bench]")
+        raise ImportError("Sen1Floods11 not available in torchgeo. Use load_landcoverai instead.")
 
     cfg = ModalityConfig(modality)
     ds = Sen1Floods11(root=root, split=split, download=True)
     ds = _SegmentationDataset(ds, cfg.indices, image_key="image", mask_key="mask")
+    if max_samples and len(ds) > max_samples:
+        from torch.utils.data import Subset
+        import numpy as np
+        rng = np.random.RandomState(42)
+        indices = rng.choice(len(ds), max_samples, replace=False)
+        ds = Subset(ds, indices.tolist())
+    return ds
+
+
+def load_landcoverai(root: str, split: str = "train", max_samples: int = None):
+    """Load LandCover.ai for 6-class semantic segmentation via torchgeo."""
+    try:
+        from torchgeo.datasets import LandCoverAI
+    except ImportError:
+        raise ImportError("Install torchgeo: pip install geoadapter[bench]")
+
+    ds = LandCoverAI(root=root, split=split, download=True)
+    ds = _SegmentationDataset(ds, band_indices=None, image_key="image", mask_key="mask")
     if max_samples and len(ds) > max_samples:
         from torch.utils.data import Subset
         import numpy as np

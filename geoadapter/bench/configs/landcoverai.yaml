@@ -1,0 +1,35 @@
+experiment:
+  name: landcoverai_segmentation_benchmark
+  task: segmentation
+  dataset: landcoverai
+  dataset_root: ./data/landcoverai
+  num_classes: 6
+  epochs: 50
+  batch_size: 8
+  seeds: [42, 123, 456]
+
+modalities:
+  - preset: rgb
+
+methods:
+  - name: linear_probe
+    adapter: zero_pad
+    peft: null
+  - name: houlsby
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+  - name: lora_r8
+    adapter: zero_pad
+    peft: lora
+    rank: 8
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: null

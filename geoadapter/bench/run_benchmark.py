@@ -103,6 +103,10 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
             from geoadapter.data.datasets import load_sen1floods11
             train_ds = load_sen1floods11(root=ds_root, modality=modality_cfg["preset"], split="train", max_samples=max_samples)
             val_ds = load_sen1floods11(root=ds_root, modality=modality_cfg["preset"], split="test", max_samples=val_max_samples)
+        elif dataset_name == "landcoverai":
+            from geoadapter.data.datasets import load_landcoverai
+            train_ds = load_landcoverai(root=ds_root, split="train", max_samples=max_samples)
+            val_ds = load_landcoverai(root=ds_root, split="val", max_samples=val_max_samples)
         else:
             from geoadapter.data.datasets import load_eurosat
             train_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="train")
