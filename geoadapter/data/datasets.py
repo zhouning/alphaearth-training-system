@@ -15,6 +15,7 @@ class ModalityConfig:
         "rgb_sar": {"indices": [3, 2, 1], "c_in": 4, "name": "RGB + SAR VV"},
         "gf2": {"indices": [3, 2, 1, 7], "c_in": 4, "name": "GF-2 (B,G,R,NIR)"},
         "sar_only": {"indices": None, "c_in": 2, "name": "SAR VV+VH"},
+        "s2_floods": {"indices": list(range(13)), "c_in": 13, "name": "Sen1Floods11 S2 (13 bands)"},
     }
 
     def __init__(self, preset: str):
@@ -84,3 +85,46 @@ class _BandSubset(Dataset):
         if hasattr(label, "float") and label.dim() > 0:
             label = label.float()
         return img, label
+
+
+def load_sen1floods11(root: str, modality: str = "s2_floods", split: str = "train",
+                      max_samples: int = None):
+    """Load Sen1Floods11 for binary flood segmentation via torchgeo."""
+    try:
+        from torchgeo.datasets import Sen1Floods11
+    except ImportError:
+        raise ImportError("Install torchgeo: pip install geoadapter[bench]")
+
+    cfg = ModalityConfig(modality)
+    ds = Sen1Floods11(root=root, split=split, download=True)
+    ds = _SegmentationDataset(ds, cfg.indices, image_key="image", mask_key="mask")
+    if max_samples and len(ds) > max_samples:
+        from torch.utils.data import Subset
+        import numpy as np
+        rng = np.random.RandomState(42)
+        indices = rng.choice(len(ds), max_samples, replace=False)
+        ds = Subset(ds, indices.tolist())
+    return ds
+
+
+class _SegmentationDataset(Dataset):
+    """Wraps a torchgeo dataset returning (image, mask) for segmentation."""
+
+    def __init__(self, base_dataset, band_indices, image_key="image", mask_key="mask"):
+        self.base = base_dataset
+        self.indices = band_indices
+        self.image_key = image_key
+        self.mask_key = mask_key
+
+    def __len__(self):
+        return len(self.base)
+
+    def __getitem__(self, idx):
+        sample = self.base[idx]
+        img = sample[self.image_key]
+        if self.indices is not None:
+            img = img[self.indices]
+        mask = sample[self.mask_key].long()
+        if mask.dim() == 3:
+            mask = mask.squeeze(0)
+        return img, mask

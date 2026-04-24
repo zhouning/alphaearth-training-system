@@ -23,6 +23,7 @@ class PEFTTrainer:
         self.head = head.to(device)
         self.device = device
         self.task = task
+        self.return_spatial = (task == "segmentation")
 
         # Differential learning rates
         head_params = list(head.parameters())
@@ -41,6 +42,8 @@ class PEFTTrainer:
         # Task-specific loss
         if task == "multilabel":
             self.criterion = nn.BCEWithLogitsLoss()
+        elif task == "segmentation":
+            self.criterion = nn.CrossEntropyLoss(ignore_index=255)
         else:
             self.criterion = nn.CrossEntropyLoss()
 
@@ -49,8 +52,12 @@ class PEFTTrainer:
         self.optimizer.zero_grad()
         if self.adapter:
             x = self.adapter(x)
-        features = self.backbone(x)
-        logits = self.head(features)
+        if self.return_spatial:
+            features, spatial_dims = self.backbone(x, return_spatial=True)
+            logits = self.head(features, spatial_dims)
+        else:
+            features = self.backbone(x)
+            logits = self.head(features)
         loss = self.criterion(logits, y)
         loss.backward()
         self.optimizer.step()
@@ -65,5 +72,8 @@ class PEFTTrainer:
         x = x.to(self.device)
         if self.adapter:
             x = self.adapter(x)
+        if self.return_spatial:
+            features, spatial_dims = self.backbone(x, return_spatial=True)
+            return self.head(features, spatial_dims)
         features = self.backbone(x)
         return self.head(features)

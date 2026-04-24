@@ -24,7 +24,7 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
     from geoadapter.adapters.houlsby import inject_houlsby_adapters
     from geoadapter.data.datasets import ModalityConfig
     from geoadapter.engine.trainer import PEFTTrainer
-    from geoadapter.engine.evaluator import compute_classification_metrics, compute_multilabel_metrics
+    from geoadapter.engine.evaluator import compute_classification_metrics, compute_multilabel_metrics, compute_segmentation_metrics
     import numpy as np
 
     torch.manual_seed(seed)
@@ -66,6 +66,9 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
     if task_type == "multilabel":
         from geoadapter.models.heads import MultiLabelHead
         head = MultiLabelHead(in_dim=768, num_classes=num_classes)
+    elif task_type == "segmentation":
+        from geoadapter.models.heads import SegmentationHead
+        head = SegmentationHead(in_dim=768, num_classes=num_classes, patch_size=16)
     else:
         head = ClassificationHead(in_dim=768, num_classes=num_classes)
     trainer = PEFTTrainer(
@@ -96,6 +99,10 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
             from geoadapter.data.datasets import load_bigearthnet
             train_ds = load_bigearthnet(root=ds_root, modality=modality_cfg["preset"], split="train", max_samples=max_samples)
             val_ds = load_bigearthnet(root=ds_root, modality=modality_cfg["preset"], split="test", max_samples=val_max_samples)
+        elif dataset_name == "sen1floods11":
+            from geoadapter.data.datasets import load_sen1floods11
+            train_ds = load_sen1floods11(root=ds_root, modality=modality_cfg["preset"], split="train", max_samples=max_samples)
+            val_ds = load_sen1floods11(root=ds_root, modality=modality_cfg["preset"], split="test", max_samples=val_max_samples)
         else:
             from geoadapter.data.datasets import load_eurosat
             train_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="train")
@@ -108,6 +115,8 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
         x_syn = torch.randn(64, cfg_m.c_in, 64, 64)
         if task_type == "multilabel":
             y_syn = torch.randint(0, 2, (64, num_classes)).float()
+        elif task_type == "segmentation":
+            y_syn = torch.randint(0, num_classes, (64, 64, 64)).long()
         else:
             y_syn = torch.randint(0, num_classes, (64,))
         train_loader = DataLoader(TensorDataset(x_syn, y_syn), batch_size=batch_size)
@@ -138,6 +147,17 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
             eval_metrics = compute_multilabel_metrics(np.vstack(all_labels), np.vstack(all_scores))
             metrics.update(eval_metrics)
             print(f"  [{tag}] mAP={eval_metrics['mAP']:.4f}")
+        elif task_type == "segmentation":
+            all_preds, all_labels = [], []
+            for batch_x, batch_y in val_loader:
+                logits = trainer.predict(batch_x)
+                preds = logits.argmax(dim=1).cpu().numpy()
+                all_preds.append(preds)
+                all_labels.append(batch_y.numpy())
+            eval_metrics = compute_segmentation_metrics(
+                np.concatenate(all_labels), np.concatenate(all_preds))
+            metrics.update(eval_metrics)
+            print(f"  [{tag}] mIoU={eval_metrics.get('mIoU', 0):.4f}")
         else:
             all_preds, all_labels = [], []
             for batch_x, batch_y in val_loader:

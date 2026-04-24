@@ -97,14 +97,17 @@ class PrithviBackbone(nn.Module):
         for p in self.parameters():
             p.requires_grad_(False)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """[B, 6, H, W] -> [B, 768] global features."""
+    def forward(self, x: torch.Tensor, return_spatial: bool = False):
+        """[B, 6, H, W] -> [B, 768] global features, or spatial tokens if requested."""
         B = x.shape[0]
         x = self.patch_embed(x)                    # [B, 768, H/16, W/16]
+        h, w = x.shape[2], x.shape[3]
         x = x.flatten(2).transpose(1, 2)           # [B, N, 768]
         cls = self.cls_token.expand(B, -1, -1)
         x = torch.cat([cls, x], dim=1)             # [B, N+1, 768]
         for block in self.blocks:
             x = block(x)
         x = self.norm(x)
+        if return_spatial:
+            return x[:, 1:], (h, w)                # [B, N, 768], spatial dims
         return x[:, 0]                             # CLS token -> [B, 768]

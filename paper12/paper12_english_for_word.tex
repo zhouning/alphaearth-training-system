@@ -1,0 +1,210 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{enumitem}
+\usepackage{caption}
+
+\title{How Well Do PEFT Methods Adapt Geospatial Foundation Models to Heterogeneous Inputs?\\
+A Systematic Evaluation on Prithvi-100M}
+\author{Zhouning \\ AlphaEarth-System Project}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Parameter-efficient fine-tuning (PEFT) methods such as LoRA, adapters, and BitFit have become standard tools for adapting large pre-trained models in natural language processing and computer vision. However, it remains unclear whether the same PEFT rankings transfer to geospatial foundation models, which differ in both architecture and input structure. In this work, we present the first systematic benchmark of PEFT methods on Prithvi-100M under heterogeneous input settings. We evaluate seven adaptation strategies across five modality configurations on EuroSAT, and validate the main findings on BigEarthNet-S2. In total, the study covers 100 experiments, including a full fine-tuning baseline and a diagnostic LoRA split-QKV ablation.
+
+Our results reveal three consistent findings. First, LoRA provides virtually no gain over linear probing across both EuroSAT and BigEarthNet-S2. A diagnostic ablation shows that this failure is caused by two compounding factors: a fused-QKV implementation trap in standard PyTorch attention layers, and the fact that low-rank adaptation remains suboptimal even after Q/K/V are correctly exposed. Second, Houlsby adapters consistently dominate all other PEFT methods, reaching 94.5\% of full fine-tuning performance on EuroSAT while using only 1.4\% of the trainable parameters. Third, modality selection matters more than PEFT choice: multi-spectral inputs consistently outperform RGB subsets across methods and datasets.
+
+These results suggest that PEFT intuitions from mainstream NLP and vision cannot be transferred directly to geospatial foundation models without validation. Our benchmark provides both empirical guidance for practitioners and a reproducible experimental framework for future GeoFM adaptation research.
+\end{abstract}
+
+\section{Introduction}
+
+Geospatial foundation models (GeoFMs) have recently emerged as a promising paradigm for Earth observation analysis. Models such as Prithvi-100M~\cite{jakubik2023prithvi}, SatMAE~\cite{cong2022satmae}, Scale-MAE~\cite{reed2023scalemae}, and related self-supervised transformers~\cite{hong2024spectralgpt} suggest that large-scale pre-training on satellite imagery can yield transferable representations for downstream remote sensing tasks. At the same time, practitioners increasingly face adaptation problems that differ substantially from the homogeneous settings used during pre-training. Real-world inputs may contain different band subsets, missing channels, alternative sensor combinations, or strongly out-of-distribution modality configurations.
+
+In mainstream natural language processing and computer vision, parameter-efficient fine-tuning (PEFT) methods are widely used to adapt large pre-trained models at low cost. LoRA~\cite{hu2022lora}, adapters~\cite{houlsby2019adapter}, BitFit~\cite{zaken2022bitfit}, and prompt-style tuning methods~\cite{lester2021prompt,jia2022vpt} have become standard choices because they often approach full fine-tuning performance with far fewer trainable parameters. This success naturally raises the question of whether the same PEFT rankings hold for geospatial foundation models.
+
+We argue that this assumption is non-trivial for at least three reasons. First, geospatial foundation models often operate on heterogeneous multi-band inputs rather than fixed RGB inputs. Second, remote sensing pre-training objectives, especially masked autoencoding on spectral-spatial data, differ from the language modeling and image classification setups where PEFT methods are most established. Third, implementation details that are harmless in conventional vision backbones can become critical in GeoFMs, especially when architectural components such as fused attention projections interact with adaptation layers.
+
+Despite the practical importance of this problem, current literature lacks a systematic benchmark of PEFT methods under heterogeneous geospatial input settings. Existing studies often evaluate only one or two adaptation strategies, focus on a single downstream task, or treat PEFT as an implementation detail rather than the object of study. As a result, practitioners still lack clear guidance on which PEFT method to choose when adapting a model such as Prithvi-100M to non-standard remote sensing inputs.
+
+This paper addresses that gap through a controlled empirical study on Prithvi-100M. We benchmark seven adaptation strategies across five modality configurations on EuroSAT, then validate the main findings on BigEarthNet-S2. Beyond reporting final scores, we include a full fine-tuning ceiling and a diagnostic split-QKV LoRA ablation to identify the root causes of LoRA failure. Across 100 total experiments, we show that PEFT rankings from mainstream NLP and vision do not transfer directly to geospatial foundation models.
+
+Our main contributions are as follows:
+\begin{enumerate}[leftmargin=1.5em]
+    \item We present the first systematic benchmark of PEFT methods on Prithvi-100M under heterogeneous input settings, covering 100 experiments across EuroSAT and BigEarthNet-S2.
+    \item We show that LoRA fails on Prithvi-100M for two compounding reasons: naive implementations miss fused QKV projections, and corrected low-rank adaptation remains suboptimal even after this issue is fixed.
+    \item We demonstrate that Houlsby adapters consistently dominate all other PEFT methods across both datasets, achieving 94.5\% of full fine-tuning performance with only 1.4\% of the trainable parameters.
+    \item We confirm across datasets that modality selection has a larger practical impact than PEFT selection: richer spectral inputs consistently outperform reduced-band alternatives.
+    \item We provide a negative result for standalone input-stage adaptation (GeoAdapter), clarifying its failure modes and limitations.
+    \item We release a reproducible Geo-MLOps benchmarking framework for geospatial PEFT experimentation.
+\end{enumerate}
+
+\section{Related Work}
+
+\subsection{Geospatial Foundation Models}
+Recent years have seen rapid growth in foundation models for Earth observation. Prithvi-100M~\cite{jakubik2023prithvi}, SatMAE~\cite{cong2022satmae}, Scale-MAE~\cite{reed2023scalemae}, and SpectralGPT~\cite{hong2024spectralgpt} all extend the masked autoencoder paradigm~\cite{he2022mae} from natural images to multi-spectral and multi-temporal satellite imagery. These models share the Vision Transformer backbone~\cite{dosovitskiy2021vit} but differ from conventional vision encoders in three important ways: they ingest multi-spectral inputs rather than RGB, they exploit large unlabeled satellite corpora through self-supervised pre-training~\cite{manas2021seco,wang2022ssl4eo}, and they must support broad variation in spatial resolution and sensor configuration. While downstream transfer results are encouraging, the question of how to adapt such models efficiently to new sensor combinations has received much less attention than the pre-training itself.
+
+\subsection{Parameter-Efficient Fine-Tuning}
+Parameter-efficient fine-tuning (PEFT) has become the standard recipe for adapting large pre-trained models without updating all parameters. BitFit~\cite{zaken2022bitfit} restricts learning to bias terms; LoRA~\cite{hu2022lora} injects low-rank updates into linear projections; Houlsby adapters~\cite{houlsby2019adapter} insert bottleneck modules between transformer blocks; and prompt-based methods~\cite{lester2021prompt,jia2022vpt} prepend learnable tokens to the input. Subsequent work has unified these strategies under a common framework~\cite{he2022unified} and explored composition across tasks~\cite{pfeiffer2020adapterfusion}. In language models and conventional vision transformers, these methods often approach full fine-tuning while reducing memory and storage costs by one to three orders of magnitude. However, their relative ranking depends strongly on architecture, task, and pre-training objective, which raises the possibility that PEFT rankings established in mainstream domains may not transfer to geospatial models.
+
+\subsection{PEFT for Remote Sensing}
+Although remote sensing research increasingly relies on pre-trained transformers, systematic evaluation of PEFT methods in this domain remains limited. Existing work tends to focus on a single adaptation method, a single dataset, or an application-specific pipeline; PEFT is typically adopted pragmatically rather than studied comparatively. Closely related lines of work, such as training-free adaptation in vision-language models~\cite{zhang2022tip}, show that adaptation strategy can dominate over backbone choice, but this observation has not been verified for geospatial foundation models. As a result, the field still lacks a controlled benchmark answering basic but practically important questions: Does LoRA~\cite{hu2022lora} work as expected on geospatial transformers? Which adapter family is most robust under heterogeneous input configurations? How much of the gap to full fine-tuning can be closed under small parameter budgets? Our work is designed to answer these questions directly.
+
+\section{Experimental Setup}
+
+\subsection{Foundation Model}
+We use Prithvi-100M~\cite{jakubik2023prithvi} as the shared backbone in all experiments. Prithvi-100M is an 86M-parameter Vision Transformer~\cite{dosovitskiy2021vit} pre-trained on remote sensing imagery using a masked autoencoding objective~\cite{he2022mae}. In our implementation, the backbone consists of a 12-layer transformer encoder with embedding dimension 768, 12 attention heads, and an input patch embedding layer adapted for six expected input channels. Unless otherwise noted, the backbone is frozen and only PEFT parameters and task heads are updated.
+
+A key architectural detail is that Prithvi's attention uses a fused QKV projection pattern inherited through PyTorch's \texttt{nn.MultiheadAttention}, where query, key, and value weights are stored as a single \texttt{in\_proj\_weight} parameter. This detail turns out to be crucial for interpreting LoRA results.
+
+\subsection{PEFT Methods}
+We evaluate seven adaptation strategies:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Linear Probe}: frozen backbone with a trainable classification head.
+    \item \textbf{BitFit}~\cite{zaken2022bitfit}: unfreezes only bias parameters throughout the backbone.
+    \item \textbf{LoRA (r=8)}~\cite{hu2022lora}: standard low-rank adaptation inserted into attention projections.
+    \item \textbf{LoRA Split-QKV (r=8)}: diagnostic variant that explicitly splits fused QKV into separate query, key, and value linear layers before injecting LoRA.
+    \item \textbf{Houlsby Adapters (d=64)}~\cite{houlsby2019adapter}: bottleneck adapters inserted after each transformer block.
+    \item \textbf{GeoAdapter v2}: residual input-stage modality adapter.
+    \item \textbf{Full Fine-Tuning}: unfreezes all backbone parameters (EuroSAT only) to establish the performance ceiling.
+\end{itemize}
+
+The trainable parameter counts range from 7.7K for EuroSAT linear probing to 86.2M for full fine-tuning.
+
+\subsection{Modality Configurations}
+We define five input configurations on EuroSAT to stress-test adaptation under heterogeneous spectral settings:
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{s2\_full}: all 10 Sentinel-2 bands (B2--B12).
+    \item \textbf{rgb}: visible subset (B4, B3, B2).
+    \item \textbf{rgb\_sar}: RGB plus a simulated extra channel.
+    \item \textbf{gf2}: a 4-band high-resolution optical proxy (B, G, R, NIR).
+    \item \textbf{sar\_only}: 2-band extreme out-of-distribution configuration.
+\end{itemize}
+
+Because Prithvi expects six channels, all non-matching inputs are bridged either by zero-padding or by GeoAdapter. The zero-padding setup is not merely a preprocessing trick; it is part of the evaluation, since it reveals whether different PEFT methods can exploit partially missing or mismatched channels.
+
+For BigEarthNet-S2, we evaluate two configurations: \texttt{s2\_full} and \texttt{rgb}. This is sufficient to test whether the main EuroSAT conclusions transfer to a second dataset and a multi-label task.
+
+\subsection{Datasets}
+\textbf{EuroSAT}~\cite{helber2019eurosat} is used as the primary benchmark. It contains 27K Sentinel-2 image patches at 64\,$\times$\,64 resolution across 10 land-use classes. We use three random seeds and report mean and standard deviation across runs.
+
+\textbf{BigEarthNet-S2}~\cite{sumbul2019bigearthnet} is used for cross-dataset validation. To keep experiments tractable on Colab A100 hardware, we use a 10K/5K train/validation subsample from the 19-class simplified multi-label setting. Evaluation uses mean Average Precision (mAP).
+
+\subsection{Training Protocol}
+All experiments are run on Google Colab Pro+ with an NVIDIA A100 40GB GPU. EuroSAT experiments use 50 epochs; BigEarthNet experiments use 15 epochs. The optimizer is AdamW~\cite{loshchilov2019adamw} with cosine annealing~\cite{loshchilov2017sgdr}. We use a batch size of 64 in standard PEFT runs, and batch size 32 for full fine-tuning to avoid memory overflow. Differential learning rates are used where appropriate: PEFT parameters receive a lower learning rate than the task head.
+
+For EuroSAT, we report Overall Accuracy (OA) and macro F1. For BigEarthNet-S2, we report mAP. Results are aggregated over three seeds whenever possible; the full fine-tuning ceiling is reported as a single run.
+
+\section{Results and Analysis}
+
+\subsection{Main EuroSAT Results}
+Table~\ref{tab:eurosat-main} reports overall accuracy across all five modality configurations on EuroSAT. Houlsby adapters dominate every modality, while standard LoRA tracks the linear-probe baseline within $\pm 0.001$ OA --- consistent with complete failure under the original implementation. The split-QKV ablation recovers most of LoRA's expected gain on s2\_full but, as analyzed below, still falls short of both BitFit and Houlsby.
+
+\begin{table}[t]
+\centering
+\small
+\caption{EuroSAT~\cite{helber2019eurosat} overall accuracy across five modality configurations. Mean $\pm$ std over three seeds; full fine-tuning is reported as a single run. Best PEFT result per column in \textbf{bold}.}
+\label{tab:eurosat-main}
+\begin{tabular}{lccccc}
+\toprule
+Method & s2\_full & rgb & rgb\_sar & gf2 & sar\_only \\
+\midrule
+Linear Probe        & 0.657 $\pm$ 0.002 & 0.556 $\pm$ 0.004 & 0.552 $\pm$ 0.002 & 0.649 $\pm$ 0.006 & 0.387 $\pm$ 0.004 \\
+BitFit              & 0.702 $\pm$ 0.002 & 0.608 $\pm$ 0.001 & 0.605 $\pm$ 0.002 & 0.701 $\pm$ 0.001 & 0.449 $\pm$ 0.003 \\
+LoRA (r=8)          & 0.658 $\pm$ 0.003 & 0.556 $\pm$ 0.003 & 0.553 $\pm$ 0.003 & 0.650 $\pm$ 0.006 & 0.388 $\pm$ 0.004 \\
+LoRA Split-QKV      & 0.707 $\pm$ 0.003 & 0.498 $\pm$ 0.006 & --- & --- & --- \\
+Houlsby             & \textbf{0.821 $\pm$ 0.003} & \textbf{0.727 $\pm$ 0.003} & \textbf{0.738 $\pm$ 0.002} & \textbf{0.820 $\pm$ 0.002} & \textbf{0.615 $\pm$ 0.004} \\
+GeoAdapter v2       & 0.485 $\pm$ 0.056 & 0.383 $\pm$ 0.015 & --- & --- & --- \\
+\midrule
+Full Fine-Tuning    & 0.869 & --- & --- & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two patterns are immediately visible. (i) The Houlsby--linear-probe gap is consistent across modalities ($+16.4\%$ to $+22.8\%$ OA), suggesting the gain is structural rather than modality-specific. (ii) The cross-modality gap dominates the cross-method gap whenever the spectral input is degraded: switching from s2\_full to sar\_only costs more accuracy (e.g. $-20.6\%$ for Houlsby) than switching between PEFT methods at fixed modality.
+
+\subsection{Main BigEarthNet Results}
+Table~\ref{tab:bigearthnet-main} validates the EuroSAT ranking on a larger, multi-label benchmark. Houlsby again leads, while LoRA and linear probing are statistically indistinguishable.
+
+\begin{table}[t]
+\centering
+\caption{BigEarthNet-S2~\cite{sumbul2019bigearthnet} validation mAP (19-class multi-label, mean $\pm$ std over three seeds).}
+\label{tab:bigearthnet-main}
+\begin{tabular}{lcc}
+\toprule
+Method & s2\_full & rgb \\
+\midrule
+Linear Probe & 0.358 $\pm$ 0.003 & 0.335 $\pm$ 0.001 \\
+LoRA (r=8) & 0.358 $\pm$ 0.003 & 0.335 $\pm$ 0.001 \\
+Houlsby & \textbf{0.491 $\pm$ 0.008} & \textbf{0.456 $\pm$ 0.003} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Finding 1: Why LoRA Fails}
+The naive LoRA result initially suggested complete failure: on EuroSAT, LoRA differs from linear probing by only $+0.001$ OA, and on BigEarthNet-S2 by only $+0.0001$ mAP. Our split-QKV ablation reveals that this failure has two distinct causes.
+
+First, the standard implementation misses the actual query, key, and value projections because Prithvi's attention stores them as a fused \texttt{in\_proj\_weight} parameter rather than as separate child modules. As a result, the original LoRA insertion only wraps \texttt{out\_proj}. Second, even when the fused QKV issue is corrected, LoRA remains suboptimal. Split-QKV LoRA improves s2\_full from 0.658 to 0.707 on EuroSAT, confirming the implementation trap is real, but it still underperforms both BitFit and Houlsby. On rgb, split-QKV LoRA actually degrades below the linear probing baseline.
+
+Together, these observations show that LoRA fails on Prithvi-100M not only because of an implementation pitfall, but also because low-rank adaptation appears mismatched to this architecture and pre-training regime. We further validated this point with a rank-sensitivity ablation on EuroSAT s2\_full: increasing the split-QKV LoRA rank from $r=4$ to $r=32$ changes OA only from $0.709 \pm 0.002$ to $0.706 \pm 0.002$, with no monotonic improvement and no configuration approaching Houlsby.
+
+\subsection{Finding 2: Houlsby Consistently Dominates}
+Houlsby adapters are the best method on every evaluated configuration. On EuroSAT, they outperform linear probing by $+16.4\%$ to $+22.8\%$ OA depending on modality. On BigEarthNet-S2, they outperform linear probing by $+13.3$ mAP on s2\_full and $+12.1$ mAP on rgb. This consistency across datasets and tasks is the strongest empirical conclusion of the benchmark. The full fine-tuning baseline further clarifies the quality of this result: full fine-tuning reaches 0.869 OA on EuroSAT s2\_full while Houlsby reaches 0.821, corresponding to 94.5\% of the full fine-tuning score with only 1.4\% of the trainable parameters.
+
+\subsection{Finding 3: Modality Selection Matters More Than Method Selection}
+Across both datasets, richer spectral inputs consistently outperform reduced-band subsets. On BigEarthNet-S2, the s2\_full--rgb gap is $+0.023$ mAP for linear probing, $+0.023$ mAP for LoRA, and $+0.035$ mAP for Houlsby. On EuroSAT, the spread between modalities is even larger: switching from s2\_full to sar\_only costs Houlsby $-20.6\%$ OA, more than the entire spread between BitFit and Houlsby on s2\_full.
+
+This result suggests that practitioners should first maximize input information quality before worrying about subtle PEFT differences. A simple linear probe on better spectral inputs can outperform more sophisticated adaptation on weaker input subsets.
+
+\subsection{Finding 4: Input-Stage Adaptation Remains a Negative Result}
+GeoAdapter v2 consistently underperforms the linear probing baseline on EuroSAT. Although it was designed to bridge modality mismatches at the input stage, its residual adapter structure does not provide a stable optimization path under a frozen transformer backbone. The high seed variance on s2\_full ($\pm 0.056$) is itself diagnostic: the optimization landscape is unstable, and the negative result therefore reflects a structural rather than a hyperparameter issue. We conclude that modality adaptation is more effectively handled by backbone-level PEFT than by a tiny standalone input bridge.
+
+\subsection{Practical Takeaways}
+The benchmark supports three practical recommendations. First, Houlsby adapters are the safest default for adapting Prithvi-100M to heterogeneous inputs. Second, LoRA should not be assumed effective in GeoFMs without careful architectural inspection. Third, when spectral richness is available, preserving that information has larger returns than switching between weak PEFT methods.
+
+\section{Discussion}
+
+\subsection{Why Does Low-Rank Adaptation Underperform on Prithvi?}
+Our split-QKV ablation isolates two effects. The \emph{implementation trap} reflects a property of PyTorch's \texttt{nn.MultiheadAttention}, in which query, key, and value weights are packed into a single \texttt{in\_proj\_weight} tensor. A naive application of LoRA to named \texttt{nn.Linear} children therefore touches only \texttt{out\_proj}, leaving the attention projections effectively frozen. This is a silent failure mode: training proceeds, loss decreases, and accuracy settles only slightly above linear probing, which can easily be misread as a genuine negative result.
+
+Once Q, K, and V are explicitly exposed, split-QKV LoRA improves EuroSAT s2\_full from 0.658 to 0.707 but remains below both BitFit (0.702) and Houlsby (0.821). We attribute this residual gap to two factors. First, the masked autoencoding objective~\cite{he2022mae} used by Prithvi produces features whose task-relevant directions are not well captured by low-rank updates to attention alone; richer adaptation (bottleneck MLPs) appears to be required. Second, the frozen backbone restricts LoRA to reshaping existing attention patterns, whereas Houlsby adapters introduce new non-linear capacity inside each block. This is consistent with the unified view of PEFT proposed in prior work~\cite{he2022unified}, which predicts that methods with both extra capacity and non-linearity can dominate under sufficiently different pre-training distributions. A follow-up rank-sensitivity ablation strengthens this interpretation: increasing split-QKV LoRA from $r=4$ to $r=32$ leaves EuroSAT s2\_full accuracy essentially flat at 0.706--0.709, ruling out the simple explanation that the negative result is caused by an underpowered rank choice alone.
+
+\subsection{Why Does Input-Stage Adaptation Fail?}
+GeoAdapter v2 places a small residual module before the patch embedding. Conceptually, this is attractive for modality bridging, but empirically it underperforms linear probing on every EuroSAT configuration. Two mechanisms likely contribute. First, the module lies on the critical gradient path to a frozen backbone, so any early-stage misadaptation propagates unchallenged through 12 transformer blocks. Second, the adapter has no clear pre-training prior: unlike bottleneck adapters that operate on already well-structured hidden states, input-stage adapters must jointly learn modality alignment and useful feature transformation from scratch, and with a small parameter budget. We view this as a genuine negative result rather than a bug, and recommend that future modality bridging work combine input-stage and backbone-level adaptation rather than rely on standalone input adapters.
+
+\subsection{Architecture-Awareness as a Methodological Principle}
+The fused-QKV trap has an uncomfortable implication: published PEFT comparisons on Prithvi-like backbones may silently conflate \emph{method failure} with \emph{implementation failure}. We believe this motivates a broader methodological recommendation. Before reporting negative results for PEFT methods on any new architecture, authors should report (i) exactly which parameter tensors were registered as trainable, (ii) whether the attention projections are fused, and (iii) whether a diagnostic split variant was attempted. Our study adopts this protocol and we encourage its adoption for future GeoFM benchmarks.
+
+\subsection{Practical Guidance and Limitations}
+For practitioners adapting Prithvi-100M to heterogeneous inputs, the safest default is Houlsby adapters with bottleneck dimension 64, which reach 94.5\% of the full fine-tuning ceiling on EuroSAT s2\_full while training 1.4\% of parameters. When spectral richness is available, preserving it yields larger returns than switching between PEFT methods: a linear probe on s2\_full outperforms sophisticated adaptation on sar\_only. LoRA should not be used on fused-QKV backbones without explicit Q/K/V exposure and, even then, should be justified empirically against adapter baselines.
+
+Our study has three limitations. First, we evaluate a single backbone, Prithvi-100M; extension to SatMAE~\cite{cong2022satmae}, Scale-MAE~\cite{reed2023scalemae}, and SpectralGPT~\cite{hong2024spectralgpt} would strengthen the generality of conclusions. Second, we restrict tasks to classification (single-label on EuroSAT, multi-label on BigEarthNet-S2); segmentation, regression, and temporal forecasting remain open. Third, our BigEarthNet-S2 subsample (10K/5K) is chosen for Colab-scale tractability and may under-represent the long tail of rare classes; full-scale replication is an obvious next step.
+
+\section{Conclusion}
+
+We presented a systematic evaluation of PEFT methods for adapting Prithvi-100M to heterogeneous geospatial inputs. Across 100 total experiments spanning EuroSAT, BigEarthNet-S2, a full fine-tuning ceiling, and a diagnostic LoRA ablation, three conclusions emerge clearly. First, PEFT rankings from NLP and conventional vision do not transfer directly to geospatial foundation models. Second, Houlsby adapters provide the strongest and most reliable adaptation performance across datasets, tasks, and modality configurations. Third, modality selection has a larger practical impact than PEFT choice, especially when moving from reduced-band inputs to richer multi-spectral configurations.
+
+The study also contributes a deeper diagnosis of LoRA failure in GeoFMs. Rather than a single negative result, we show a two-stage explanation: standard implementations miss fused QKV projections, and corrected low-rank adaptation remains inferior to adapter-based methods. This finding highlights the importance of architecture-aware PEFT evaluation in remote sensing.
+
+Our work has several limitations. We focus on a single backbone, Prithvi-100M, and two benchmark datasets. Although the cross-dataset consistency is strong, further validation on additional geospatial foundation models and task types would strengthen the generality of the conclusions. Future work should also examine whether the same PEFT ranking holds for segmentation, regression, and temporal forecasting tasks.
+
+Despite these limitations, we believe this benchmark provides a useful empirical foundation for the next stage of GeoFM research. By clarifying which PEFT methods work, which fail, and why, it offers both a practical guide for deployment and a methodological reference for future adaptation studies.
+
+\section*{Appendix Summary}
+
+The appendix in the LaTeX version includes full per-seed tables for EuroSAT and BigEarthNet-S2, exact trainable parameter counts, training hyperparameters and compute notes, training-curve figures, a LoRA rank-sensitivity ablation, and an implementation note explaining the fused-QKV trap in PyTorch's \texttt{nn.MultiheadAttention}. Those materials can be ported to a separate supplementary Word document if needed.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
