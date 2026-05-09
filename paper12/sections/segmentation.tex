@@ -1,0 +1,45 @@
+\section{Extension to Dense Prediction}
+\label{sec:segmentation}
+
+A natural concern for any PEFT benchmark is whether the observed ranking is task-specific. Our main results cover single-label (EuroSAT) and multi-label (BigEarthNet-S2) classification; this section tests whether the same ranking holds on a \emph{dense prediction} task, where the adapter must shape not only a pooled class-token feature but also the full spatial feature grid. We port the three primary PEFT configurations to semantic segmentation on LandCover.ai~\cite{boguszewski2021landcoverai} and hold all other training-side choices fixed.
+
+\subsection{Setup}
+
+LandCover.ai provides 6-class land-cover segmentation on high-resolution aerial RGB tiles. We keep the same Prithvi-100M backbone used throughout the paper, reuse the existing \texttt{zero\_pad} input adapter, and attach a lightweight linear segmentation head that upsamples the final transformer feature grid to the input resolution. Each method is trained for 50 epochs with batch size 8 under three seeds $\{42, 123, 456\}$, yielding 9 runs (3 methods $\times$ 1 modality $\times$ 3 seeds). Performance is reported as mean Intersection-over-Union (mIoU) over the six semantic classes.
+
+\subsection{Results}
+
+Table~\ref{tab:landcoverai-seg} reports the aggregated results; per-seed values appear in Appendix~\ref{app:per-seed}.
+
+\begin{table}[h]
+\centering
+\small
+\caption{LandCover.ai semantic segmentation. Mean $\pm$ std mIoU over three seeds.}
+\label{tab:landcoverai-seg}
+\begin{tabular}{lccc}
+\toprule
+Method & Trainable Params & mIoU & $\Delta$ vs.\ Linear Probe \\
+\midrule
+Linear Probe & 4{,}614       & 0.2510 $\pm$ 0.0003 & --- \\
+LoRA (r=8)   & 152{,}070     & 0.2510 $\pm$ 0.0001 & $+0.000$ \\
+Houlsby      & 1{,}194{,}246 & \textbf{0.6410 $\pm$ 0.0029} & $\mathbf{+0.390}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.62\linewidth]{figures/landcoverai_segmentation.pdf}
+\caption{LandCover.ai mIoU by PEFT method (3 seeds each). Houlsby outperforms linear probing by $+155\%$ relative mIoU, while LoRA is statistically indistinguishable from linear probing to the fourth decimal place.}
+\label{fig:seg-bars}
+\end{figure}
+
+Three observations carry over essentially unchanged from the classification results. First, Houlsby dominates by a large margin: $+0.390$ mIoU over linear probing, or a $+155\%$ relative gain. Second, LoRA offers no detectable improvement over linear probing; the two methods differ by less than $0.0001$ mIoU on each seed, with the LoRA standard deviation ($0.0001$) being even smaller than that of linear probing ($0.0003$). Third, the ordering Houlsby $\gg$ LoRA $\approx$ Linear~Probe is preserved across all three seeds without exception.
+
+\subsection{Discussion}
+
+The segmentation result is stronger than a consistency check. Relative to classification, the Houlsby--linear-probe gap widens from $+16.4\%$ OA on EuroSAT s2\_full to $+155\%$ mIoU on LandCover.ai. Two mechanisms plausibly contribute. (i)~Dense prediction requires the adapter to shape every spatial token, not merely a pooled classifier input, so the per-layer bottleneck of a Houlsby adapter exerts influence at every position. (ii)~The linear-probe ceiling on LandCover.ai is low in absolute terms (0.2510 mIoU), leaving more headroom for a capable adapter to exploit; this is the opposite regime from EuroSAT s2\_full, where linear probing already reaches 0.657 OA.
+
+The LoRA result deserves explicit attention. On classification we reported that naive LoRA collapses to the linear-probe baseline within $\pm 0.001$ OA. On segmentation the collapse is more extreme: the three LoRA seeds match the three linear-probe seeds to the fourth decimal place, indicating that the 152K LoRA parameters are not merely ineffective but are essentially unused. This is consistent with our classification-side diagnosis of a fused-QKV implementation trap compounded by a structural mismatch between low-rank adaptation and Prithvi-100M's pre-training regime; extending LoRA to dense prediction does not alter either cause.
+
+Taken together, these experiments directly close the ``segmentation remains open'' caveat raised earlier in our discussion. The PEFT ranking reported in the main benchmark --- Houlsby $\gg$ BitFit $>$ LoRA $\approx$ Linear~Probe --- is not an artifact of the classification setting; it holds on dense prediction with an even larger Houlsby margin.

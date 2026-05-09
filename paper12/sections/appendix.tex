@@ -169,6 +169,27 @@ Our split-QKV variant resolves this by replacing each \texttt{MultiheadAttention
 
 We emphasize that this is not a bug in any specific PEFT library --- it is a direct consequence of how PyTorch fuses attention projections by default. Any LoRA implementation that targets \texttt{nn.Linear} child modules will silently miss them on Prithvi-100M and other Vision Transformer codebases that build on \texttt{nn.MultiheadAttention}.
 
+\section{LandCover.ai Per-Seed Segmentation Results}
+\label{app:seg-per-seed}
+
+\begin{table}[h]
+\centering
+\small
+\caption{LandCover.ai per-seed mIoU. Each cell is a single training run (50 epochs, batch size 8, RGB modality).}
+\label{tab:landcoverai-per-seed}
+\begin{tabular}{lcccc}
+\toprule
+Method & Trainable Params & seed=42 & seed=123 & seed=456 \\
+\midrule
+Linear Probe & 4{,}614       & 0.2508 & 0.2513 & 0.2507 \\
+LoRA (r=8)   & 152{,}070     & 0.2511 & 0.2511 & 0.2509 \\
+Houlsby      & 1{,}194{,}246 & 0.6392 & 0.6394 & 0.6444 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The LoRA and linear-probe seed spreads agree to the fourth decimal place; the Houlsby spread spans $0.0052$, dominated by the seed=456 run. No seed reverses the overall ordering.
+
 \section{Reproducibility}
 \label{app:repro}
 

@@ -1,0 +1,65 @@
+[
+  {
+    "method": "linear_probe",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 4614,
+    "mIoU": 0.2508214824096421
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 4614,
+    "mIoU": 0.2513076282936755
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 4614,
+    "mIoU": 0.2507277018810618
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 1194246,
+    "mIoU": 0.6392384862557676
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 1194246,
+    "mIoU": 0.6394114347644372
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 1194246,
+    "mIoU": 0.6443776063492079
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 152070,
+    "mIoU": 0.2510594863242421
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 152070,
+    "mIoU": 0.2510628204985258
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 152070,
+    "mIoU": 0.25089524786894624
+  }
+]
