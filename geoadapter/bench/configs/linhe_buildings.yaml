@@ -1,0 +1,33 @@
+experiment:
+  name: linhe_buildings_segmentation
+  task: segmentation
+  dataset: linhe_buildings
+  dataset_root: .
+  num_classes: 2
+  epochs: 30
+  batch_size: 16
+  seeds: [42, 123, 456]
+  positive_min_share: 0.005   # drop near-empty patches; demo focuses on buildings
+  max_samples: 2000           # cap per split for tight turnaround; raise after smoke
+
+modalities:
+  - preset: rgb_3band
+
+methods:
+  - name: linear_probe
+    adapter: zero_pad
+    peft: null
+  - name: houlsby
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt

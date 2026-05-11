@@ -4,83 +4,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Geo-MLOps: PEFT Benchmark Platform for Geospatial Foundation Models — a systematic evaluation platform for parameter-efficient fine-tuning of Prithvi-100M on heterogeneous satellite inputs. Two-service architecture: FastAPI+PyTorch backend (`ae_backend/`) and Vue 3 dashboard (`ae_frontend/`). The `geoadapter/` package is an independent Python library (zero FastAPI dependency) containing 5 PEFT method implementations, Prithvi-100M backbone loader (149/149 weights), unified training engine, and benchmark runner.
-
-75 experiments completed on EuroSAT (5 methods x 5 modalities x 3 seeds). Key findings: LoRA fails on Prithvi's fused-QKV architecture; Houlsby adapter dominates (+16-23%); input-stage adaptation (GeoAdapter) does not work — negative result documented in `docs/Experiment_Results_Analysis.md`.
-
-Research context: Pivoted from "GeoAdapter as method contribution" to "PEFT benchmark with negative results." Paper target: GIScience & Remote Sensing or CVPR EarthVision Workshop.
+- Geo-MLOps is a PEFT benchmark platform for geospatial foundation models built around Prithvi-100M.
+- `geoadapter/` is the core Python library: PEFT adapters, Prithvi backbone loading, training/eval engine, dataset loaders, benchmark runners, and visualization utilities live here.
+- `ae_backend/` is a thin FastAPI service that wraps `geoadapter` for dataset preparation, training job orchestration, model registry, and spatial lookup.
+- `ae_frontend/` is a no-build Vue 3 + ECharts dashboard implemented as a single `index.html` and served by the backend.
 
 ## Commands
 
-### Run backend
 ```bash
-cd ae_backend
-pip install -e ../.  # install geoadapter package
-uvicorn app.main:app --host 127.0.0.1 --port 8087
+pip install -e .
+pip install -r ae_backend/requirements.txt
+python -m uvicorn app.main:app --app-dir ae_backend --host 127.0.0.1 --port 8087
+python -m pytest tests -v
+python -m pytest tests/test_trainer.py -v
+python -m pytest tests/test_trainer.py::TestPEFTTrainer::test_one_step -v
+python -m pytest tests/test_labels_api.py -v
+docker build -t alphaearth-backend ae_backend
+docker build -t alphaearth-frontend ae_frontend
 ```
 
-### Run with Docker
-```bash
-docker-compose up -d ae_backend ae_frontend
-```
+- No repo-wide lint or typecheck command is configured in the checked-in files.
+- There is no checked-in `docker-compose.yml`; build backend and frontend images separately.
+- `ae_backend/test_pipeline.py` and `ae_backend/test_ws.py` are manual smoke scripts, not the maintained test suite.
 
-### Run tests
-```bash
-cd ae_backend
-python test_pipeline.py      # Integration test — hits /api/ae/pipeline/prepare
-python test_ws.py            # WebSocket connection test
-```
+## High-Level Architecture
 
-### Frontend
-The frontend is a single `ae_frontend/index.html` file (Vue 3 + Tailwind CSS + ECharts, no build step). Served as static files by the backend or via nginx in Docker.
+- `geoadapter/` is intentionally independent of FastAPI. Most model-side changes belong here, not in `ae_backend/`.
+- `ae_backend/app/main.py` mounts five routers under `/api/ae`: `pipeline`, `training`, `satellites`, `areas`, and `models`. It also serves `ae_frontend/index.html` at `/` when the frontend directory exists.
+- `ae_backend/app/services/data_fusion.py` is the preprocessing core. It resolves ROI geometry from the `xiangzhen` PostGIS table, pulls public imagery from GEE or local/private `.tif` files, reprojects to a 10 m target grid, then slices fused rasters into 128x128 training patches.
+- `ae_backend/app/core/memory.py` provides the in-memory dataset bridge. When `/api/ae/pipeline/prepare` runs with `in_memory=true`, tensors are stored there and later consumed by the trainer via `memory_{job_id}` dataset IDs.
+- `ae_backend/app/services/trainer.py` owns the training runtime. `PrithviAlphaEarthEncoder` wraps the Prithvi backbone and switches among `linear_probe`, `bitfit`, `lora`, `houlsby`, and `geoadapter`. `AlphaEarthTrainer` streams logs/metrics over WebSocket, updates `ae_training_jobs`, and optionally uploads outputs to Huawei OBS.
+- `ae_backend/app/models/domain.py` defines the persistent state: `AeDataset`, `AeTrainingJob`, `AeModel`, plus spatial lookup tables `Xiangzhen` and `SmSatellite`.
+- `ae_frontend/index.html` talks directly to the backend with relative `/api/ae/...` requests and opens WebSockets at `/api/ae/training/ws/{job_id}`. There is no separate frontend build pipeline for local development.
 
-## Architecture
+## Constraints That Matter
 
-### Two Services
+- The root `.env` is authoritative and is loaded with `override=True` in `ae_backend/app/core/config.py`; do not auto-edit credentials.
+- Full backend behavior depends on PostgreSQL/PostGIS. Spatial clipping and admin-area lookup come from the `xiangzhen` table.
+- GEE and Huawei OBS are optional integrations. The code degrades when they are unavailable, but dataset download/upload features become partial or no-op.
+- Training expects Prithvi weights at `data/weights/prithvi/Prithvi_100M.pt`.
+- Dataset listing in `/api/ae/pipeline/datasets` only recognizes `data/weights/raw_data/dataset_*`, `data/linhe_patches/_index.parquet`, and in-memory datasets.
+- The root `tests/` suite mostly validates `geoadapter` and small backend helpers; it is not a full end-to-end backend test harness.
 
-**`ae_backend/`** — FastAPI + PyTorch + Rasterio
-- `app/main.py`: FastAPI app, CORS, router mounting, static file serving
-- `app/api/`: 5 routers — `pipeline` (data fusion), `training` (PEFT jobs + WebSocket), `satellites` (catalog), `areas` (PostGIS admin boundaries), `models` (asset registry)
-- `app/services/data_fusion.py`: `DataFusionPipeline` — GEE download, local .tif ingestion, spatial alignment, 10m normalization, 128x128 patch generation
-- `app/services/trainer.py`: `AlphaEarthTrainer` — STP encoder training loop with WebSocket broadcast, OBS upload, PCA embedding visualization
-- `app/models/domain.py`: SQLAlchemy models — `AeDataset`, `AeTrainingJob`, `AeModel`, `SmSatellite`, `Xiangzhen` (PostGIS admin boundaries)
-- `app/core/config.py`: Pydantic Settings from `.env` (loads with `override=True` to prevent stale system env vars)
-- `app/core/memory.py`: `IN_MEMORY_DATASETS` dict for zero-copy tensor pipelining
-- `app/db/database.py`: SQLAlchemy engine + `SessionLocal` + `get_db()` dependency
+## Current Documentation Gaps Fixed From The Previous Version
 
-**`ae_frontend/`** — Single HTML file with embedded Vue 3 + ECharts
-- Real-time training dashboard via WebSocket (`ws://host:8085/api/ae/training/ws`)
-- Tabs: data source selection, pipeline monitoring, training metrics (loss curves, ETA, GPU), model asset registry
-
-### API Prefix
-All backend routes use `/api/ae/` prefix (configured in `Settings.API_V1_STR`).
-
-### Data Flow
-1. User selects satellite sources + admin area → `POST /api/ae/pipeline/prepare`
-2. `DataFusionPipeline` fetches GEE data + reads local .tif → spatial alignment → 128x128 patches (disk or in-memory)
-3. `POST /api/ae/training/start` → `AlphaEarthTrainer` runs STP encoder PEFT loop in background task
-4. Training metrics broadcast via WebSocket → frontend ECharts updates in real-time
-5. Trained weights pushed to Huawei OBS → registered in `ae_models` table
-
-### Zero-Copy Tensor Pipelining (Paper 9)
-When `in_memory=True`, `DataFusionPipeline` stores tensors in `IN_MEMORY_DATASETS[job_id]` instead of writing to disk. `RealPatchDataset` in `trainer.py` detects `memory_` prefix in dataset_id and reads directly from RAM, eliminating I/O bottleneck.
-
-### Database
-PostgreSQL + PostGIS. Tables: `ae_datasets`, `ae_training_jobs`, `ae_models`, `xiangzhen` (admin boundaries with MULTIPOLYGON geometry), `sm_satellite` (legacy satellite catalog). Connection via SQLAlchemy with `pool_pre_ping=True`.
-
-## Environment Variables
-
-Configured in `.env` at project root (loaded by `app/core/config.py`):
-- `POSTGRES_SERVER`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-- `HUAWEI_OBS_AK`, `HUAWEI_OBS_SK`, `HUAWEI_OBS_SERVER`, `HUAWEI_OBS_BUCKET`
-
-**CRITICAL**: Never modify `.env` automatically — it contains manually configured credentials. Output suggested changes as text for the user to copy.
-
-## Key Constraints
-
-- GEE (`earthengine-api` + `geemap`) initialization may fail if no Google Cloud credentials are configured — the system logs a warning and continues without GEE support
-- OBS SDK (`obs-sdk-python`) is optional — `ObsClient` import is wrapped in try/except throughout
-- The `xiangzhen` table provides real Chinese admin boundary polygons for spatial clipping — queries use PostGIS `ST_Intersects`
-- Frontend connects to backend WebSocket at the same host — no separate frontend dev server needed
-- `data/` directory is gitignored (contains raw samples and model weights)
-- Language: UI text and comments are primarily in Chinese; API code is in English
+- Removed the stale `docker-compose up -d ae_backend ae_frontend` command; no compose file is checked in.
+- Added file-scoped pytest commands, including a single-test invocation.
+- Clarified that the frontend is a single static file served by the backend, and that the backend is mostly an orchestration layer around `geoadapter`.
+- Marked the backend smoke scripts as non-canonical so future agents prefer the maintained pytest suite.

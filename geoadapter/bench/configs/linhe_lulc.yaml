@@ -1,0 +1,33 @@
+experiment:
+  name: linhe_lulc_segmentation
+  task: segmentation
+  dataset: linhe_lulc
+  dataset_root: .
+  year: 2022
+  num_classes: 6              # matches LINHE_6CLASS_NAMES in linhe_pull_esri_lulc.py
+  epochs: 30
+  batch_size: 16
+  seeds: [42, 123, 456]
+  max_samples: 2000
+
+modalities:
+  - preset: rgb_3band
+
+methods:
+  - name: linear_probe
+    adapter: zero_pad
+    peft: null
+  - name: houlsby
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt

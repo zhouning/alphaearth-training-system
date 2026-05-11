@@ -107,6 +107,21 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
             from geoadapter.data.datasets import load_landcoverai
             train_ds = load_landcoverai(root=ds_root, split="train", max_samples=max_samples)
             val_ds = load_landcoverai(root=ds_root, split="val", max_samples=val_max_samples)
+        elif dataset_name == "linhe_buildings":
+            from geoadapter.data.datasets import load_linhe_buildings
+            train_ds = load_linhe_buildings(
+                root=ds_root, split="train", max_samples=max_samples,
+                positive_min_share=global_cfg["experiment"].get("positive_min_share", 0.0),
+            )
+            val_ds = load_linhe_buildings(
+                root=ds_root, split="val", max_samples=val_max_samples,
+                positive_min_share=global_cfg["experiment"].get("positive_min_share", 0.0),
+            )
+        elif dataset_name == "linhe_lulc":
+            from geoadapter.data.datasets import load_linhe_lulc
+            year = global_cfg["experiment"].get("year", 2022)
+            train_ds = load_linhe_lulc(root=ds_root, year=year, split="train", max_samples=max_samples)
+            val_ds = load_linhe_lulc(root=ds_root, year=year, split="val", max_samples=val_max_samples)
         else:
             from geoadapter.data.datasets import load_eurosat
             train_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="train")

@@ -12,6 +12,7 @@ class ModalityConfig:
     PRESETS = {
         "s2_full": {"indices": list(range(10)), "c_in": 10, "name": "Sentinel-2 (B2-B12)"},
         "rgb": {"indices": [3, 2, 1], "c_in": 3, "name": "RGB (B4,B3,B2)"},
+        "rgb_3band": {"indices": None, "c_in": 3, "name": "Native 3-band RGB"},
         "rgb_sar": {"indices": [3, 2, 1], "c_in": 4, "name": "RGB + SAR VV"},
         "gf2": {"indices": [3, 2, 1, 7], "c_in": 4, "name": "GF-2 (B,G,R,NIR)"},
         "sar_only": {"indices": None, "c_in": 2, "name": "SAR VV+VH"},
@@ -146,3 +147,125 @@ class _SegmentationDataset(Dataset):
         if mask.dim() == 3:
             mask = mask.squeeze(0)
         return img, mask
+
+
+class _LinhePairedDataset(Dataset):
+    """Pair RGB patches (data/linhe_patches/_index.parquet) with rasterized masks.
+
+    Designed for the Linhe demo: 3-band RGB uint8 at /255, and a binary or
+    multi-class mask npz produced by linhe_rasterize_buildings.py /
+    linhe_pull_esri_lulc.py.
+    """
+
+    def __init__(self, paired_rows, root, mask_key="mask"):
+        import pandas as pd
+        self.rows = paired_rows.reset_index(drop=True)
+        self.root = root
+        self.mask_key = mask_key
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, idx):
+        import numpy as np
+        import torch
+        r = self.rows.iloc[idx]
+        rgb = np.load(self.root / r["patch_path"])["rgb"].astype(np.float32) / 255.0
+        mask = np.load(self.root / r["label_path"])[self.mask_key].astype(np.int64)
+        return torch.from_numpy(rgb), torch.from_numpy(mask)
+
+
+def load_linhe_buildings(root: str, split: str = "train", val_frac: float = 0.2,
+                         seed: int = 42, max_samples: int = None,
+                         positive_min_share: float = 0.0):
+    """Load paired Linhe RGB patches + OSM building masks for 2-class segmentation.
+
+    The split is deterministic and disjoint by scene_id so val never leaks scenes
+    seen in training. Scenes are sorted alphabetically, val_frac of them go to val.
+
+    Args:
+        root: repo root (the directory containing data/linhe_patches/)
+        split: "train" or "val"
+        val_frac: fraction of scenes held out for validation
+        seed: ignored at scene level (sorted+sliced) but threaded for API parity
+        max_samples: cap patches in the returned split
+        positive_min_share: drop patches whose building_share is below this
+            (set to e.g. 0.01 to focus on building-bearing patches during demos)
+    """
+    import pandas as pd
+    from pathlib import Path
+
+    root = Path(root)
+    patch_idx = root / "data" / "linhe_patches" / "_index.parquet"
+    osm_idx = root / "data" / "linhe_patches" / "_osm_index.parquet"
+    if not patch_idx.exists():
+        raise FileNotFoundError(f"{patch_idx} not found — run scripts/linhe_build_patches.py")
+    if not osm_idx.exists():
+        raise FileNotFoundError(
+            f"{osm_idx} not found — run "
+            "scripts/linhe_pull_osm_buildings.py then linhe_rasterize_buildings.py"
+        )
+
+    patches = pd.read_parquet(patch_idx)
+    osm = pd.read_parquet(osm_idx).rename(columns={"osm_path": "label_path"})
+    paired = patches.merge(osm[["patch_path", "label_path", "building_share"]],
+                           on="patch_path", how="inner")
+    if positive_min_share > 0:
+        paired = paired[paired["building_share"] >= positive_min_share]
+
+    scenes = sorted(paired["scene_id"].unique())
+    n_val = max(1, int(len(scenes) * val_frac))
+    val_scenes = set(scenes[-n_val:])
+    if split == "val":
+        paired = paired[paired["scene_id"].isin(val_scenes)]
+    elif split == "train":
+        paired = paired[~paired["scene_id"].isin(val_scenes)]
+    else:
+        raise ValueError(f"split must be 'train' or 'val', got {split!r}")
+
+    if max_samples and len(paired) > max_samples:
+        paired = paired.sample(n=max_samples, random_state=seed)
+
+    return _LinhePairedDataset(paired, root, mask_key="mask")
+
+
+def load_linhe_lulc(root: str, year: int, split: str = "train", val_frac: float = 0.2,
+                    seed: int = 42, max_samples: int = None):
+    """Load paired Linhe RGB patches + Esri LULC masks for N-class segmentation.
+
+    Year selects which annual mosaic to use (2017-2023 supported by the puller).
+    The number of classes comes from the mask file itself (default 6 after the
+    Linhe remap, or 9 if --keep-9-classes was passed at pull time).
+    """
+    import pandas as pd
+    from pathlib import Path
+
+    root = Path(root)
+    patch_idx = root / "data" / "linhe_patches" / "_index.parquet"
+    lulc_idx = root / "data" / "linhe_patches" / "_lulc_index.parquet"
+    if not patch_idx.exists():
+        raise FileNotFoundError(f"{patch_idx} not found — run scripts/linhe_build_patches.py")
+    if not lulc_idx.exists():
+        raise FileNotFoundError(f"{lulc_idx} not found — run scripts/linhe_pull_esri_lulc.py")
+
+    patches = pd.read_parquet(patch_idx)
+    lulc = pd.read_parquet(lulc_idx)
+    lulc = lulc[lulc["year"] == year].rename(columns={"lulc_path": "label_path"})
+    if len(lulc) == 0:
+        raise ValueError(f"no LULC rows for year={year}; pull it with linhe_pull_esri_lulc.py")
+    paired = patches.merge(lulc[["patch_path", "label_path"]], on="patch_path", how="inner")
+
+    scenes = sorted(paired["scene_id"].unique())
+    n_val = max(1, int(len(scenes) * val_frac))
+    val_scenes = set(scenes[-n_val:])
+    if split == "val":
+        paired = paired[paired["scene_id"].isin(val_scenes)]
+    elif split == "train":
+        paired = paired[~paired["scene_id"].isin(val_scenes)]
+    else:
+        raise ValueError(f"split must be 'train' or 'val', got {split!r}")
+
+    if max_samples and len(paired) > max_samples:
+        paired = paired.sample(n=max_samples, random_state=seed)
+
+    return _LinhePairedDataset(paired, root, mask_key="mask")
