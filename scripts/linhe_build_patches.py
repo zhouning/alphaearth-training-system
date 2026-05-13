@@ -41,12 +41,38 @@ CATALOG = ROOT / "results" / "linhe" / "linhe_scenes.geojson"
 OUT_BASE = ROOT / "data" / "linhe_patches"
 
 
-def reproject_to_grid(src: rasterio.io.DatasetReader, target_gsd_m: float) -> tuple[np.ndarray, dict]:
-    """Reproject src to EPSG:3857 at target_gsd_m. Returns (array CHW, profile)."""
+def reproject_to_grid(src: rasterio.io.DatasetReader, target_gsd_m: float,
+                       grid_step_m: float | None = None) -> tuple[np.ndarray, dict]:
+    """Reproject src to EPSG:3857 at target_gsd_m.
+
+    Snaps the destination transform origin down to a multiple of ``grid_step_m``
+    so patches from different scenes share a common pixel grid — required for
+    cross-scene bbox matching in linhe_pair_patches. When ``grid_step_m`` is
+    None, snaps to ``target_gsd_m`` (pixel alignment only, not patch-boundary
+    alignment).
+
+    Returns (array CHW, profile).
+    """
+    from rasterio.transform import Affine
+
     dst_crs = "EPSG:3857"
     transform, width, height = calculate_default_transform(
         src.crs, dst_crs, src.width, src.height, *src.bounds, resolution=target_gsd_m
     )
+    # Snap origin to grid. `transform.c` is x of top-left, `transform.f` is y.
+    # In EPSG:3857 y increases northwards and transform.e < 0.
+    step = grid_step_m if grid_step_m is not None else target_gsd_m
+    new_c = np.floor(transform.c / step) * step
+    new_f = np.ceil(transform.f / step) * step
+    # Recompute width/height so snapped grid still covers the source bounds
+    # after projection. `transform` already covers the bounds; shifting origin
+    # outward and bumping size by 1 cell guarantees no clipping.
+    shift_x = (transform.c - new_c) / target_gsd_m
+    shift_y = (new_f - transform.f) / target_gsd_m
+    width = int(np.ceil(width + shift_x))
+    height = int(np.ceil(height + shift_y))
+    transform = Affine(target_gsd_m, 0, new_c, 0, -target_gsd_m, new_f)
+
     dst = np.zeros((src.count, height, width), dtype=src.dtypes[0])
     for i in range(src.count):
         reproject(
@@ -118,7 +144,10 @@ def build_offline(args: argparse.Namespace) -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         try:
             with rasterio.open(tif) as src:
-                arr, profile = reproject_to_grid(src, args.target_gsd)
+                arr, profile = reproject_to_grid(
+                    src, args.target_gsd,
+                    grid_step_m=args.target_gsd * args.patch,
+                )
         except Exception as e:
             print(f"[skip] {scene_id}: {e}")
             continue
