@@ -1,0 +1,53 @@
+{
+  "bbox": [
+    106.5,
+    39.74,
+    108.55,
+    41.7
+  ],
+  "tile_deg": 0.5,
+  "log": [
+    {
+      "tile_idx": 2,
+      "bbox": [
+        106.5,
+        40.74,
+        107.0,
+        41.24
+      ],
+      "error": "Overpass failed after retries on (106.5, 40.74, 107.0, 41.24): 403 Client Error: Forbidden for url: https://overpass.openstreetmap.fr/api/interpreter"
+    },
+    {
+      "tile_idx": 6,
+      "bbox": [
+        107.0,
+        40.74,
+        107.5,
+        41.24
+      ],
+      "elements": 12025,
+      "elapsed_s": 14.2
+    },
+    {
+      "tile_idx": 14,
+      "bbox": [
+        108.0,
+        40.74,
+        108.5,
+        41.24
+      ],
+      "elements": 5425,
+      "elapsed_s": 15.1
+    },
+    {
+      "tile_idx": 16,
+      "bbox": [
+        108.5,
+        39.74,
+        108.55,
+        40.24
+      ],
+      "error": "Overpass failed after retries on (108.5, 39.74, 108.55, 40.24): 403 Client Error: Forbidden for url: https://overpass.openstreetmap.fr/api/interpreter"
+    }
+  ]
+}

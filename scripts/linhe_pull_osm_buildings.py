@@ -178,7 +178,8 @@ def main() -> None:
         print("[warn] no buildings parsed")
         return
 
-    gdf = gpd.GeoDataFrame({"source": "osm"}, geometry=all_polys, crs="EPSG:4326")
+    gdf = gpd.GeoDataFrame({"source": ["osm"] * len(all_polys)},
+                            geometry=all_polys, crs="EPSG:4326")
     n_before = len(gdf)
     gdf = gdf[gdf.geometry.is_valid & ~gdf.geometry.is_empty]
     gdf["wkb"] = gdf.geometry.apply(lambda g: g.wkb)

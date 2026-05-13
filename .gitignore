@@ -68,3 +68,7 @@ packaging/colab/*.tar.gz.sha256
 packaging/colab/_index.parquet
 packaging/colab/_osm_index.parquet
 packaging/colab/_manifest.txt
+
+# OSM / GEE cache (regenerable, large)
+results/linhe/osm/_tiles/
+results/linhe/lulc/_tiles/

@@ -1,0 +1,9 @@
+{
+  "built_at": "2026-05-13T20:02:06",
+  "min_area_m2": 20.0,
+  "positive_only": false,
+  "n_buildings_used": 8345,
+  "n_patches_processed": 22834,
+  "n_positive_patches": 1976,
+  "n_masks_written": 22834
+}
