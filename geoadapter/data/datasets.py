@@ -177,20 +177,21 @@ class _LinhePairedDataset(Dataset):
 
 def load_linhe_buildings(root: str, split: str = "train", val_frac: float = 0.2,
                          seed: int = 42, max_samples: int = None,
-                         positive_min_share: float = 0.0):
+                         positive_min_share: float = 0.0,
+                         split_mode: str = "scene"):
     """Load paired Linhe RGB patches + OSM building masks for 2-class segmentation.
-
-    The split is deterministic and disjoint by scene_id so val never leaks scenes
-    seen in training. Scenes are sorted alphabetically, val_frac of them go to val.
 
     Args:
         root: repo root (the directory containing data/linhe_patches/)
         split: "train" or "val"
-        val_frac: fraction of scenes held out for validation
-        seed: ignored at scene level (sorted+sliced) but threaded for API parity
+        val_frac: fraction held out for validation
+        seed: RNG seed for patch-level split and max_samples subsampling
         max_samples: cap patches in the returned split
         positive_min_share: drop patches whose building_share is below this
-            (set to e.g. 0.01 to focus on building-bearing patches during demos)
+        split_mode: "scene" (default — deterministic by scene_id, prevents leakage
+            across scenes; required for honest generalization numbers) or "patch"
+            (random patch-level split within the paired pool; use for smoke tests
+            and single-scene debugging where scene-level split is impossible).
     """
     import pandas as pd
     from pathlib import Path
@@ -213,13 +214,23 @@ def load_linhe_buildings(root: str, split: str = "train", val_frac: float = 0.2,
     if positive_min_share > 0:
         paired = paired[paired["building_share"] >= positive_min_share]
 
-    scenes = sorted(paired["scene_id"].unique())
-    n_val = max(1, int(len(scenes) * val_frac))
-    val_scenes = set(scenes[-n_val:])
+    if split_mode == "scene":
+        scenes = sorted(paired["scene_id"].unique())
+        n_val = max(1, int(len(scenes) * val_frac))
+        val_scenes = set(scenes[-n_val:])
+        is_val = paired["scene_id"].isin(val_scenes)
+    elif split_mode == "patch":
+        shuffled = paired.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+        cut = int(len(shuffled) * (1.0 - val_frac))
+        paired = shuffled
+        is_val = pd.Series([i >= cut for i in range(len(paired))], index=paired.index)
+    else:
+        raise ValueError(f"split_mode must be 'scene' or 'patch', got {split_mode!r}")
+
     if split == "val":
-        paired = paired[paired["scene_id"].isin(val_scenes)]
+        paired = paired[is_val]
     elif split == "train":
-        paired = paired[~paired["scene_id"].isin(val_scenes)]
+        paired = paired[~is_val]
     else:
         raise ValueError(f"split must be 'train' or 'val', got {split!r}")
 

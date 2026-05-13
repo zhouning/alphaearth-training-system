@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def load_config(path: str) -> dict:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -109,13 +109,16 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
             val_ds = load_landcoverai(root=ds_root, split="val", max_samples=val_max_samples)
         elif dataset_name == "linhe_buildings":
             from geoadapter.data.datasets import load_linhe_buildings
+            split_mode = global_cfg["experiment"].get("split_mode", "scene")
             train_ds = load_linhe_buildings(
-                root=ds_root, split="train", max_samples=max_samples,
+                root=ds_root, split="train", max_samples=max_samples, seed=seed,
                 positive_min_share=global_cfg["experiment"].get("positive_min_share", 0.0),
+                split_mode=split_mode,
             )
             val_ds = load_linhe_buildings(
-                root=ds_root, split="val", max_samples=val_max_samples,
+                root=ds_root, split="val", max_samples=val_max_samples, seed=seed,
                 positive_min_share=global_cfg["experiment"].get("positive_min_share", 0.0),
+                split_mode=split_mode,
             )
         elif dataset_name == "linhe_lulc":
             from geoadapter.data.datasets import load_linhe_lulc
