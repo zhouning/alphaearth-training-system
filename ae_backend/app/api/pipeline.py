@@ -131,36 +131,48 @@ import time
 @router.get("/datasets")
 async def list_available_datasets():
     """
-    列出所有已生成的有效训练数据集 (包含 .pt 文件的目录或内存数据集)
+    列出所有可训练数据集:
+    - 传统 DataFusion 输出目录: dataset_*/*.pt
+    - Linhe patch dataset: data/linhe_patches/_index.parquet
+    - 内存直通数据集
     """
     from app.core.config import settings
     work_dir = settings.RAW_DATA_DIR
     datasets = []
-    
+
     if os.path.exists(work_dir):
         for item in os.listdir(work_dir):
             item_path = os.path.join(work_dir, item)
             if os.path.isdir(item_path) and item.startswith("dataset_"):
-                # Check if it has any .pt files
                 pt_files = [f for f in os.listdir(item_path) if f.endswith('.pt')]
                 if pt_files:
-                    # Get modification time of the directory
                     mtime = os.path.getmtime(item_path)
                     datasets.append({
                         "id": item,
                         "name": f"数据集 {item[-8:]} ({len(pt_files)} 切片) [磁盘]",
                         "mtime": mtime
                     })
-                    
-    # Add in-memory datasets
+
+    linhe_index = os.path.join(settings.DATA_DIR, "linhe_patches", "_index.parquet")
+    if os.path.exists(linhe_index):
+        try:
+            import pandas as pd
+            patch_count = len(pd.read_parquet(linhe_index, columns=["scene_id"]))
+        except Exception:
+            patch_count = 0
+        datasets.append({
+            "id": "linhe_patches",
+            "name": f"临河样例数据 ({patch_count} 切片) [RGB→Prithvi PEFT]",
+            "mtime": os.path.getmtime(linhe_index)
+        })
+
     for mem_id, tensors in IN_MEMORY_DATASETS.items():
         datasets.append({
             "id": f"memory_{mem_id}",
             "name": f"数据集 {mem_id[-8:]} ({len(tensors)} 切片) [内存直通 🚀]",
-            "mtime": time.time()  # always float them to top
+            "mtime": time.time()
         })
-                    
-    # Sort by modification time, newest first
+
     datasets.sort(key=lambda x: x["mtime"], reverse=True)
     return {"status": "success", "data": datasets}
 
