@@ -61,3 +61,10 @@ logs/
 # Claude Code local state (per-machine)
 .claude/settings.local.json
 .claude/worktrees/
+
+# Colab packaging artifacts (large tar.gz, regenerable)
+packaging/colab/*.tar.gz
+packaging/colab/*.tar.gz.sha256
+packaging/colab/_index.parquet
+packaging/colab/_osm_index.parquet
+packaging/colab/_manifest.txt
