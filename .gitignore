@@ -57,3 +57,7 @@ logs/
 *.out
 *.synctex.gz
 *.toc
+
+# Claude Code local state (per-machine)
+.claude/settings.local.json
+.claude/worktrees/
