@@ -174,14 +174,11 @@ def main() -> None:
             except Exception as e:
                 print(f"[WARN] failed to read {xlsx}: {e}")
 
-        # per-scene tif folders
-        for sub in sorted(q_dir.iterdir()):
-            if not sub.is_dir():
-                continue
-            tifs = list(sub.glob("*.tif"))
-            if not tifs:
-                continue
-            tif = tifs[0]
+        # per-tif scenes (recursive — some quarters nest under e.g. 低精度正射成果/)
+        # Each scene dir contains exactly one .tif; scene_id = parent dir name.
+        tif_paths = sorted(q_dir.rglob("*.tif"))
+        for tif in tif_paths:
+            sub = tif.parent
             scene_id = sub.name
             sat, sensor = parse_sat_from_name(scene_id)
             date = parse_date_from_name(scene_id)
@@ -280,7 +277,8 @@ def main() -> None:
         "## 说明",
         "",
         "- `.tif` 为 3 波段 uint8 RGB 成品影像 (**无 NIR/SWIR/红边**)",
-        "- 季度 2020Q1–2020Q4 仅有元数据 xlsx 与 落图 zip, 无栅格 → 可参考 `linhe_footprints_from_zip.geojson`",
+        "- 同一 quarter 内 scene 目录可能嵌套（如 `2020Q1/低精度正射成果/<scene>/<scene>.tif`），脚本递归扫描",
+        "- 落图 zip 仅作 footprint 兜底, 已被光栅 bbox 取代; 见 `linhe_footprints_from_zip.geojson`",
         f"- 输出 GeoJSON: `{gdf_path.relative_to(Path(__file__).resolve().parents[1])}`",
         f"- 输出 CSV:     `{csv_path.relative_to(Path(__file__).resolve().parents[1])}`",
     ]
