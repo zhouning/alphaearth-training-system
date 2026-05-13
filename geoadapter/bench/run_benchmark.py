@@ -12,7 +12,40 @@ def load_config(path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
+def _ckpt_path(ckpt_dir, method_name, modality, seed):
+    from pathlib import Path
+    return Path(ckpt_dir) / f"{method_name}__{modality}__seed{seed}.pt"
+
+
+def _save_ckpt(path, trainer, adapter, head, epoch):
+    import torch
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        "epoch": epoch,
+        "adapter": adapter.state_dict(),
+        "head": head.state_dict(),
+        "backbone_peft": {k: v for k, v in trainer.backbone.state_dict().items()
+                          if any(tag in k for tag in ("lora_", "adapter", "houlsby"))},
+        "optimizer": trainer.optimizer.state_dict(),
+        "scheduler": trainer.scheduler.state_dict(),
+    }, path)
+
+
+def _load_ckpt(path, trainer, adapter, head):
+    import torch
+    ck = torch.load(path, map_location=trainer.device, weights_only=False)
+    adapter.load_state_dict(ck["adapter"])
+    head.load_state_dict(ck["head"])
+    if ck.get("backbone_peft"):
+        miss, _ = trainer.backbone.load_state_dict(ck["backbone_peft"], strict=False)
+        # only PEFT subkeys were saved, so strict=False and missing keys = frozen backbone tensors
+    trainer.optimizer.load_state_dict(ck["optimizer"])
+    trainer.scheduler.load_state_dict(ck["scheduler"])
+    return ck["epoch"]
+
+
+def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
+                          ckpt_dir=None, ckpt_every=2):
     """Run one (method, modality, seed) combination. Returns metrics dict."""
     import torch
     from torch.utils.data import DataLoader, TensorDataset
@@ -143,8 +176,20 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
             y_syn = torch.randint(0, num_classes, (64,))
         train_loader = DataLoader(TensorDataset(x_syn, y_syn), batch_size=batch_size)
 
-    # Training loop
-    for epoch in range(1, epochs + 1):
+    # Training loop with optional per-epoch checkpoint / resume
+    start_epoch = 1
+    ckpt_path = None
+    if ckpt_dir is not None:
+        ckpt_path = _ckpt_path(ckpt_dir, method_cfg["name"], modality_cfg["preset"], seed)
+        if ckpt_path.exists():
+            try:
+                last = _load_ckpt(ckpt_path, trainer, adapter, head)
+                start_epoch = last + 1
+                print(f"  [{tag}] Resumed from epoch {last} via {ckpt_path.name}")
+            except Exception as e:
+                print(f"  [{tag}] ckpt load failed ({e}), starting from epoch 1")
+
+    for epoch in range(start_epoch, epochs + 1):
         epoch_loss = 0.0
         n_batches = 0
         for batch_x, batch_y in train_loader:
@@ -155,6 +200,8 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed):
         if epoch % 10 == 0 or epoch == epochs:
             avg = epoch_loss / max(n_batches, 1)
             print(f"  [{tag}] Epoch {epoch}/{epochs} loss={avg:.4f}")
+        if ckpt_path is not None and (epoch % ckpt_every == 0 or epoch == epochs):
+            _save_ckpt(ckpt_path, trainer, adapter, head, epoch)
 
     # Evaluation
     metrics = {"method": method_cfg["name"], "modality": modality_cfg["preset"],
@@ -200,6 +247,11 @@ def main():
     parser.add_argument("--output", default="results.json")
     parser.add_argument("--dry-run", action="store_true", help="Only print experiment matrix")
     parser.add_argument("--epochs", type=int, default=None, help="Override epochs from config")
+    parser.add_argument("--checkpoint-dir", default=None,
+                        help="Save/resume per-epoch checkpoint per experiment. "
+                             "Critical for Colab where sessions die mid-training.")
+    parser.add_argument("--checkpoint-every", type=int, default=2,
+                        help="Save checkpoint every N epochs (default 2).")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -232,7 +284,9 @@ def main():
         if key in done_keys:
             print(f"  SKIP {method['name']}|{modality['preset']}|seed={seed} (already done)")
             continue
-        result = run_single_experiment(method, modality, cfg, seed)
+        result = run_single_experiment(method, modality, cfg, seed,
+                                        ckpt_dir=args.checkpoint_dir,
+                                        ckpt_every=args.checkpoint_every)
         results.append(result)
         output_path.write_text(json.dumps(results, indent=2))
         print(f"  -> appended to {output_path} ({len(results)}/{len(combos)})")

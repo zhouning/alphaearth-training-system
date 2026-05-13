@@ -4,13 +4,13 @@
     "modality": "rgb_3band",
     "seed": 42,
     "trainable_params": 1538,
-    "mIoU": 0.566699678083328
+    "mIoU": 0.5970409579832114
   },
   {
     "method": "houlsby",
     "modality": "rgb_3band",
     "seed": 42,
     "trainable_params": 1191170,
-    "mIoU": 0.6991113699880525
+    "mIoU": 0.7058586209121505
   }
 ]
