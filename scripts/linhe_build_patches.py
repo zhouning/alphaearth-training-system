@@ -17,6 +17,8 @@ Outputs:
 
 Usage:
   python scripts/linhe_build_patches.py --target-gsd 10 --patch 128 --max-scenes 4
+  python scripts/linhe_build_patches.py --max-scenes 0 --resume         # full 203-scene rebuild
+  python scripts/linhe_build_patches.py --quarters 2025Q1 2025Q2 2025Q3 2025Q4 --resume
   python scripts/linhe_build_patches.py --with-s2  # later, after GEE setup
 """
 from __future__ import annotations
@@ -85,14 +87,31 @@ def build_offline(args: argparse.Namespace) -> None:
     gdf = gpd.read_file(CATALOG)
     if args.satellites:
         gdf = gdf[gdf["satellite"].isin(args.satellites)]
+    if args.quarters:
+        gdf = gdf[gdf["quarter"].isin(args.quarters)]
     if args.max_scenes:
         gdf = gdf.head(args.max_scenes)
-    print(f"[info] processing {len(gdf)} scenes → {OUT_BASE}")
-
     OUT_BASE.mkdir(parents=True, exist_ok=True)
-    index_rows: list[dict] = []
 
-    for _, row in gdf.iterrows():
+    idx_path = OUT_BASE / "_index.parquet"
+    existing_rows: list[dict] = []
+    done_scenes: set[str] = set()
+    if args.resume and idx_path.exists():
+        try:
+            existing = pd.read_parquet(idx_path)
+            existing_rows = existing.to_dict("records")
+            done_scenes = set(existing["scene_id"].unique())
+            print(f"[resume] {len(done_scenes)} scenes already in {idx_path.name}")
+        except Exception as e:
+            print(f"[resume] cannot read {idx_path.name}: {e} — starting fresh")
+
+    todo = gdf[~gdf["scene_id"].isin(done_scenes)] if done_scenes else gdf
+    print(f"[info] {len(todo)}/{len(gdf)} scenes to process → {OUT_BASE}")
+
+    index_rows: list[dict] = list(existing_rows)
+    n_new_scenes = 0
+
+    for _, row in todo.iterrows():
         scene_id = row["scene_id"]
         tif = Path(row["tif_path"])
         out_dir = OUT_BASE / scene_id
@@ -104,11 +123,12 @@ def build_offline(args: argparse.Namespace) -> None:
             print(f"[skip] {scene_id}: {e}")
             continue
         tiles = tile_array(arr, args.patch, args.stride or args.patch)
+        scene_rows: list[dict] = []
         for r, c, tile in tiles:
             npz_path = out_dir / f"p_{r:05d}_{c:05d}.npz"
             np.savez_compressed(npz_path, rgb=tile)
             bbox = patch_bbox(profile, r, c, args.patch)
-            index_rows.append({
+            scene_rows.append({
                 "scene_id": scene_id,
                 "satellite": row["satellite"],
                 "quarter": row["quarter"],
@@ -120,14 +140,20 @@ def build_offline(args: argparse.Namespace) -> None:
                 "gsd_m": args.target_gsd,
                 "modality": "rgb",
             })
-        print(f"[ok]   {scene_id}: {len(tiles)} patches")
+        index_rows.extend(scene_rows)
+        n_new_scenes += 1
+        print(f"[ok]   {scene_id}: {len(tiles)} patches ({n_new_scenes}/{len(todo)})")
+
+        # Incremental save every N scenes so a crash never wipes progress
+        if n_new_scenes % args.save_every == 0:
+            pd.DataFrame(index_rows).to_parquet(idx_path)
+            print(f"[save] {len(index_rows)} patches → {idx_path.name}")
 
     if not index_rows:
         print("[warn] no patches produced")
         return
 
     idx = pd.DataFrame(index_rows)
-    idx_path = OUT_BASE / "_index.parquet"
     idx.to_parquet(idx_path)
     (OUT_BASE / "_manifest.json").write_text(json.dumps({
         "built_at": datetime.now().isoformat(timespec="seconds"),
@@ -137,6 +163,7 @@ def build_offline(args: argparse.Namespace) -> None:
         "n_patches": len(idx),
         "n_scenes": int(idx["scene_id"].nunique()),
         "modalities": ["rgb"],
+        "quarters": sorted(idx["quarter"].unique().tolist()),
     }, indent=2), encoding="utf-8")
     print(f"\n[done] {len(idx)} patches across {idx['scene_id'].nunique()} scenes → {idx_path}")
 
@@ -148,6 +175,11 @@ def main() -> None:
     p.add_argument("--stride", type=int, default=None, help="default = patch (non-overlapping)")
     p.add_argument("--max-scenes", type=int, default=4, help="limit for quick test; 0 = all")
     p.add_argument("--satellites", nargs="*", help="filter e.g. JKF01 GF600")
+    p.add_argument("--quarters", nargs="*", help="filter e.g. 2025Q3 2025Q4")
+    p.add_argument("--resume", action="store_true",
+                   help="skip scenes already present in _index.parquet")
+    p.add_argument("--save-every", type=int, default=5,
+                   help="flush _index.parquet every N processed scenes")
     p.add_argument("--with-s2", action="store_true", help="also pull Sentinel-2 (requires GEE)")
     args = p.parse_args()
     if args.max_scenes == 0:
