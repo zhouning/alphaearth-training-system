@@ -224,8 +224,8 @@ def slice_patches_for_year(year: int, raw_tif: Path, remap_to_6: bool) -> list[d
             rows.append({
                 "scene_id": r["scene_id"],
                 "quarter": r["quarter"],
-                "patch_path": r["patch_path"],
-                "lulc_path": str(out_npz.relative_to(ROOT)),
+                "patch_path": r["patch_path"].replace("\\", "/"),
+                "lulc_path": str(out_npz.relative_to(ROOT)).replace("\\", "/"),
                 "year": year,
                 "n_classes": 6 if remap_to_6 else 9,
                 "class_map": "linhe_6" if remap_to_6 else "esri_9",
