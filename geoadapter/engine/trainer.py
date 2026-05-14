@@ -1,7 +1,40 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from geoadapter.adapters.base import ModalityAdapter
 from geoadapter.models.prithvi import PrithviBackbone
+
+
+class FocalLoss(nn.Module):
+    """Multi-class focal loss for severely imbalanced semantic segmentation.
+
+    Args:
+        gamma: focusing parameter; γ=0 reduces to standard CE, γ=2 is the
+            RetinaNet default that down-weights easy (well-classified) pixels
+            so gradient is dominated by hard / minority-class pixels.
+        alpha: optional per-class weight (list of length num_classes). For
+            balanced binary seg you can leave it None.
+        ignore_index: standard CE ignore_index passthrough.
+    """
+
+    def __init__(self, gamma: float = 2.0, alpha: list[float] | None = None,
+                 ignore_index: int = 255):
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = torch.tensor(alpha, dtype=torch.float32) if alpha else None
+        self.ignore_index = ignore_index
+
+    def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        # logits: (B, C, H, W)  target: (B, H, W)
+        log_p = F.log_softmax(logits, dim=1)
+        if self.alpha is not None and self.alpha.device != logits.device:
+            self.alpha = self.alpha.to(logits.device)
+        ce = F.nll_loss(log_p, target, weight=self.alpha,
+                        ignore_index=self.ignore_index, reduction="none")
+        # pt = exp(-ce) is the prob of the *true* class
+        pt = torch.exp(-ce)
+        focal = ((1 - pt) ** self.gamma) * ce
+        return focal.mean()
 
 
 class PEFTTrainer:
@@ -18,6 +51,8 @@ class PEFTTrainer:
         task: str = "classification",
         device: str = "cpu",
         class_weights: list[float] | None = None,
+        loss: str = "ce",
+        focal_gamma: float = 2.0,
     ):
         self.backbone = backbone.to(device)
         self.adapter = adapter.to(device) if adapter else None
@@ -44,9 +79,13 @@ class PEFTTrainer:
         if task == "multilabel":
             self.criterion = nn.BCEWithLogitsLoss()
         elif task == "segmentation":
-            weight_t = torch.tensor(class_weights, device=device, dtype=torch.float32) \
-                if class_weights else None
-            self.criterion = nn.CrossEntropyLoss(ignore_index=255, weight=weight_t)
+            if loss == "focal":
+                self.criterion = FocalLoss(gamma=focal_gamma, alpha=class_weights,
+                                           ignore_index=255)
+            else:
+                weight_t = torch.tensor(class_weights, device=device, dtype=torch.float32) \
+                    if class_weights else None
+                self.criterion = nn.CrossEntropyLoss(ignore_index=255, weight=weight_t)
         else:
             self.criterion = nn.CrossEntropyLoss()
 

@@ -1,5 +1,5 @@
 experiment:
-  name: linhe_buildings_segmentation_v2
+  name: linhe_buildings_segmentation_v3
   task: segmentation
   dataset: linhe_buildings
   dataset_root: .
@@ -27,10 +27,11 @@ training:
   lr_peft: 1.0e-4
   scheduler: cosine
   weight_decay: 0.01
-  # OSM 真标签下 building 像素仅 ~2.2%, 不加类权重 CE loss 让模型
-  # 退化为常量预测背景 (mIoU 0.50 ≈ always-neg). 50× 权重让正样本梯度
-  # 主导, 模型有动力学建筑判别. 可调 30-100 找最佳点.
-  class_weights: [1.0, 50.0]
+  # OSM 真标签下 building 像素仅 ~2.2%. v2 用 [1.0, 50.0] CE 矫枉过正
+  # (mIoU 全部退化到 0.36-0.40, 模型偏向预测前景). 改用 focal loss
+  # γ=2 自适应平衡, 不依赖人工调权重 (alpha=null), 是稀疏 seg 行业标准.
+  loss: focal
+  focal_gamma: 2.0
 
 prithvi:
   pretrained: true

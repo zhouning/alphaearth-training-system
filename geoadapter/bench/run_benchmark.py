@@ -112,6 +112,8 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
         task=task_type,
         device=device,
         class_weights=global_cfg["training"].get("class_weights"),
+        loss=global_cfg["training"].get("loss", "ce"),
+        focal_gamma=global_cfg["training"].get("focal_gamma", 2.0),
     )
 
     n_trainable = sum(p.numel() for p in list(head.parameters()) +
