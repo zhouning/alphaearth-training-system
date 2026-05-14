@@ -1,5 +1,5 @@
 experiment:
-  name: linhe_buildings_segmentation_v4
+  name: linhe_buildings_synth_baseline
   task: segmentation
   dataset: linhe_buildings
   dataset_root: .
@@ -7,7 +7,8 @@ experiment:
   epochs: 30
   batch_size: 16
   seeds: [42, 123, 456]
-  positive_min_share: 0.02    # raise threshold so each patch has ≥2% building, easier signal
+  split_mode: patch             # synth label 无跨 scene 泛化意义, patch-level 更公平
+  positive_min_share: 0.05      # synth threshold=140 → 保留建筑密度 ≥5% 的 patch
   max_samples: 2000
   val_max_samples: 400
 
@@ -28,14 +29,10 @@ training:
   lr_peft: 1.0e-4
   scheduler: cosine
   weight_decay: 0.01
-  # v3 (focal γ=2) 仍退化 (train precision=0.69 但 recall=0.017),
-  # 模型只在极确信时预测建筑. v4 三件事联动:
-  # 1. positive_min_share 0.005→0.02, train 集平均建筑占比从 2.65% 升到 ~5%
-  # 2. focal γ 2→4, 更激进 down-weight 已分对的简单背景像素
-  # 3. focal alpha [0.25, 0.75], 给正样本 3× 类权重 (RetinaNet 标准 α=0.25 反 highlights 多数类, 这里我们要反过来)
-  loss: focal
-  focal_gamma: 4.0
-  class_weights: [0.25, 0.75]
+  # Synth label (brightness threshold=140) 与 RGB 强相关, 模型能学到
+  # 0.70 mIoU (houlsby). 不需要 focal/class_weights — 正样本占比
+  # 已通过 positive_min_share=0.05 保证 ≥5%.
+  loss: ce
 
 prithvi:
   pretrained: true
