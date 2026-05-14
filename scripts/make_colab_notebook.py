@@ -43,10 +43,16 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 print('Drive mounted; checkpoint dir:', CHECKPOINT_DIR)"""),
     ("code", """# 2. GPU check
 !nvidia-smi | head -20"""),
-    ("code", """# 3. Clone repo
+    ("code", """# 3. Clone repo (or pull if already cloned)
 %cd /content
-!git clone https://github.com/zhouning/AlphaEarth-System.git 2>/dev/null || (cd AlphaEarth-System && git pull)
-%cd /content/AlphaEarth-System
+REPO_URL = 'https://github.com/zhouning/alphaearth-training-system.git'
+REPO_DIR = '/content/alphaearth-training-system'
+import os, subprocess
+if os.path.isdir(REPO_DIR + '/.git'):
+    subprocess.run(['git', '-C', REPO_DIR, 'pull'], check=True)
+else:
+    subprocess.run(['git', 'clone', REPO_URL, REPO_DIR], check=True)
+%cd $REPO_DIR
 !git log --oneline -5"""),
     ("code", """# 4. Install deps
 !pip install -q -e .
@@ -67,7 +73,7 @@ for arc in ARCHIVES:
     subprocess.run(['sha256sum', '-c', f'/content/{os.path.basename(sha_src)}'],
                    cwd='/content', check=True)
     print(f'extract {arc}')
-    subprocess.run(['tar', 'xzf', dst, '-C', '/content/AlphaEarth-System/'], check=True)
+    subprocess.run(['tar', 'xzf', dst, '-C', REPO_DIR + '/'], check=True)
     # snapshot per-archive index before next archive overwrites it
     merged_idx_rows.append(pd.read_parquet('data/linhe_patches/_index.parquet'))
     merged_osm_rows.append(pd.read_parquet('data/linhe_patches/_osm_index.parquet'))
