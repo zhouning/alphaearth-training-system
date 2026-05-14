@@ -95,10 +95,15 @@ def linhe_roi_bounds_3857() -> tuple[float, float, float, float]:
 
 
 def export_year_to_tif(year: int, bounds_3857: tuple[float, float, float, float], out_path: Path) -> None:
-    """Export one annual mosaic clipped to the ROI as a local GeoTIFF via getDownloadURL."""
+    """Export one annual mosaic clipped to the ROI as a local GeoTIFF via getDownloadURL.
+
+    GEE limits single downloads to ~50MB. The Linhe ROI at 10m is ~1.3GB,
+    so we tile the ROI into a grid of chunks, download each, then merge.
+    """
     import ee
     import requests
     import tempfile
+    from rasterio.merge import merge as rio_merge
 
     ee.Initialize()
 
@@ -106,25 +111,77 @@ def export_year_to_tif(year: int, bounds_3857: tuple[float, float, float, float]
     img = col.mosaic().toUint8().rename("lulc")
 
     minx, miny, maxx, maxy = bounds_3857
-    region = ee.Geometry.Rectangle([minx, miny, maxx, maxy], proj="EPSG:3857", evenOdd=False)
+    # ~50MB limit at 10m uint8 single band ≈ 7000×7000 pixels per chunk
+    chunk_size_m = 45000  # 45km per side → ~4500×4500 px at 10m ≈ 20MB
+    xs = np.arange(minx, maxx, chunk_size_m)
+    ys = np.arange(miny, maxy, chunk_size_m)
+    n_chunks = len(xs) * len(ys)
+    print(f"[info] {year}: ROI split into {n_chunks} chunks ({len(xs)}x{len(ys)} grid)")
 
-    url = img.getDownloadURL({
-        "scale": 10,
-        "region": region,
-        "crs": "EPSG:3857",
-        "format": "GEO_TIFF",
-    })
-    print(f"[info] {year}: downloading from GEE → {out_path.name}")
-    resp = requests.get(url, stream=True, timeout=600)
-    resp.raise_for_status()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=1 << 20):
-            f.write(chunk)
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f"esri_lulc_{year}_"))
+    chunk_paths = []
+
+    for ix, x0 in enumerate(xs):
+        for iy, y0 in enumerate(ys):
+            x1 = min(x0 + chunk_size_m, maxx)
+            y1 = min(y0 + chunk_size_m, maxy)
+            region = ee.Geometry.Rectangle([x0, y0, x1, y1], proj="EPSG:3857", evenOdd=False)
+
+            try:
+                url = img.getDownloadURL({
+                    "scale": 10,
+                    "region": region,
+                    "crs": "EPSG:3857",
+                    "format": "GEO_TIFF",
+                })
+            except Exception as e:
+                print(f"  [skip] chunk ({ix},{iy}): {e}")
+                continue
+
+            chunk_path = tmp_dir / f"chunk_{ix:02d}_{iy:02d}.tif"
+            print(f"  [{ix*len(ys)+iy+1}/{n_chunks}] downloading chunk ({ix},{iy})...")
+            try:
+                resp = requests.get(url, stream=True, timeout=600)
+                resp.raise_for_status()
+                with open(chunk_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1 << 20):
+                        f.write(chunk)
+                chunk_paths.append(chunk_path)
+            except Exception as e:
+                print(f"  [error] chunk ({ix},{iy}): {e}")
+                continue
+
+    if not chunk_paths:
+        print(f"[error] {year}: no chunks downloaded")
+        return
+
+    # Merge all chunks into single tif
+    print(f"[info] {year}: merging {len(chunk_paths)} chunks...")
+    datasets = [rasterio.open(p) for p in chunk_paths]
+    mosaic, transform = rio_merge(datasets)
+    for ds in datasets:
+        ds.close()
+
+    profile = rasterio.open(chunk_paths[0]).profile.copy()
+    profile.update(
+        width=mosaic.shape[2],
+        height=mosaic.shape[1],
+        transform=transform,
+        compress="deflate",
+    )
+    with rasterio.open(out_path, "w", **profile) as dst:
+        dst.write(mosaic)
+
+    # Cleanup temp chunks
+    for p in chunk_paths:
+        p.unlink(missing_ok=True)
+    tmp_dir.rmdir()
+    print(f"[info] {year}: merged -> {out_path} ({out_path.stat().st_size / 1e6:.1f} MB)")
 
 
 def remap_to_linhe_6(arr: np.ndarray) -> np.ndarray:
-    """Vectorized 9-class → 6-class remap. Unknown codes fall to 0."""
+    """Vectorized 9-class -> 6-class remap. Unknown codes fall to 0."""
     out = np.zeros_like(arr, dtype=np.uint8)
     for src, dst in LINHE_6CLASS_MAP.items():
         out[arr == src] = dst
@@ -198,7 +255,7 @@ def main() -> None:
 
     bounds = linhe_roi_bounds_3857()
     print(f"[info] Linhe ROI bounds (EPSG:3857): {bounds}")
-    print(f"[info] ROI area: {(bounds[2]-bounds[0])*(bounds[3]-bounds[1])/1e6:.0f} km²")
+    print(f"[info] ROI area: {(bounds[2]-bounds[0])*(bounds[3]-bounds[1])/1e6:.0f} km2")
 
     OUT_TIF.mkdir(parents=True, exist_ok=True)
     all_rows: list[dict] = []
@@ -234,7 +291,7 @@ def main() -> None:
         idx = pd.DataFrame(all_rows)
         idx_path = PATCH_BASE / "_lulc_index.parquet"
         idx.to_parquet(idx_path)
-        print(f"[done] {len(idx)} patch×year masks → {idx_path}")
+        print(f"[done] {len(idx)} patch x year masks -> {idx_path}")
 
     manifest = {
         "built_at": datetime.now().isoformat(timespec="seconds"),
@@ -248,7 +305,7 @@ def main() -> None:
     }
     (OUT_TIF / "_manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False),
                                             encoding="utf-8")
-    print(f"[done] manifest → {OUT_TIF / '_manifest.json'}")
+    print(f"[done] manifest -> {OUT_TIF / '_manifest.json'}")
 
 
 if __name__ == "__main__":
