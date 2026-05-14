@@ -261,6 +261,10 @@ def load_linhe_lulc(root: str, year: int, split: str = "train", val_frac: float 
 
     patches = pd.read_parquet(patch_idx)
     lulc = pd.read_parquet(lulc_idx)
+    # Normalize path separators for cross-platform compatibility
+    patches["patch_path"] = patches["patch_path"].str.replace("\\", "/", regex=False)
+    lulc["patch_path"] = lulc["patch_path"].str.replace("\\", "/", regex=False)
+    lulc["lulc_path"] = lulc["lulc_path"].str.replace("\\", "/", regex=False)
     lulc = lulc[lulc["year"] == year].rename(columns={"lulc_path": "label_path"})
     if len(lulc) == 0:
         raise ValueError(f"no LULC rows for year={year}; pull it with linhe_pull_esri_lulc.py")
