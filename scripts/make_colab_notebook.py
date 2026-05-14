@@ -70,6 +70,8 @@ for arc in ARCHIVES:
     shutil.copy(src, dst)
     shutil.copy(sha_src, '/content/')
     print(f'verify {arc}')
+    # Strip any trailing \r in the sha256 file (Windows-written checksums break sha256sum -c on Linux).
+    subprocess.run(['sed', '-i', 's/\\r$//', f'/content/{os.path.basename(sha_src)}'], check=True)
     subprocess.run(['sha256sum', '-c', f'/content/{os.path.basename(sha_src)}'],
                    cwd='/content', check=True)
     print(f'extract {arc}')

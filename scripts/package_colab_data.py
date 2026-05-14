@@ -98,7 +98,9 @@ def main() -> None:
             h.update(chunk)
     sha = h.hexdigest()
     sha_path = out_path.with_suffix(out_path.suffix + ".sha256")
-    sha_path.write_text(f"{sha}  {out_path.name}\n", encoding="utf-8")
+    # Use binary write so Python on Windows does not turn \n into \r\n —
+    # `sha256sum -c` on Linux treats the trailing \r as part of the filename.
+    sha_path.write_bytes(f"{sha}  {out_path.name}\n".encode("utf-8"))
     print(f"[ok] sha256: {sha}")
     print(f"[ok] checksum file: {sha_path}")
     print()
