@@ -23,11 +23,17 @@ mid-session Colab kill can resume from the last epoch.
 2. Runtime → Change runtime type → L4 GPU (or T4 for smoke).
 3. Run cells top-to-bottom.
 """),
-    ("code", """# 1. Mount Drive, pick archive
+    ("code", """# 1. Mount Drive, pick archives
 from google.colab import drive
 drive.mount('/content/drive')
 
-ARCHIVE_NAME = 'linhe_2025Q1_2025Q4.tar.gz'   # change if you packaged a different subset
+# Two-half packaging keeps each tar.gz under 500 MB so Drive 1 GB free tier
+# can hold both simultaneously. Order does not matter — the second tar's
+# _index.parquet replaces the first; we merge below in cell 5.
+ARCHIVES = [
+    'linhe_2025_h1.tar.gz',   # Q1 + Q2  (~420 MB)
+    'linhe_2025_h2.tar.gz',   # Q3 + Q4  (~408 MB)
+]
 CHECKPOINT_DIR = '/content/drive/MyDrive/linhe_ckpt'
 RESULTS_DIR = '/content/drive/MyDrive/linhe_results'
 
@@ -45,20 +51,33 @@ print('Drive mounted; checkpoint dir:', CHECKPOINT_DIR)"""),
     ("code", """# 4. Install deps
 !pip install -q -e .
 !pip install -q pyarrow scikit-learn matplotlib"""),
-    ("code", """# 5. Copy + verify + extract data archive
+    ("code", """# 5. Copy + verify + extract each archive, then merge indexes
 import shutil, subprocess, os
-src = f'/content/drive/MyDrive/{ARCHIVE_NAME}'
-sha_src = src + '.sha256'
-dst = f'/content/{ARCHIVE_NAME}'
-assert os.path.exists(src), f'Upload {ARCHIVE_NAME} to Drive first'
-shutil.copy(src, dst)
-shutil.copy(sha_src, '/content/')
-print('copied, verifying sha256...')
-subprocess.run(['sha256sum', '-c', f'/content/{os.path.basename(sha_src)}'], cwd='/content', check=True)
-print('extracting...')
-subprocess.run(['tar', 'xzf', dst, '-C', '/content/AlphaEarth-System/'], check=True)
-!ls -la data/linhe_patches/ | head -10
-!cat data/linhe_patches/_colab_manifest.txt"""),
+import pandas as pd
+
+merged_idx_rows, merged_osm_rows = [], []
+for arc in ARCHIVES:
+    src = f'/content/drive/MyDrive/{arc}'
+    sha_src = src + '.sha256'
+    dst = f'/content/{arc}'
+    assert os.path.exists(src), f'Upload {arc} to Drive first'
+    shutil.copy(src, dst)
+    shutil.copy(sha_src, '/content/')
+    print(f'verify {arc}')
+    subprocess.run(['sha256sum', '-c', f'/content/{os.path.basename(sha_src)}'],
+                   cwd='/content', check=True)
+    print(f'extract {arc}')
+    subprocess.run(['tar', 'xzf', dst, '-C', '/content/AlphaEarth-System/'], check=True)
+    # snapshot per-archive index before next archive overwrites it
+    merged_idx_rows.append(pd.read_parquet('data/linhe_patches/_index.parquet'))
+    merged_osm_rows.append(pd.read_parquet('data/linhe_patches/_osm_index.parquet'))
+
+merged_idx = pd.concat(merged_idx_rows, ignore_index=True).drop_duplicates('patch_path')
+merged_osm = pd.concat(merged_osm_rows, ignore_index=True).drop_duplicates('patch_path')
+merged_idx.to_parquet('data/linhe_patches/_index.parquet')
+merged_osm.to_parquet('data/linhe_patches/_osm_index.parquet')
+print(f'merged: {len(merged_idx)} patches, {merged_idx[\"scene_id\"].nunique()} scenes')
+print(merged_idx['quarter'].value_counts().to_dict())"""),
     ("code", """# 6. Download Prithvi weights from HuggingFace (350 MB)
 import os
 os.makedirs('data/weights/prithvi', exist_ok=True)
@@ -89,11 +108,9 @@ print(df[['method','modality','seed','trainable_params','mIoU']].sort_values('mI
 
 - **Out-of-time kill**: Colab may cut the session after ~24 h / idle. Re-running
   cell 8 resumes from the last checkpoint + skips completed experiments.
-- **Budget**: one full run of 68-scene 20-epoch × 2 method × 3 seed ≈ 15 L4
-  GPU-hours ≈ 75 compute units.
-- **Change subset**: repackage locally with
-  `python scripts/package_colab_data.py --quarters 2025Q3 2025Q4` and upload
-  the new tar.gz; update `ARCHIVE_NAME` in cell 1.
+- **Budget**: one full run of 69-scene 20-epoch × 2 method × 3 seed ≈ 25 L4
+  GPU-hours ≈ 125 compute units (user has 600/month).
+- **Sub-task**: train Q3+Q4 only by editing cell 5's ARCHIVES to a single tar.gz.
 - **Checkpoint cleanup**: after a successful full run, delete
   `/content/drive/MyDrive/linhe_ckpt/` to free Drive space.
 """),
