@@ -55,6 +55,14 @@ def main() -> None:
     osm_sub = osm[osm["patch_path"].isin(sub["patch_path"])].copy()
     print(f"[info] {len(osm_sub)} matching mask entries")
 
+    # Normalise Windows backslashes to forward slashes so the parquet works on
+    # Linux (Colab) without rewriting at load time.
+    for col in ("patch_path", "label_path"):
+        if col in sub.columns:
+            sub[col] = sub[col].str.replace("\\", "/", regex=False)
+        if col in osm_sub.columns:
+            osm_sub[col] = osm_sub[col].str.replace("\\", "/", regex=False)
+
     # write subset indexes to a temp dir under packaging/
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     sub_idx = OUT_DIR / "_index.parquet"
