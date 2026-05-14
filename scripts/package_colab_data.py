@@ -49,6 +49,9 @@ def main() -> None:
     print(f"[info] {len(sub)} patches across {sub['scene_id'].nunique()} scenes")
 
     osm = pd.read_parquet(osm_path)
+    # Schema differs: synth_masks → label_path; rasterize_buildings → osm_path
+    if "label_path" not in osm.columns and "osm_path" in osm.columns:
+        osm = osm.rename(columns={"osm_path": "label_path"})
     osm_sub = osm[osm["patch_path"].isin(sub["patch_path"])].copy()
     print(f"[info] {len(osm_sub)} matching mask entries")
 
