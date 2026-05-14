@@ -111,6 +111,7 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
         epochs=epochs,
         task=task_type,
         device=device,
+        class_weights=global_cfg["training"].get("class_weights"),
     )
 
     n_trainable = sum(p.numel() for p in list(head.parameters()) +

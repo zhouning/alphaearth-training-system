@@ -17,6 +17,7 @@ class PEFTTrainer:
         epochs: int = 50,
         task: str = "classification",
         device: str = "cpu",
+        class_weights: list[float] | None = None,
     ):
         self.backbone = backbone.to(device)
         self.adapter = adapter.to(device) if adapter else None
@@ -43,7 +44,9 @@ class PEFTTrainer:
         if task == "multilabel":
             self.criterion = nn.BCEWithLogitsLoss()
         elif task == "segmentation":
-            self.criterion = nn.CrossEntropyLoss(ignore_index=255)
+            weight_t = torch.tensor(class_weights, device=device, dtype=torch.float32) \
+                if class_weights else None
+            self.criterion = nn.CrossEntropyLoss(ignore_index=255, weight=weight_t)
         else:
             self.criterion = nn.CrossEntropyLoss()
 
