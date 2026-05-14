@@ -1,14 +1,18 @@
 experiment:
-  name: linhe_lulc_segmentation
+  name: linhe_lulc_6class
   task: segmentation
   dataset: linhe_lulc
   dataset_root: .
-  year: 2022
   num_classes: 6              # matches LINHE_6CLASS_NAMES in linhe_pull_esri_lulc.py
   epochs: 30
   batch_size: 16
   seeds: [42, 123, 456]
-  max_samples: 2000
+  split_mode: scene           # geographic split prevents spatial leakage
+  positive_min_share: 0.0     # multi-class, keep all patches
+  max_samples: 3000
+  val_max_samples: 600
+  lulc_year: 2022             # primary training year (read as 'year' by run_benchmark)
+  year: 2022
 
 modalities:
   - preset: rgb_3band
@@ -27,6 +31,8 @@ training:
   lr_peft: 1.0e-4
   scheduler: cosine
   weight_decay: 0.01
+  loss: ce
+  # Class distribution: crops 55.6%, rangeland 32.8%, built 9.6%, water 1.9%, trees ~0%
 
 prithvi:
   pretrained: true
