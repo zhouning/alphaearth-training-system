@@ -1,5 +1,5 @@
 experiment:
-  name: linhe_buildings_segmentation_v3
+  name: linhe_buildings_segmentation_v4
   task: segmentation
   dataset: linhe_buildings
   dataset_root: .
@@ -7,8 +7,9 @@ experiment:
   epochs: 30
   batch_size: 16
   seeds: [42, 123, 456]
-  positive_min_share: 0.005   # drop near-empty patches; demo focuses on buildings
-  max_samples: 2000           # cap per split for tight turnaround; raise after smoke
+  positive_min_share: 0.02    # raise threshold so each patch has ≥2% building, easier signal
+  max_samples: 2000
+  val_max_samples: 400
 
 modalities:
   - preset: rgb_3band
@@ -27,11 +28,14 @@ training:
   lr_peft: 1.0e-4
   scheduler: cosine
   weight_decay: 0.01
-  # OSM 真标签下 building 像素仅 ~2.2%. v2 用 [1.0, 50.0] CE 矫枉过正
-  # (mIoU 全部退化到 0.36-0.40, 模型偏向预测前景). 改用 focal loss
-  # γ=2 自适应平衡, 不依赖人工调权重 (alpha=null), 是稀疏 seg 行业标准.
+  # v3 (focal γ=2) 仍退化 (train precision=0.69 但 recall=0.017),
+  # 模型只在极确信时预测建筑. v4 三件事联动:
+  # 1. positive_min_share 0.005→0.02, train 集平均建筑占比从 2.65% 升到 ~5%
+  # 2. focal γ 2→4, 更激进 down-weight 已分对的简单背景像素
+  # 3. focal alpha [0.25, 0.75], 给正样本 3× 类权重 (RetinaNet 标准 α=0.25 反 highlights 多数类, 这里我们要反过来)
   loss: focal
-  focal_gamma: 2.0
+  focal_gamma: 4.0
+  class_weights: [0.25, 0.75]
 
 prithvi:
   pretrained: true
