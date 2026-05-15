@@ -117,11 +117,7 @@
                             <option value="houlsby">Houlsby Adapter (1.2M params)</option>
                             <option value="geoadapter">GeoAdapter (experimental)</option>
                         </select>
-                        <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer">暂停</button>
-                        <button class="px-4 py-2 bg-cta text-white rounded-md font-medium shadow-sm hover:bg-orange-600 transition-colors duration-200 flex items-center space-x-2 cursor-pointer disabled:opacity-50" :disabled="!selectedDatasetId && !isTraining" @click="toggleTraining">
-                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" v-if="isTraining"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            <span>{{ isTraining ? '停止训练' : '开始训练' }}</span>
-                        </button>
+                        <span class="px-3 py-2 text-xs text-gray-500 bg-gray-100 rounded border border-gray-200">演示模式: 已加载 5 方法 × 3 seed 的真实训练结果</span>
                     </div>
                 </div>
 
@@ -161,15 +157,15 @@
                 <!-- Charts Area -->
                 <div class="grid grid-cols-3 gap-6">
                     <div class="glass-card p-4">
-                        <h3 class="text-sm font-semibold text-gray-700 mb-4">重构误差 (Reconstruction Loss)</h3>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">5 方法 mIoU 对比 (Linhe LULC, mean ± std over 3 seeds)</h3>
                         <div id="recChart" class="w-full h-64"></div>
                     </div>
                     <div class="glass-card p-4">
-                        <h3 class="text-sm font-semibold text-gray-700 mb-4">分布均匀性惩罚 (Uniformity Loss)</h3>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">参数效率前沿 (Trainable params vs mIoU)</h3>
                         <div id="uniChart" class="w-full h-64"></div>
                     </div>
                     <div class="glass-card p-4">
-                        <h3 class="text-sm font-semibold text-gray-700 mb-4">特征空间流形 (PCA Latent Space)</h3>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">单 seed mIoU 分布 (n=3 per method)</h3>
                         <div id="latentChart" class="w-full h-64"></div>
                     </div>
                 </div>
@@ -257,10 +253,11 @@
                     </div>
                     <div class="mt-4 pt-4 border-t border-blue-100 flex items-center justify-between">
                         <div class="flex items-center space-x-4">
-                            <button class="px-4 py-2 bg-primary text-white rounded-md font-medium shadow-sm hover:bg-blue-600 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="!selectedArea || selectedSatellites.length === 0 || isPipelineRunning" @click="startPipeline">
+                            <button class="px-4 py-2 bg-primary text-white rounded-md font-medium shadow-sm hover:bg-blue-600 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="!selectedArea || selectedSatellites.length === 0 || isPipelineRunning" @click="startPipeline" title="演示中通常跳过此步骤，直接使用已切好的 35,920 patch 数据集">
                                 <svg class="w-4 h-4 animate-spin inline-block mr-2" fill="none" viewBox="0 0 24 24" v-if="isPipelineRunning"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                 {{ isPipelineRunning ? '处理中...' : '生成训练切片任务' }}
                             </button>
+                            <span class="text-xs text-gray-500 italic">演示模式 · 实切片耗时 30+ 分钟</span>
                             <label class="flex items-center space-x-2 cursor-pointer text-sm text-gray-700">
                                 <input type="checkbox" v-model="inMemoryMode" class="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary">
                                 <span class="font-medium">启用内存直通(Zero-Copy)模式 🚀</span>
@@ -371,6 +368,14 @@
                                 <span class="text-sm text-gray-500">评测得分 (100分制):</span>
                                 <span class="text-sm font-bold" :class="model.evaluation_score > 90 ? 'text-green-600' : 'text-blue-600'">{{ model.evaluation_score.toFixed(1) }}</span>
                             </div>
+                            <div v-if="model._demo" class="flex justify-between">
+                                <span class="text-sm text-gray-500">mIoU (mean ± std):</span>
+                                <span class="text-sm font-mono text-gray-800">{{ model.mIoU_mean.toFixed(3) }} ± {{ model.mIoU_std.toFixed(3) }}</span>
+                            </div>
+                            <div v-if="model._demo" class="flex justify-between">
+                                <span class="text-sm text-gray-500">可训练参数 / seeds:</span>
+                                <span class="text-sm font-mono text-gray-800">{{ (model.trainable_params / 1e6).toFixed(2) }}M · n={{ model.n_seeds }}</span>
+                            </div>
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-500">关联数据源:</span>
                                 <span class="text-sm font-medium text-gray-700 truncate max-w-[150px]">{{ model.dataset_name || '未知数据集' }}</span>
@@ -383,11 +388,12 @@
                             </div>
                         </div>
                         <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end space-x-2">
-                            <button class="px-3 py-1.5 text-sm font-medium text-primary hover:bg-blue-50 rounded transition-colors disabled:opacity-50" :disabled="isEvaluating" @click="evaluateModel(model.id, model.model_name)">
+                            <button v-if="!model._demo" class="px-3 py-1.5 text-sm font-medium text-primary hover:bg-blue-50 rounded transition-colors disabled:opacity-50" :disabled="isEvaluating" @click="evaluateModel(model.id, model.model_name)">
                                 <svg class="w-3 h-3 animate-spin inline-block mr-1" fill="none" viewBox="0 0 24 24" v-if="isEvaluating"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                 {{ isEvaluating ? '评估中...' : '实测模型并查看报告' }}
                             </button>
-                            <button v-if="!model.is_active" class="px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors" @click="activateModel(model.id)">设为默认预测模型</button>
+                            <span v-if="model._demo" class="px-3 py-1.5 text-sm font-medium text-gray-500 bg-gray-100 rounded">3 seed 静态评测</span>
+                            <button v-if="!model.is_active && !model._demo" class="px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors" @click="activateModel(model.id)">设为默认预测模型</button>
                         </div>
                     </div>
                 </div>
@@ -587,56 +593,109 @@
             const uniData = [];
             let latentData = [];
 
-            const initCharts = () => {
+            const initCharts = async () => {
                 if (currentTab.value !== 'dashboard') return;
                 if (!document.getElementById('recChart')) return;
-                
+
                 if (!recChart) recChart = echarts.init(document.getElementById('recChart'));
                 if (!uniChart) uniChart = echarts.init(document.getElementById('uniChart'));
                 if (!latentChart) latentChart = echarts.init(document.getElementById('latentChart'));
 
-                const recOption = {
-                    tooltip: { trigger: 'axis' },
-                    grid: { top: 10, right: 10, bottom: 20, left: 40 },
-                    xAxis: { type: 'category', data: xData, axisLine: { lineStyle: { color: '#CBD5E1' } } },
-                    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#F1F5F9' } } },
-                    series: [{
-                        data: recData,
-                        type: 'line', smooth: true, symbol: 'none',
-                        itemStyle: { color: '#3B82F6' },
-                        areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(59,130,246,0.3)'}, {offset: 1, color: 'rgba(59,130,246,0)'}]) }
-                    }]
-                };
+                let history = null;
+                try {
+                    const resp = await fetch('/api/ae/results/training_history');
+                    history = await resp.json();
+                } catch (e) {
+                    console.error('Failed to load training history', e);
+                }
 
-                const uniOption = {
-                    tooltip: { trigger: 'axis' },
-                    grid: { top: 10, right: 10, bottom: 20, left: 40 },
-                    xAxis: { type: 'category', data: xData, axisLine: { lineStyle: { color: '#CBD5E1' } } },
-                    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#F1F5F9' } } },
-                    series: [{
-                        data: uniData,
-                        type: 'line', smooth: true, symbol: 'none',
-                        itemStyle: { color: '#60A5FA' }
-                    }]
-                };
+                if (history && Array.isArray(history.methods) && history.methods.length > 0) {
+                    const labels = history.methods.map(m => m.label);
+                    const means = history.methods.map(m => +(m.mean * 100).toFixed(2));
+                    const errBars = history.methods.map(m => [
+                        +((m.mean - m.std) * 100).toFixed(2),
+                        +((m.mean + m.std) * 100).toFixed(2),
+                    ]);
 
-                const latentOption = {
-                    tooltip: { trigger: 'item', formatter: 'Feature {c}' },
-                    grid: { top: 10, right: 10, bottom: 20, left: 30 },
-                    xAxis: { type: 'value', splitLine: { show: false }, axisLine: { lineStyle: { color: '#CBD5E1' } } },
-                    yAxis: { type: 'value', splitLine: { show: false }, axisLine: { lineStyle: { color: '#CBD5E1' } } },
-                    series: [{
-                        data: latentData,
-                        type: 'scatter',
-                        symbolSize: 6,
-                        itemStyle: { color: '#F97316', opacity: 0.7 }
-                    }]
-                };
+                    // KPI 字段反映真实训练完成状态
+                    currentEpoch.value = history.epochs_per_run || 30;
+                    totalEpochs.value = history.epochs_per_run || 30;
+                    eta.value = '已完成';
+                    currentLoss.value = 1.0 - (history.methods[history.methods.length - 1].mean || 0);
+                    gpuMem.value = 0;
+                    if (logs.value.length === 0) {
+                        logs.value.push(`[demo] 加载 ${history.task} 真实训练结果`);
+                        logs.value.push(`[demo] ${history.scenes} 个 scene · ${history.patches} 个 128x128 patch · ${history.epochs_per_run} epoch/run`);
+                        history.methods.forEach(m => {
+                            logs.value.push(`[result] ${m.label.padEnd(28)} mIoU = ${m.mean.toFixed(4)} ± ${m.std.toFixed(4)} · ${(m.params/1e6).toFixed(2)}M params`);
+                        });
+                    }
 
-                recChart.setOption(recOption);
-                uniChart.setOption(uniOption);
-                latentChart.setOption(latentOption);
-                
+                    recChart.setOption({
+                        tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>mIoU = ${(p[0].value/100).toFixed(4)} (×100 显示)` },
+                        grid: { top: 20, right: 12, bottom: 30, left: 40 },
+                        xAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10, interval: 0, rotate: 12 } },
+                        yAxis: { type: 'value', name: 'mIoU × 100', min: 'dataMin', splitLine: { lineStyle: { color: '#F1F5F9' } } },
+                        series: [
+                            { type: 'bar', data: means, itemStyle: { color: '#3B82F6' }, barWidth: '40%',
+                              label: { show: true, position: 'top', formatter: v => v.value.toFixed(1), fontSize: 10 } },
+                            { type: 'custom', renderItem: (params, api) => {
+                                const xValue = api.value(0);
+                                const lo = api.coord([xValue, api.value(1)]);
+                                const hi = api.coord([xValue, api.value(2)]);
+                                const half = 6;
+                                return { type: 'group', children: [
+                                    { type: 'line', shape: { x1: lo[0], y1: lo[1], x2: hi[0], y2: hi[1] }, style: { stroke: '#1E3A8A', lineWidth: 1.5 } },
+                                    { type: 'line', shape: { x1: lo[0]-half, y1: lo[1], x2: lo[0]+half, y2: lo[1] }, style: { stroke: '#1E3A8A', lineWidth: 1.5 } },
+                                    { type: 'line', shape: { x1: hi[0]-half, y1: hi[1], x2: hi[0]+half, y2: hi[1] }, style: { stroke: '#1E3A8A', lineWidth: 1.5 } },
+                                ] };
+                              },
+                              data: errBars.map((eb, i) => [i, eb[0], eb[1]]),
+                              encode: { x: 0, y: [1, 2] },
+                              z: 10,
+                            },
+                        ],
+                    });
+
+                    uniChart.setOption({
+                        tooltip: { trigger: 'item', formatter: p => `${p.data.label}<br/>params = ${(p.data.value[0]/1e6).toFixed(2)}M<br/>mIoU = ${p.data.value[1].toFixed(4)}` },
+                        grid: { top: 20, right: 16, bottom: 36, left: 48 },
+                        xAxis: { type: 'log', name: 'Trainable params', nameLocation: 'middle', nameGap: 22, axisLabel: { formatter: v => v >= 1e6 ? (v/1e6)+'M' : (v >= 1e3 ? (v/1e3)+'K' : v) } },
+                        yAxis: { type: 'value', name: 'mIoU', scale: true, splitLine: { lineStyle: { color: '#F1F5F9' } } },
+                        series: [{
+                            type: 'scatter',
+                            data: history.methods.map(m => ({ value: [m.params, m.mean], label: m.label })),
+                            symbolSize: 18,
+                            itemStyle: { color: '#F97316', opacity: 0.85 },
+                            label: { show: true, position: 'right', formatter: p => p.data.label, fontSize: 10, color: '#475569' },
+                        }],
+                    });
+
+                    const colorMap = { linear_probe: '#94A3B8', bitfit: '#60A5FA', lora_r8: '#A78BFA', geoadapter: '#34D399', houlsby: '#F97316' };
+                    latentChart.setOption({
+                        tooltip: { trigger: 'item', formatter: p => `${p.data.label}<br/>seed #${p.data.value[0]+1}: mIoU = ${p.data.value[1].toFixed(4)}` },
+                        legend: { show: false },
+                        grid: { top: 20, right: 12, bottom: 30, left: 40 },
+                        xAxis: { type: 'category', data: history.methods.map(m => m.label), axisLabel: { fontSize: 9, interval: 0, rotate: 12 } },
+                        yAxis: { type: 'value', name: 'mIoU', scale: true, splitLine: { lineStyle: { color: '#F1F5F9' } } },
+                        series: [{
+                            type: 'scatter',
+                            data: (history.per_seed || []).map(p => ({ value: [history.methods.findIndex(m => m.key === p.method), p.mIoU], label: p.label, itemStyle: { color: colorMap[p.method] || '#3B82F6' } })),
+                            symbolSize: 14,
+                            itemStyle: { opacity: 0.85 },
+                        }, {
+                            type: 'line', data: Array(history.methods.length).fill(history.linear_probe_floor || (1/6)),
+                            symbol: 'none', lineStyle: { color: '#9CA3AF', type: 'dashed' },
+                            markLine: { silent: true, data: [{ yAxis: history.linear_probe_floor || (1/6), label: { formatter: '随机基线 1/6', position: 'end', fontSize: 9 } }], lineStyle: { color: '#9CA3AF', type: 'dashed' } },
+                        }],
+                    });
+                } else {
+                    // 后端无数据，回退到原来空图表占位
+                    recChart.setOption({ tooltip: {}, xAxis: { type: 'category', data: [] }, yAxis: { type: 'value' }, series: [{ data: [], type: 'line' }] });
+                    uniChart.setOption({ tooltip: {}, xAxis: { type: 'category', data: [] }, yAxis: { type: 'value' }, series: [{ data: [], type: 'line' }] });
+                    latentChart.setOption({ tooltip: {}, xAxis: { type: 'value' }, yAxis: { type: 'value' }, series: [{ data: [], type: 'scatter' }] });
+                }
+
                 window.addEventListener('resize', () => {
                     if (recChart) recChart.resize();
                     if (uniChart) uniChart.resize();
@@ -863,7 +922,10 @@
                     alert("请选择区域和至少一个卫星源");
                     return;
                 }
-                
+                if (!confirm("⚠️ 演示模式提示：\n\n生成训练切片需要拉取 GEE 影像并切片，预计 30 分钟以上。\n\n演示中通常使用已切好的临河 35,920 张 patch 数据集。\n\n确定要现在启动新切片任务吗？")) {
+                    return;
+                }
+
                 isPipelineRunning.value = true;
                 pipelineStatus.value = { progress: 0, message: "正在启动流水线..." };
                 
@@ -925,6 +987,12 @@
             const fetchModels = async () => {
                 loadingModels.value = true;
                 try {
+                    const demoResp = await fetch('/api/ae/results/models');
+                    const demoData = await demoResp.json();
+                    if (Array.isArray(demoData) && demoData.length > 0) {
+                        models.value = demoData.map(m => ({ ...m, _demo: true }));
+                        return;
+                    }
                     const response = await fetch('/api/ae/models/');
                     const data = await response.json();
                     if (Array.isArray(data)) {
