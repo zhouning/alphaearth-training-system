@@ -1,0 +1,41 @@
+\documentclass[11pt]{letter}
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage[hidelinks]{hyperref}
+
+\signature{Zhouning}
+\address{AlphaEarth-System Project \\ Inner Mongolia, China}
+
+\begin{document}
+
+\begin{letter}{%
+  Editor-in-Chief \\
+  \emph{Remote Sensing of Environment} \\
+}
+
+\opening{Dear Editor,}
+
+We are pleased to submit our manuscript, ``How Well Do PEFT Methods Adapt Geospatial Foundation Models to Heterogeneous Inputs? A Systematic Evaluation on Prithvi-100M with Production Validation on a Chinese Domestic High-Resolution Corpus,'' for consideration as a research article in \emph{Remote Sensing of Environment}.
+
+\textbf{Scope fit.} The manuscript reports a systematic empirical study of how parameter-efficient fine-tuning (PEFT) methods adapt the publicly available Prithvi-100M geospatial foundation model to heterogeneous remote sensing inputs --- and, critically, validates the laboratory benchmark on a 35{,}920-patch operational deployment over Linhe County, China, using 203 multi-sensor scenes (0.42--4.29\,m ground sampling distance, 22 satellite families, six calendar quarters in 2025) with Esri 10\,m global LULC as the supervisory signal. This dual benchmark--deployment design is, we believe, well aligned with RSE's emphasis on environmental applications grounded in rigorous remote sensing methodology rather than method papers in isolation.
+
+\textbf{Principal contributions.}
+\begin{enumerate}
+    \item A controlled benchmark of five PEFT methods (linear probing, BitFit, LoRA at rank 8, Houlsby adapters, an input-stage GeoAdapter) across single-label classification (EuroSAT, 27 modality configurations), multi-label classification (BigEarthNet-S2), and semantic segmentation (LandCover.ai). 109 experiments in total.
+    \item A diagnostic finding that the standard LoRA implementation against PyTorch's \texttt{nn.MultiheadAttention} silently fails on Prithvi-100M because Q/K/V are packed into a single fused tensor. A split-QKV ablation isolates implementation failure from genuine method limitation.
+    \item Production validation on the AlphaEarth-System platform: Houlsby adapters deliver $+0.116$ absolute mIoU ($+65.5\%$ relative) over linear probing on the Linhe LULC corpus under a geographic (scene-level) split protocol. The ordering Houlsby $\gg$ Linear~Probe is preserved across all four datasets.
+    \item A complementary control experiment establishing that the PEFT delta on the same imagery is mediated by label quality: synthetic brightness-thresholded weak labels yield only a $+0.017$ PEFT delta, while production Esri labels yield $+0.116$. This argues that method-only papers risk misleading practitioners when reporting a single delta on a single dataset.
+\end{enumerate}
+
+\textbf{Reproducibility.} All training code, configuration files, per-seed log files, and the AlphaEarth-System platform that orchestrates the Linhe pipeline are released under an open-source license. The Linhe patch index ($\sim$35\,k patches at $128\times128$, RGB) is shareable subject to source-imagery licensing; the supervisory labels are entirely derived from the publicly available Esri 10\,m LULC product.
+
+\textbf{Confirmation.} This manuscript has not been published, accepted, or simultaneously submitted elsewhere. An earlier preprint version covering the public-benchmark portion only (Sections 1--8) was prepared for the CVPR 2026 EarthVision workshop but was not submitted following the workshop deadline; the present manuscript adds Section 9 (production validation on Linhe) and substantially revises the discussion. All experimental decisions and authorship are unchanged.
+
+\textbf{Suggested reviewers.} We suggest, but defer to your judgment, reviewers with expertise in geospatial foundation models and remote sensing PEFT (e.g., authors of Prithvi-100M / SatMAE / Scale-MAE / SpectralGPT), Chinese-domestic high-resolution remote sensing benchmarks, and operational LULC mapping.
+
+We appreciate your consideration of our manuscript.
+
+\closing{Sincerely,}
+
+\end{letter}
+\end{document}

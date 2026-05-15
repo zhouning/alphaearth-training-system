@@ -190,6 +190,31 @@ Houlsby      & 1{,}194{,}246 & 0.6392 & 0.6394 & 0.6444 \\
 
 The LoRA and linear-probe seed spreads agree to the fourth decimal place; the Houlsby spread spans $0.0052$, dominated by the seed=456 run. No seed reverses the overall ordering.
 
+\subsection{Linhe LULC Per-Seed Results}
+\label{app:linhe-perseed}
+
+Table~\ref{tab:linhe-perseed} reports per-seed mIoU for the methods reported in Section~\ref{sec:linhe}.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-seed mIoU on Linhe LULC 6-class segmentation (geographic scene-level split, Esri 2022 labels). \emph{TBD} entries pending the extended Colab run with the 5-method config.}
+\label{tab:linhe-perseed}
+\begin{tabular}{lcccc}
+\toprule
+Method & Trainable Params & seed=42 & seed=123 & seed=456 \\
+\midrule
+Linear Probe & 4{,}614       & 0.176 & 0.178 & 0.177 \\
+BitFit       & 110{,}982     & TBD   & TBD   & TBD   \\
+LoRA (r=8, split-QKV) & 152{,}070 & TBD & TBD & TBD \\
+Houlsby      & 1{,}194{,}246 & 0.289 & 0.296 & 0.293 \\
+GeoAdapter   & 8{,}214       & TBD   & TBD   & TBD   \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Houlsby spread of $0.007$ across seeds reproduces the qualitative pattern observed on LandCover.ai (Appendix~\ref{app:per-seed}): seed variance is small relative to the Houlsby--linear-probe gap, which exceeds $0.10$ mIoU on every seed.
+
 \section{Reproducibility}
 \label{app:repro}
 

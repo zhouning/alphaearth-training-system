@@ -21,10 +21,20 @@ methods:
   - name: linear_probe
     adapter: zero_pad
     peft: null
+  - name: bitfit
+    adapter: zero_pad
+    peft: bitfit
+  - name: lora_r8
+    adapter: zero_pad
+    peft: lora
+    rank: 8
   - name: houlsby
     adapter: zero_pad
     peft: houlsby
     bottleneck_dim: 64
+  - name: geoadapter
+    adapter: geo_adapter
+    peft: null
 
 training:
   lr: 1.0e-3
