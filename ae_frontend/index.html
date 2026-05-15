@@ -29,9 +29,9 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <!-- Leaflet (demo map) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet (demo map) — vendor copy for offline / 中国大陆 reachability -->
+    <link rel="stylesheet" href="/static/vendor/leaflet.css">
+    <script src="/static/vendor/leaflet.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -449,9 +449,9 @@
                         <div class="flex justify-between items-center mb-3">
                             <h3 class="text-sm font-semibold text-gray-700">变化热力图 · 全量 {{ demoSummary?.tasks.change_2025.n_pairs ?? '--' }} patch (PCA-RX score)</h3>
                             <div class="flex items-center space-x-1 text-xs">
-                                <button @click="setBasemap('carto')" :class="basemapKey === 'carto' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">底图</button>
                                 <button @click="setBasemap('gaode')" :class="basemapKey === 'gaode' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">高德影像</button>
                                 <button @click="setBasemap('esri')" :class="basemapKey === 'esri' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">Esri 卫星</button>
+                                <button @click="setBasemap('carto')" :class="basemapKey === 'carto' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">CartoDB</button>
                             </div>
                         </div>
                         <div id="demoMap" class="w-full" style="height: 480px; border-radius: 6px;"></div>
@@ -577,7 +577,7 @@
             const demoPairs = ref([]);
             const selectedPair = ref(null);
             const heatmapTop = ref(6769);
-            const basemapKey = ref('carto');
+            const basemapKey = ref('gaode');
             let demoMap = null;
             let demoHeatLayer = null;
             let demoBasemap = null;
@@ -1108,7 +1108,16 @@
                     attribution: cfg.attribution,
                     subdomains: cfg.subdomains,
                     maxZoom: cfg.maxZoom,
-                }).addTo(demoMap);
+                });
+                let firstError = true;
+                demoBasemap.on('tileerror', () => {
+                    if (firstError && key !== 'gaode') {
+                        firstError = false;
+                        console.warn(`[basemap] ${key} 不可达，自动回退到高德影像`);
+                        setBasemap('gaode');
+                    }
+                });
+                demoBasemap.addTo(demoMap);
                 demoBasemap.bringToBack();
             };
 
