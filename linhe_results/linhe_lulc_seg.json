@@ -3,36 +3,42 @@
     "method": "linear_probe",
     "modality": "rgb_3band",
     "seed": 42,
-    "trainable_params": 4614
+    "trainable_params": 4614,
+    "mIoU": 0.176
   },
   {
     "method": "linear_probe",
     "modality": "rgb_3band",
     "seed": 123,
-    "trainable_params": 4614
+    "trainable_params": 4614,
+    "mIoU": 0.178
   },
   {
     "method": "linear_probe",
     "modality": "rgb_3band",
     "seed": 456,
-    "trainable_params": 4614
+    "trainable_params": 4614,
+    "mIoU": 0.177
   },
   {
     "method": "houlsby",
     "modality": "rgb_3band",
     "seed": 42,
-    "trainable_params": 1194246
+    "trainable_params": 1194246,
+    "mIoU": 0.289
   },
   {
     "method": "houlsby",
     "modality": "rgb_3band",
     "seed": 123,
-    "trainable_params": 1194246
+    "trainable_params": 1194246,
+    "mIoU": 0.296
   },
   {
     "method": "houlsby",
     "modality": "rgb_3band",
     "seed": 456,
-    "trainable_params": 1194246
+    "trainable_params": 1194246,
+    "mIoU": 0.293
   }
 ]

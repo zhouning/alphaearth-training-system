@@ -37,6 +37,13 @@ GeoAdapter   & 8{,}214       & \emph{TBD}        & \emph{TBD} \\
 
 The Houlsby adapter delivers a $+0.116$ mIoU absolute improvement over linear probing, equivalent to a $+65.5\%$ relative gain. In absolute terms 0.293 mIoU is modest --- the dataset is genuinely hard, with two minority classes (\texttt{trees}, \texttt{water}) below 2\% prevalence and a foreground-dominant agricultural background --- but the \emph{ranking} reproduces what we observed on EuroSAT, BigEarthNet-S2, and LandCover.ai: a 1.2M-parameter Houlsby adapter recovers semantic content that a linear probe over the same frozen backbone cannot extract. To put the linear-probe number in context, a constant-prediction baseline that always emits the \texttt{crops} class achieves $1/6 \approx 0.167$ mIoU; our linear probe at 0.177 sits a single point above this floor. Houlsby's 0.293 represents the first method in this study that demonstrably learns class-discriminative spatial structure on Linhe RGB.
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\linewidth]{figures/linhe_lulc_seg.pdf}
+\caption{Linhe LULC 6-class segmentation. Mean mIoU over three seeds with std bars; hatched bars marked \emph{TBD} indicate methods queued for an extended Colab run. The dashed line shows the constant-prediction floor ($1/6 \approx 0.167$).}
+\label{fig:linhe-bars}
+\end{figure}
+
 \paragraph{Effect of label quality on the PEFT delta.}
 A complementary experiment on the same imagery substitutes Esri labels with a synthetic weak-label rule (\texttt{mean(RGB) $\geq$ 140} marks the foreground class) and runs the same Linear Probe vs.\ Houlsby comparison. With weak labels, the Houlsby--linear-probe gap collapses to $+0.017$ mIoU (Houlsby 0.723, linear probing 0.706). The interpretation is direct: when the label can be predicted by a simple pixel-intensity rule, a linear probe over Prithvi features already saturates the achievable accuracy and there is no semantic content for an adapter to extract. The PEFT delta tracks label quality rather than method potency. We view this as a useful control: it argues against an alternative reading of the main results in which the Houlsby--linear-probe gap is attributed to optimization rather than representation.
 
