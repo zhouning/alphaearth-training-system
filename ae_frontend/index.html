@@ -29,6 +29,9 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <!-- Leaflet (demo map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -79,6 +82,12 @@
                         <a href="#" @click.prevent="currentTab = 'models'" :class="currentTab === 'models' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                             <span>模型资产库</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" @click.prevent="currentTab = 'demo'" :class="currentTab === 'demo' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m-6 3l6-3"></path></svg>
+                            <span>演示成果</span>
                         </a>
                     </li>
                 </ul>
@@ -384,6 +393,133 @@
                 </div>
             </div>
 
+            <!-- Demo Showcase Tab -->
+            <div v-show="currentTab === 'demo'" class="max-w-7xl mx-auto space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">演示成果</h2>
+                        <p class="text-sm text-gray-500 mt-1">临河区域 PEFT 基准 + 季度变化检测 (2025Q1 vs 2025Q4)</p>
+                    </div>
+                    <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer" @click="loadDemoData">
+                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        刷新
+                    </button>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="glass-card p-4 flex flex-col">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">1.a 建筑物分割 (合成弱标签)</span>
+                        <div class="mt-2 flex items-baseline space-x-2">
+                            <span class="text-3xl font-bold text-gray-900 data-font">{{ demoSummary?.tasks.buildings_synth.houlsby.toFixed(3) ?? '--' }}</span>
+                            <span class="text-sm text-gray-500">houlsby mIoU</span>
+                        </div>
+                        <div class="mt-1 text-xs text-gray-500">linear {{ demoSummary?.tasks.buildings_synth.linear.toFixed(3) ?? '--' }} · PEFT Δ <span class="text-gray-700">+{{ demoSummary?.tasks.buildings_synth.delta.toFixed(3) ?? '--' }}</span></div>
+                        <div class="mt-2 text-xs text-gray-400">{{ demoSummary?.tasks.buildings_synth.note ?? '' }}</div>
+                    </div>
+                    <div class="glass-card p-4 flex flex-col ring-2 ring-primary border-primary">
+                        <span class="text-xs font-semibold text-primary uppercase tracking-wider">1.b 土地利用 6 类 (真业务标签) ★</span>
+                        <div class="mt-2 flex items-baseline space-x-2">
+                            <span class="text-3xl font-bold text-primary data-font">{{ demoSummary?.tasks.lulc_6class.houlsby.toFixed(3) ?? '--' }}</span>
+                            <span class="text-sm text-gray-500">houlsby mIoU</span>
+                        </div>
+                        <div class="mt-1 text-xs text-gray-700">linear {{ demoSummary?.tasks.lulc_6class.linear.toFixed(3) ?? '--' }} · PEFT Δ <span class="text-green-600 font-semibold">+{{ demoSummary?.tasks.lulc_6class.delta.toFixed(3) ?? '--' }}</span> (相对 +{{ ((demoSummary?.tasks.lulc_6class.delta_relative ?? 0) * 100).toFixed(0) }}%)</div>
+                        <div class="mt-2 text-xs text-gray-500">{{ demoSummary?.tasks.lulc_6class.note ?? '' }}</div>
+                    </div>
+                    <div class="glass-card p-4 flex flex-col">
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">1.c 季度变化检测</span>
+                        <div class="mt-2 flex items-baseline space-x-2">
+                            <span class="text-3xl font-bold text-gray-900 data-font">{{ demoSummary?.tasks.change_2025.n_pairs ?? '--' }}</span>
+                            <span class="text-sm text-gray-500">配准 patch 对</span>
+                        </div>
+                        <div class="mt-1 text-xs text-gray-500">top PCA-RX <span class="text-gray-700">{{ demoSummary?.tasks.change_2025.top_pca.toFixed(3) ?? '--' }}</span> · {{ demoSummary?.tasks.change_2025.quarters.join(' → ') ?? '' }}</div>
+                        <div class="mt-2 text-xs text-gray-400">{{ demoSummary?.tasks.change_2025.note ?? '' }}</div>
+                    </div>
+                </div>
+
+                <!-- Map + Pair Viewer -->
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="glass-card col-span-2 p-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-sm font-semibold text-gray-700">变化热力图 · 全量 {{ demoSummary?.tasks.change_2025.n_pairs ?? '--' }} patch (PCA-RX score)</h3>
+                            <div class="flex items-center space-x-1 text-xs">
+                                <button @click="setBasemap('carto')" :class="basemapKey === 'carto' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">底图</button>
+                                <button @click="setBasemap('gaode')" :class="basemapKey === 'gaode' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">高德影像</button>
+                                <button @click="setBasemap('esri')" :class="basemapKey === 'esri' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">Esri 卫星</button>
+                            </div>
+                        </div>
+                        <div id="demoMap" class="w-full" style="height: 480px; border-radius: 6px;"></div>
+                    </div>
+                    <div class="glass-card p-4 flex flex-col" style="height: 532px;">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">像素级变化对比</h3>
+                        <div v-if="!selectedPair" class="flex-1 flex flex-col">
+                            <div class="flex-1 flex items-center justify-center text-center text-sm text-gray-400 px-4">
+                                点击地图上的高亮圆点<br>查看 2025Q1 ↔ 2025Q4 同位 patch 的<br>RGB 对比与 PCA-RX 异常热度
+                            </div>
+                            <div class="border-t border-gray-100 pt-3 mt-3">
+                                <div class="text-xs text-gray-500 mb-2">或从 Top-{{ demoPairs.length }} 高变化点快速选取</div>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    <button v-for="(p, i) in demoPairs.slice(0, 10)" :key="p.patch_id"
+                                        @click="selectedPair = p"
+                                        class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 text-xs flex justify-between items-center">
+                                        <span class="text-gray-600 data-font">#{{ i+1 }} · {{ p.patch_id }}</span>
+                                        <span class="text-cta data-font">{{ p.mean_pca_score.toFixed(3) }}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="flex-1 overflow-y-auto space-y-3">
+                            <div class="flex justify-between items-start">
+                                <div class="text-xs text-gray-600 data-font">
+                                    patch {{ selectedPair.patch_id }}<br>
+                                    <span class="text-gray-400">({{ selectedPair.lon.toFixed(4) }}°E, {{ selectedPair.lat.toFixed(4) }}°N)</span>
+                                </div>
+                                <button @click="selectedPair = null" class="text-xs text-gray-400 hover:text-gray-600 px-1">✕</button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="bg-gray-50 rounded p-2">
+                                    <div class="text-gray-500">PCA-RX score</div>
+                                    <div class="font-bold text-cta data-font text-base">{{ selectedPair.mean_pca_score.toFixed(3) }}</div>
+                                </div>
+                                <div class="bg-gray-50 rounded p-2">
+                                    <div class="text-gray-500">RGB diff</div>
+                                    <div class="font-bold text-gray-700 data-font text-base">{{ selectedPair.mean_rgb_diff?.toFixed(3) ?? '--' }}</div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-gray-500 mb-1 flex justify-between">
+                                    <span>Before (2025Q1) / After (2025Q4) / RGB Diff</span>
+                                    <a :href="selectedPair.pair_url" target="_blank" class="text-primary hover:underline">放大↗</a>
+                                </div>
+                                <img :src="selectedPair.pair_url" class="w-full rounded border border-gray-200 cursor-zoom-in" alt="pair" @click="window.open(selectedPair.pair_url, '_blank')">
+                            </div>
+                            <div v-if="selectedPair.pca_url">
+                                <div class="text-xs text-gray-500 mb-1 flex justify-between">
+                                    <span>PCA-RX 异常热度</span>
+                                    <a :href="selectedPair.pca_url" target="_blank" class="text-primary hover:underline">放大↗</a>
+                                </div>
+                                <img :src="selectedPair.pca_url" class="w-full rounded border border-gray-200 cursor-zoom-in" alt="pca-rx" @click="window.open(selectedPair.pca_url, '_blank')">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PEFT Comparison + LULC Distribution -->
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="glass-card col-span-2 p-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">PEFT 增益对比 (linear probe vs Houlsby adapter)</h3>
+                        <div id="peftBarChart" class="w-full h-64"></div>
+                        <p class="mt-3 text-xs text-gray-500 leading-relaxed">
+                            1.b Esri LULC 真业务标签下，Houlsby 适配器 mIoU 0.293 vs linear probe 0.177，<span class="text-green-600 font-semibold">相对增益 65%</span> — backbone 表征里有 linear probe 取不到的语义信号，PEFT 把它解出来了。1.a 合成标签因为本身与 RGB 强相关，PEFT 增益小，作为流水线 sanity check 使用。
+                        </p>
+                    </div>
+                    <div class="glass-card p-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">临河 LULC 类别分布</h3>
+                        <div id="lulcPieChart" class="w-full h-64"></div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 </div>
@@ -429,6 +565,18 @@
             // Models refs
             const models = ref([]);
             const loadingModels = ref(false);
+
+            // Demo refs
+            const demoSummary = ref(null);
+            const demoPairs = ref([]);
+            const selectedPair = ref(null);
+            const heatmapTop = ref(6769);
+            const basemapKey = ref('carto');
+            let demoMap = null;
+            let demoHeatLayer = null;
+            let demoBasemap = null;
+            let peftBarChart = null;
+            let lulcPieChart = null;
 
             let recChart, uniChart, latentChart;
             let ws = null;
@@ -837,6 +985,169 @@
                 }
             };
 
+            const loadDemoData = async () => {
+                try {
+                    const [summaryRes, pairsRes] = await Promise.all([
+                        fetch('/api/ae/results/summary'),
+                        fetch('/api/ae/results/change/pairs'),
+                    ]);
+                    demoSummary.value = await summaryRes.json();
+                    demoPairs.value = await pairsRes.json();
+                    await nextTick();
+                    initDemoMap();
+                    initDemoCharts();
+                } catch (e) {
+                    console.error('loadDemoData failed', e);
+                }
+            };
+
+            const scoreColor = (s) => {
+                const t = Math.min(1, Math.max(0, (s - 0.10) / 0.30));
+                const r = 255;
+                const g = Math.round(240 - 220 * t);
+                const b = Math.round(120 - 120 * t);
+                return `rgb(${r},${g},${b})`;
+            };
+
+            const BASEMAPS = {
+                carto: {
+                    name: 'CartoDB Light',
+                    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                    attribution: '© OpenStreetMap, © CartoDB',
+                    maxZoom: 18,
+                },
+                gaode: {
+                    name: '高德影像',
+                    url: 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+                    attribution: '© 高德地图',
+                    subdomains: '1234',
+                    maxZoom: 18,
+                },
+                esri: {
+                    name: 'Esri 卫星',
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                    attribution: '© Esri',
+                    maxZoom: 18,
+                },
+            };
+
+            const setBasemap = (key) => {
+                basemapKey.value = key;
+                if (!demoMap) return;
+                if (demoBasemap) demoMap.removeLayer(demoBasemap);
+                const cfg = BASEMAPS[key];
+                demoBasemap = L.tileLayer(cfg.url, {
+                    attribution: cfg.attribution,
+                    subdomains: cfg.subdomains,
+                    maxZoom: cfg.maxZoom,
+                }).addTo(demoMap);
+                demoBasemap.bringToBack();
+            };
+
+            const addLegend = () => {
+                if (!demoMap) return;
+                const Legend = L.Control.extend({
+                    options: { position: 'bottomright' },
+                    onAdd: function () {
+                        const div = L.DomUtil.create('div', 'demo-legend');
+                        div.style.cssText = 'background:rgba(255,255,255,0.92);padding:8px 10px;border-radius:6px;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.15);min-width:140px;';
+                        const stops = [0.10, 0.18, 0.26, 0.34, 0.40];
+                        const swatches = stops.map(s => `<div style="display:flex;align-items:center;margin:2px 0;"><span style="display:inline-block;width:14px;height:14px;background:${scoreColor(s)};border-radius:50%;border:1px solid rgba(0,0,0,0.15);margin-right:6px;"></span><span style="font-family:monospace;color:#475569;">${s.toFixed(2)}</span></div>`).join('');
+                        div.innerHTML = `<div style="font-weight:600;color:#1E293B;margin-bottom:4px;">PCA-RX 异常分</div>${swatches}<div style="margin-top:6px;padding-top:6px;border-top:1px solid #E2E8F0;color:#475569;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#fff;border:2px solid #1E293B;margin-right:5px;vertical-align:middle;"></span>有像素级对比</div>`;
+                        L.DomEvent.disableClickPropagation(div);
+                        return div;
+                    },
+                });
+                new Legend().addTo(demoMap);
+            };
+
+            const initDemoMap = async () => {
+                if (typeof L === 'undefined') return;
+                const el = document.getElementById('demoMap');
+                if (!el) return;
+                if (!demoMap) {
+                    demoMap = L.map('demoMap', { preferCanvas: true }).setView([40.90, 107.46], 9);
+                    setBasemap(basemapKey.value);
+                    addLegend();
+                }
+                if (demoHeatLayer) {
+                    demoMap.removeLayer(demoHeatLayer);
+                    demoHeatLayer = null;
+                }
+                try {
+                    const res = await fetch(`/api/ae/results/change/heatmap?top=${heatmapTop.value}`);
+                    const fc = await res.json();
+                    const pairLookup = {};
+                    for (const p of demoPairs.value) pairLookup[p.patch_id] = p;
+                    demoHeatLayer = L.geoJSON(fc, {
+                        pointToLayer: (feature, latlng) => {
+                            const score = feature.properties.mean_pca_score;
+                            const pa = feature.properties.patch_a || '';
+                            const m = pa.match(/p_(\d+_\d+)\.npz/);
+                            const patchId = m ? m[1] : null;
+                            const hasPair = patchId && pairLookup[patchId];
+                            const t = Math.min(1, Math.max(0, (score - 0.10) / 0.30));
+                            return L.circleMarker(latlng, {
+                                radius: hasPair ? 8 : (2 + t * 4),
+                                fillColor: scoreColor(score),
+                                color: hasPair ? '#1E293B' : 'rgba(30,41,59,0.4)',
+                                weight: hasPair ? 1.5 : 0.4,
+                                fillOpacity: hasPair ? 0.95 : (0.35 + t * 0.45),
+                            });
+                        },
+                        onEachFeature: (feature, layer) => {
+                            const pa = feature.properties.patch_a || '';
+                            const m = pa.match(/p_(\d+_\d+)\.npz/);
+                            const patchId = m ? m[1] : null;
+                            const pair = patchId && pairLookup[patchId];
+                            const score = feature.properties.mean_pca_score.toFixed(3);
+                            if (pair) {
+                                layer.on('click', () => { selectedPair.value = pair; });
+                                layer.bindTooltip(`patch ${patchId} · PCA ${score}<br><span style="color:#22C55E">点击查看像素级对比</span>`);
+                            } else {
+                                layer.bindTooltip(`PCA ${score}`);
+                            }
+                        },
+                    }).addTo(demoMap);
+                } catch (e) {
+                    console.error('initDemoMap failed', e);
+                }
+            };
+
+            const initDemoCharts = () => {
+                if (!demoSummary.value) return;
+                const barEl = document.getElementById('peftBarChart');
+                const pieEl = document.getElementById('lulcPieChart');
+                if (!barEl || !pieEl) return;
+                if (!peftBarChart) peftBarChart = echarts.init(barEl);
+                if (!lulcPieChart) lulcPieChart = echarts.init(pieEl);
+                const t = demoSummary.value.tasks;
+                peftBarChart.setOption({
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    legend: { data: ['linear probe', 'houlsby adapter'], top: 0 },
+                    grid: { top: 30, right: 20, bottom: 20, left: 100 },
+                    xAxis: { type: 'value', max: 1, splitLine: { lineStyle: { color: '#F1F5F9' } } },
+                    yAxis: { type: 'category', data: ['1.a 建筑物 (合成)', '1.b LULC (Esri)'], axisLine: { lineStyle: { color: '#CBD5E1' } } },
+                    series: [
+                        { name: 'linear probe', type: 'bar', data: [t.buildings_synth.linear, t.lulc_6class.linear], itemStyle: { color: '#94A3B8' }, label: { show: true, position: 'right', formatter: (p) => p.value.toFixed(3) } },
+                        { name: 'houlsby adapter', type: 'bar', data: [t.buildings_synth.houlsby, t.lulc_6class.houlsby], itemStyle: { color: '#3B82F6' }, label: { show: true, position: 'right', formatter: (p) => p.value.toFixed(3) } },
+                    ],
+                });
+                const dist = demoSummary.value.lulc_class_distribution;
+                lulcPieChart.setOption({
+                    tooltip: { trigger: 'item', formatter: '{b}: {d}%' },
+                    legend: { orient: 'vertical', right: 0, top: 'middle', textStyle: { fontSize: 11 } },
+                    series: [{
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        center: ['38%', '50%'],
+                        label: { show: false },
+                        data: Object.entries(dist).map(([k, v]) => ({ name: k, value: +(v * 100).toFixed(1) })),
+                        color: ['#3B82F6', '#22C55E', '#EAB308', '#F97316', '#A855F7', '#94A3B8'],
+                    }],
+                });
+            };
+
             watch(currentTab, (newTab) => {
                 if (newTab === 'dashboard') {
                     fetchDatasets();
@@ -849,6 +1160,16 @@
                     if (areas.value.length === 0) fetchAreas();
                 } else if (newTab === 'models') {
                     fetchModels();
+                } else if (newTab === 'demo') {
+                    if (!demoSummary.value) {
+                        loadDemoData();
+                    } else {
+                        nextTick(() => {
+                            initDemoMap();
+                            initDemoCharts();
+                            if (demoMap) demoMap.invalidateSize();
+                        });
+                    }
                 }
             });
 
@@ -867,7 +1188,8 @@
                 isPipelineRunning, pipelineStatus, pipelineTaskId, startPipeline, inMemoryMode,
                 availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
-                isEvaluating, evaluateModel
+                isEvaluating, evaluateModel,
+                demoSummary, demoPairs, selectedPair, heatmapTop, loadDemoData, basemapKey, setBasemap
             };
         }
     }).mount('#app');

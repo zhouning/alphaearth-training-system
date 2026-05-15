@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
-from app.api import pipeline, training, satellites, areas, models
+from app.api import pipeline, training, satellites, areas, models, results
 from app.core.config import settings
 
 app = FastAPI(
@@ -43,10 +43,20 @@ app.include_router(
     tags=["areas"]
 )
 app.include_router(
-    models.router, 
-    prefix=f"{settings.API_V1_STR}/models", 
+    models.router,
+    prefix=f"{settings.API_V1_STR}/models",
     tags=["models"]
 )
+app.include_router(
+    results.router,
+    prefix=f"{settings.API_V1_STR}/results",
+    tags=["results"]
+)
+
+# Mount results artifacts (GeoJSON, PNGs from change-detection runs)
+results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../results"))
+if os.path.exists(results_dir):
+    app.mount("/results", StaticFiles(directory=results_dir), name="results")
 
 # Mount frontend static files
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../ae_frontend"))

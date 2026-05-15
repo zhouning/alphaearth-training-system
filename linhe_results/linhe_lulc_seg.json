@@ -1,0 +1,38 @@
+[
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 4614
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 4614
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 4614
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 1194246
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 1194246
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 1194246
+  }
+]
