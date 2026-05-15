@@ -4,41 +4,104 @@
     "modality": "rgb_3band",
     "seed": 42,
     "trainable_params": 4614,
-    "mIoU": 0.176
+    "mIoU": 0.177844
   },
   {
     "method": "linear_probe",
     "modality": "rgb_3band",
     "seed": 123,
     "trainable_params": 4614,
-    "mIoU": 0.178
+    "mIoU": 0.179627
   },
   {
     "method": "linear_probe",
     "modality": "rgb_3band",
     "seed": 456,
     "trainable_params": 4614,
-    "mIoU": 0.177
+    "mIoU": 0.175214
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 107526,
+    "mIoU": 0.197699
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 107526,
+    "mIoU": 0.200254
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 107526,
+    "mIoU": 0.194622
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 152070,
+    "mIoU": 0.178049
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 152070,
+    "mIoU": 0.178833
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 152070,
+    "mIoU": 0.174827
   },
   {
     "method": "houlsby",
     "modality": "rgb_3band",
     "seed": 42,
     "trainable_params": 1194246,
-    "mIoU": 0.289
+    "mIoU": 0.296629
   },
   {
     "method": "houlsby",
     "modality": "rgb_3band",
     "seed": 123,
     "trainable_params": 1194246,
-    "mIoU": 0.296
+    "mIoU": 0.297096
   },
   {
     "method": "houlsby",
     "modality": "rgb_3band",
     "seed": 456,
     "trainable_params": 1194246,
-    "mIoU": 0.293
+    "mIoU": 0.286012
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 4756,
+    "mIoU": 0.251416
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 4756,
+    "mIoU": 0.275091
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 4756,
+    "mIoU": 0.268144
   }
 ]

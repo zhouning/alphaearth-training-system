@@ -1,4 +1,5 @@
 \section{Results and Analysis}
+\label{sec:results}
 
 \subsection{Main EuroSAT Results}
 Table~\ref{tab:eurosat-main} reports overall accuracy across all five modality configurations on EuroSAT. Houlsby adapters dominate every modality, while standard LoRA tracks the linear-probe baseline within $\pm 0.001$ OA --- consistent with complete failure under the original implementation. The split-QKV ablation recovers most of LoRA's expected gain on s2\_full but, as analyzed below, still falls short of both BitFit and Houlsby.

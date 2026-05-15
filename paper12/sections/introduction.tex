@@ -19,6 +19,6 @@ Our main contributions are as follows:
     \item We demonstrate that Houlsby adapters consistently dominate all other PEFT methods across all four datasets, achieving 94.5\% of full fine-tuning performance with only 1.4\% of the trainable parameters on EuroSAT and a $+155\%$ relative mIoU gain on dense prediction.
     \item We confirm across datasets that modality selection has a larger practical impact than PEFT selection: richer spectral inputs consistently outperform reduced-band alternatives.
     \item We provide a negative result for standalone input-stage adaptation (GeoAdapter), clarifying its failure modes and limitations.
-    \item We validate the benchmark ranking on an operational Linhe County LULC deployment under a geographic scene-level split, recovering Houlsby $+0.116$ mIoU over linear probing on production imagery, and provide a paired label-quality control study showing that the PEFT delta tracks label fidelity.
+    \item We validate the benchmark ranking on an operational Linhe County LULC deployment under a geographic scene-level split, recovering Houlsby $+0.116$ mIoU over linear probing and reproducing the LoRA collapse to within 0.0004 mIoU of linear probing across a fourth dataset; we also provide a paired label-quality control study showing that the PEFT delta tracks label fidelity.
     \item We release a reproducible Geo-MLOps benchmarking framework together with the AlphaEarth-System platform that orchestrates the Linhe deployment, including its data pipeline, training engine, and web dashboard.
 \end{enumerate}

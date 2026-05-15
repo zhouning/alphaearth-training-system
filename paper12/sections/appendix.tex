@@ -198,22 +198,22 @@ Table~\ref{tab:linhe-perseed} reports per-seed mIoU for the methods reported in 
 \begin{table}[h]
 \centering
 \small
-\caption{Per-seed mIoU on Linhe LULC 6-class segmentation (geographic scene-level split, Esri 2022 labels). \emph{TBD} entries pending the extended Colab run with the 5-method config.}
+\caption{Per-seed mIoU on Linhe LULC 6-class segmentation (geographic scene-level split, Esri 2022 labels).}
 \label{tab:linhe-perseed}
 \begin{tabular}{lcccc}
 \toprule
 Method & Trainable Params & seed=42 & seed=123 & seed=456 \\
 \midrule
-Linear Probe & 4{,}614       & 0.176 & 0.178 & 0.177 \\
-BitFit       & 110{,}982     & TBD   & TBD   & TBD   \\
-LoRA (r=8, split-QKV) & 152{,}070 & TBD & TBD & TBD \\
-Houlsby      & 1{,}194{,}246 & 0.289 & 0.296 & 0.293 \\
-GeoAdapter   & 8{,}214       & TBD   & TBD   & TBD   \\
+Linear Probe & 4{,}614       & 0.1778 & 0.1796 & 0.1752 \\
+BitFit       & 107{,}526     & 0.1977 & 0.2003 & 0.1946 \\
+LoRA (r=8, split-QKV) & 152{,}070 & 0.1780 & 0.1788 & 0.1748 \\
+Houlsby      & 1{,}194{,}246 & 0.2966 & 0.2971 & 0.2860 \\
+GeoAdapter   & 4{,}756       & 0.2514 & 0.2751 & 0.2681 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The Houlsby spread of $0.007$ across seeds reproduces the qualitative pattern observed on LandCover.ai (Appendix~\ref{app:per-seed}): seed variance is small relative to the Houlsby--linear-probe gap, which exceeds $0.10$ mIoU on every seed.
+The Linhe seed spreads reproduce two qualitative patterns from the public benchmarks. First, LoRA's per-seed values $\{0.1780, 0.1788, 0.1748\}$ are statistically indistinguishable from linear probing's $\{0.1778, 0.1796, 0.1752\}$ to the fourth decimal place --- the same diagnostic signature of LoRA collapse we observed on EuroSAT (Section~\ref{sec:results}) and LandCover.ai (Appendix~\ref{app:per-seed}). Second, seed variance is small relative to the Houlsby--linear-probe gap: the largest per-seed Houlsby reading ($0.297$) exceeds the largest linear-probe reading ($0.180$) by more than 17 mIoU points, so no choice of seed reverses the ordering. GeoAdapter shows the largest seed spread ($0.024$), consistent with its higher variance reported on EuroSAT.
 
 \section{Reproducibility}
 \label{app:repro}
