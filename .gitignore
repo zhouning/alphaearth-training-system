@@ -72,3 +72,7 @@ packaging/colab/_manifest.txt
 # OSM / GEE cache (regenerable, large)
 results/linhe/osm/_tiles/
 results/linhe/lulc/_tiles/
+
+# LoveDA smoke-test artifacts (regenerable plumbing test)
+geoadapter/bench/configs/loveda_smoke_*.yaml
+results/loveda_smoke/
