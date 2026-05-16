@@ -161,6 +161,14 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
             year = global_cfg["experiment"].get("year", 2022)
             train_ds = load_linhe_lulc(root=ds_root, year=year, split="train", max_samples=max_samples)
             val_ds = load_linhe_lulc(root=ds_root, year=year, split="val", max_samples=val_max_samples)
+        elif dataset_name == "loveda":
+            from geoadapter.data.datasets import load_loveda
+            train_domain = global_cfg["experiment"]["train_domain"]
+            val_domain = global_cfg["experiment"]["val_domain"]
+            train_ds = load_loveda(root=ds_root, domain=train_domain, split="train",
+                                    max_samples=max_samples)
+            val_ds = load_loveda(root=ds_root, domain=val_domain, split="val",
+                                  max_samples=val_max_samples)
         else:
             from geoadapter.data.datasets import load_eurosat
             train_ds = load_eurosat(root=ds_root, modality=modality_cfg["preset"], split="train")
