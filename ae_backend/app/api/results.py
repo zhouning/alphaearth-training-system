@@ -118,3 +118,131 @@ def get_change_pairs():
         })
     out.sort(key=lambda x: x["mean_pca_score"], reverse=True)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Demo-time helpers: serve real Linhe LULC training results as model assets
+# and as training-monitor curves, so the dashboard does not run the live
+# WebSocket mock during a customer demo.
+# ---------------------------------------------------------------------------
+
+LINHE_RESULTS = PROJECT_ROOT / "linhe_results" / "linhe_lulc_seg.json"
+
+_METHOD_DISPLAY = {
+    "linear_probe": ("Linear Probe", "linear_probe", "linear"),
+    "bitfit":       ("BitFit Tuning", "bitfit", "bitfit"),
+    "lora_r8":      ("LoRA r=8 (split-QKV)", "lora_r8", "lora"),
+    "houlsby":      ("Houlsby Adapter", "houlsby", "houlsby"),
+    "geoadapter":   ("GeoAdapter (input-stage)", "geoadapter", "geoadapter"),
+}
+
+
+@lru_cache(maxsize=1)
+def _load_linhe_results() -> list[dict]:
+    if not LINHE_RESULTS.exists():
+        return []
+    with open(LINHE_RESULTS, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _aggregate_by_method() -> dict[str, dict]:
+    """Group raw seed records by method into (mean, std, params, n)."""
+    rows = _load_linhe_results()
+    by_method: dict[str, list[dict]] = {}
+    for r in rows:
+        by_method.setdefault(r["method"], []).append(r)
+    out: dict[str, dict] = {}
+    for m, recs in by_method.items():
+        ious = [r["mIoU"] for r in recs if r.get("mIoU") is not None]
+        if not ious:
+            continue
+        mean = sum(ious) / len(ious)
+        var = sum((x - mean) ** 2 for x in ious) / max(len(ious) - 1, 1)
+        out[m] = {
+            "mean": mean,
+            "std": var ** 0.5,
+            "params": recs[0].get("trainable_params"),
+            "n_seeds": len(ious),
+            "ious": sorted(ious, reverse=True),
+        }
+    return out
+
+
+@router.get("/models")
+def get_models():
+    """Return demo-friendly model asset cards from the real Linhe LULC run.
+
+    Each card is a (method × Linhe LULC dataset) tuple with mean mIoU as the
+    headline score. Houlsby is auto-marked active. This lets the 模型资产
+    tab populate without depending on the AeModel DB table.
+    """
+    agg = _aggregate_by_method()
+    if not agg:
+        return []
+    cards = []
+    method_order = ["houlsby", "geoadapter", "bitfit", "lora_r8", "linear_probe"]
+    for method in method_order:
+        if method not in agg or method not in _METHOD_DISPLAY:
+            continue
+        a = agg[method]
+        display, _id, _short = _METHOD_DISPLAY[method]
+        cards.append({
+            "id": f"linhe_lulc_{method}",
+            "model_name": f"{display} · Linhe LULC 6-class",
+            "evaluation_score": round(a["mean"] * 100, 2),  # scaled to /100 for the existing UI
+            "weights_obs_key": f"obs://alphaearth/linhe_lulc/{method}/seeds_42_123_456.pt",
+            "is_active": method == "houlsby",
+            "created_at": "2026-05-15T16:00:00",
+            "dataset_name": "Linhe 35920 patches (Esri 2022 LULC)",
+            "training_job_id": f"job_linhe_lulc_{method}",
+            "method": method,
+            "trainable_params": a["params"],
+            "mIoU_mean": round(a["mean"], 4),
+            "mIoU_std": round(a["std"], 4),
+            "mIoU_per_seed": [round(x, 4) for x in a["ious"]],
+            "n_seeds": a["n_seeds"],
+        })
+    return cards
+
+
+@router.get("/training_history")
+def get_training_history():
+    """Return the 5-method × 3-seed Linhe LULC training summary in chart form.
+
+    Used by the 训练监控 tab as static reference curves so demos do not
+    rely on a live WebSocket. Returns:
+      - methods: ordered list with mean/std mIoU per method
+      - per_seed: per-seed scatter for the latent-space chart
+    """
+    agg = _aggregate_by_method()
+    if not agg:
+        return {"methods": [], "per_seed": [], "linear_probe_floor": 1 / 6}
+
+    method_order = ["linear_probe", "bitfit", "lora_r8", "geoadapter", "houlsby"]
+    methods = []
+    per_seed = []
+    for m in method_order:
+        if m not in agg or m not in _METHOD_DISPLAY:
+            continue
+        display, _, _ = _METHOD_DISPLAY[m]
+        a = agg[m]
+        methods.append({
+            "key": m,
+            "label": display,
+            "mean": round(a["mean"], 4),
+            "std": round(a["std"], 4),
+            "params": a["params"],
+            "ious": [round(x, 4) for x in a["ious"]],
+        })
+        for i, iou in enumerate(a["ious"]):
+            per_seed.append({"method": m, "label": display, "seed_idx": i, "mIoU": round(iou, 4)})
+
+    return {
+        "task": "Linhe LULC 6-class segmentation (Esri 2022 labels, scene-level split)",
+        "methods": methods,
+        "per_seed": per_seed,
+        "linear_probe_floor": 1 / 6,
+        "patches": 35920,
+        "scenes": 73,
+        "epochs_per_run": 30,
+    }
