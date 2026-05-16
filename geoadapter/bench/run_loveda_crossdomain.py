@@ -29,12 +29,12 @@ def merge_direction_results(u2r_path: Path, r2u_path: Path, out_path: Path) -> N
     if not r2u_path.exists():
         raise FileNotFoundError(f"R->U results missing: {r2u_path}")
     merged = []
-    for row in json.loads(u2r_path.read_text()):
+    for row in json.loads(u2r_path.read_text(encoding="utf-8")):
         merged.append({**row, "direction": "U->R"})
-    for row in json.loads(r2u_path.read_text()):
+    for row in json.loads(r2u_path.read_text(encoding="utf-8")):
         merged.append({**row, "direction": "R->U"})
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(merged, indent=2))
+    out_path.write_text(json.dumps(merged, indent=2), encoding="utf-8")
     print(f"Merged {len(merged)} rows -> {out_path}")
 
 
@@ -60,8 +60,9 @@ def main() -> None:
     args = parser.parse_args()
 
     out_dir = args.output.parent
-    u2r_out = out_dir / "loveda_lulc_seg_u2r.json"
-    r2u_out = out_dir / "loveda_lulc_seg_r2u.json"
+    stem = args.output.stem
+    u2r_out = out_dir / f"{stem}_u2r.json"
+    r2u_out = out_dir / f"{stem}_r2u.json"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if not args.skip_runs:
