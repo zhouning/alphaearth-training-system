@@ -136,7 +136,9 @@ def load_loveda(root: str, domain: str, split: str = "train", max_samples: int =
         max_samples: optional subsample cap; deterministic via numpy seed=42
 
     Returns:
-        _SegmentationDataset yielding (image: (3,H,W) float, mask: (H,W) long with ignore=0)
+        A torch Dataset yielding (image: (3,H,W) float, mask: (H,W) long with ignore=0).
+        Either _SegmentationDataset or a torch.utils.data.Subset wrapping one,
+        depending on whether max_samples is provided.
     """
     if domain not in ("urban", "rural"):
         raise ValueError(f"domain must be 'urban' or 'rural', got {domain!r}")
