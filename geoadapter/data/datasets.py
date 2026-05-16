@@ -126,6 +126,38 @@ def load_landcoverai(root: str, split: str = "train", max_samples: int = None):
     return ds
 
 
+def load_loveda(root: str, domain: str, split: str = "train", max_samples: int = None):
+    """Load LoveDA for 7-class semantic segmentation under cross-domain split.
+
+    Args:
+        root: directory containing the LoveDA download (or where to download to)
+        domain: "urban" or "rural" — selects the scene subset
+        split: "train" or "val" — torchgeo's LoveDA exposes train and val (test set is unlabeled)
+        max_samples: optional subsample cap; deterministic via numpy seed=42
+
+    Returns:
+        A torch Dataset yielding (image: (3,H,W) float, mask: (H,W) long with ignore=0).
+        Either _SegmentationDataset or a torch.utils.data.Subset wrapping one,
+        depending on whether max_samples is provided.
+    """
+    if domain not in ("urban", "rural"):
+        raise ValueError(f"domain must be 'urban' or 'rural', got {domain!r}")
+    try:
+        from torchgeo.datasets import LoveDA
+    except ImportError:
+        raise ImportError("Install torchgeo: pip install geoadapter[bench]")
+
+    ds = LoveDA(root=root, split=split, scene=[domain], download=True)
+    ds = _SegmentationDataset(ds, band_indices=None, image_key="image", mask_key="mask")
+    if max_samples and len(ds) > max_samples:
+        from torch.utils.data import Subset
+        import numpy as np
+        rng = np.random.RandomState(42)
+        indices = rng.choice(len(ds), max_samples, replace=False)
+        ds = Subset(ds, indices.tolist())
+    return ds
+
+
 class _SegmentationDataset(Dataset):
     """Wraps a torchgeo dataset returning (image, mask) for segmentation."""
 
