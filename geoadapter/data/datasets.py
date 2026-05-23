@@ -148,7 +148,12 @@ def load_loveda(root: str, domain: str, split: str = "train", max_samples: int =
         raise ImportError("Install torchgeo: pip install geoadapter[bench]")
 
     ds = LoveDA(root=root, split=split, scene=[domain], download=True)
-    ds = _SegmentationDataset(ds, band_indices=None, image_key="image", mask_key="mask")
+    # LoveDA torchgeo returns mask values {0=no-data/ignore, 1..7=classes}.
+    # CrossEntropyLoss in the trainer uses ignore_index=255, and num_classes=7
+    # expects labels in [0,6]. Remap 0→255 (ignore) and 1..7→0..6.
+    loveda_remap = {0: 255, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6}
+    ds = _SegmentationDataset(ds, band_indices=None, image_key="image",
+                              mask_key="mask", mask_remap=loveda_remap)
     if max_samples and len(ds) > max_samples:
         from torch.utils.data import Subset
         import numpy as np
@@ -161,11 +166,13 @@ def load_loveda(root: str, domain: str, split: str = "train", max_samples: int =
 class _SegmentationDataset(Dataset):
     """Wraps a torchgeo dataset returning (image, mask) for segmentation."""
 
-    def __init__(self, base_dataset, band_indices, image_key="image", mask_key="mask"):
+    def __init__(self, base_dataset, band_indices, image_key="image", mask_key="mask",
+                 mask_remap=None):
         self.base = base_dataset
         self.indices = band_indices
         self.image_key = image_key
         self.mask_key = mask_key
+        self.mask_remap = mask_remap
 
     def __len__(self):
         return len(self.base)
@@ -178,6 +185,12 @@ class _SegmentationDataset(Dataset):
         mask = sample[self.mask_key].long()
         if mask.dim() == 3:
             mask = mask.squeeze(0)
+        if self.mask_remap is not None:
+            import torch
+            remapped = torch.full_like(mask, 255)
+            for src, dst in self.mask_remap.items():
+                remapped[mask == src] = dst
+            mask = remapped
         return img, mask
 
 

@@ -95,3 +95,30 @@ class TestLoveDA:
             ds = load_loveda(root="/tmp/loveda", domain="urban", split="train", max_samples=200)
 
         assert len(ds) == 200
+
+    def test_load_loveda_remaps_mask_values(self):
+        """LoveDA torchgeo masks are {0=ignore, 1..7=classes} but the trainer
+        expects [0..6] with ignore_index=255. The loader must remap."""
+        import torch
+        from geoadapter.data.datasets import load_loveda
+
+        mask_raw = torch.tensor([
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+        ], dtype=torch.long)
+        mock_lo = MagicMock()
+        mock_lo.__len__.return_value = 1
+        mock_lo.__getitem__.return_value = {
+            "image": torch.randn(3, 2, 4),
+            "mask": mask_raw.clone(),
+        }
+
+        with patch("torchgeo.datasets.LoveDA", return_value=mock_lo):
+            ds = load_loveda(root="/tmp/loveda", domain="urban", split="train")
+            _, mask_out = ds[0]
+
+        expected = torch.tensor([
+            [255, 0, 1, 2],
+            [3,   4, 5, 6],
+        ], dtype=torch.long)
+        assert torch.equal(mask_out, expected), f"got {mask_out.tolist()}"
