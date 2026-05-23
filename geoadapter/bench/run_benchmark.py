@@ -57,7 +57,11 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
     from geoadapter.adapters.houlsby import inject_houlsby_adapters
     from geoadapter.data.datasets import ModalityConfig
     from geoadapter.engine.trainer import PEFTTrainer
-    from geoadapter.engine.evaluator import compute_classification_metrics, compute_multilabel_metrics, compute_segmentation_metrics
+    from geoadapter.engine.evaluator import (
+        compute_classification_metrics,
+        compute_multilabel_metrics,
+        SegmentationConfusionMatrix,
+    )
     import numpy as np
 
     torch.manual_seed(seed)
@@ -228,14 +232,12 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
             metrics.update(eval_metrics)
             print(f"  [{tag}] mAP={eval_metrics['mAP']:.4f}")
         elif task_type == "segmentation":
-            all_preds, all_labels = [], []
+            cm = SegmentationConfusionMatrix(ignore_index=255)
             for batch_x, batch_y in val_loader:
                 logits = trainer.predict(batch_x)
                 preds = logits.argmax(dim=1).cpu().numpy()
-                all_preds.append(preds)
-                all_labels.append(batch_y.numpy())
-            eval_metrics = compute_segmentation_metrics(
-                np.concatenate(all_labels), np.concatenate(all_preds))
+                cm.update(batch_y.numpy(), preds)
+            eval_metrics = cm.compute()
             metrics.update(eval_metrics)
             print(f"  [{tag}] mIoU={eval_metrics.get('mIoU', 0):.4f}")
         else:
