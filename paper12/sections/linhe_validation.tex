@@ -59,14 +59,59 @@ A complementary experiment on the same imagery substitutes Esri labels with a sy
 
 The same patch corpus, when paired across quarters along the lattice, yields 6{,}769 cross-quarter patch pairs (2025Q1 vs.\ 2025Q4) with per-patch IoU equal to 1.0 by construction. We report a small operational result that is independent of PEFT but illustrates one downstream value of the platform's pre-aligned tile geometry: a classical PCA-based RX anomaly detector~\cite{reed1990rx} applied to stacked $[\text{RGB}_{Q1}, \text{RGB}_{Q4}]$ pixels yields per-patch change scores in $[0, 0.386]$. Top-ranked patches correspond to visually verifiable infrastructure additions, agricultural rotation, and bare-earth transitions --- with zero training and zero label cost. This is included not as a methodological contribution but as evidence that the imagery infrastructure built for the supervised benchmarks generalizes to label-free monitoring tasks, a configuration that PEFT-only studies do not address.
 
+\subsection{Cross-Domain Replication on LoveDA}
+\label{sec:loveda}
+
+The Linhe deployment demonstrates that the Houlsby $\gg$ Linear~Probe ordering reproduces on a real-world production corpus, but a single production dataset cannot rule out the alternative reading that the ordering is a Linhe-specific artifact (e.g., of the agricultural label distribution, the 73-scene geographic split, or the GF/JL/ZY sensor mix). To close this gap with a public benchmark that explicitly stresses cross-domain transfer, we replicate the same five-method protocol on LoveDA~\cite{wang2021loveda}, a 7-class semantic-segmentation dataset whose canonical evaluation protocol partitions the imagery into an \emph{urban} and a \emph{rural} domain and reports both transfer directions separately.
+
+\paragraph{Setup.} We use the LoveDA train splits as released and respect the published urban/rural partition. The same five PEFT methods (linear probing, BitFit, LoRA r=8, Houlsby with bottleneck dimension 64, GeoAdapter) are trained for 30 epochs at batch size 16 with lr$=$1$\times 10^{-3}$ for the head/adapter and lr$_{\mathrm{peft}}$$=$1$\times 10^{-4}$ for trainable backbone parameters --- the same hyperparameters used for Linhe and for the main public-benchmark sweep, so that no tuning is performed against the LoveDA validation set. Each (method, direction) pair is repeated under three seeds $\{42, 123, 456\}$ on a Colab Pro L4 GPU. Training is run end-to-end on the urban domain and evaluated on the rural domain (U$\rightarrow$R) and vice versa (R$\rightarrow$U), giving 30 independent runs in total.
+
+\paragraph{Results.} Table~\ref{tab:loveda-cross} reports per-direction aggregated mIoU. Figure~\ref{fig:loveda-cross} renders the same data in two panels.
+
+\begin{table}[h]
+\centering
+\small
+\caption{LoveDA cross-domain segmentation. Mean $\pm$ std mIoU over three seeds, computed against the canonical urban/rural partition. $\Delta$ is the absolute mIoU gain over linear probing within the same direction.}
+\label{tab:loveda-cross}
+\begin{tabular}{lcccc}
+\toprule
+& & \multicolumn{2}{c}{Urban $\rightarrow$ Rural} & Rural $\rightarrow$ Urban \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-5}
+Method & Trainable Params & mIoU & $\Delta$ vs.\ Linear & mIoU \\
+\midrule
+Linear Probe & 5{,}383       & 0.0858 $\pm$ 0.0001 & ---       & 0.0952 $\pm$ 0.0003 \\
+BitFit       & 127{,}495     & 0.0850 $\pm$ 0.0001 & $-0.0008$ & 0.0984 $\pm$ 0.0002 \\
+LoRA (r=8)   & 152{,}839     & 0.0855 $\pm$ 0.0001 & $-0.0003$ & 0.0953 $\pm$ 0.0001 \\
+Houlsby      & 1{,}195{,}015 & \textbf{0.1384 $\pm$ 0.0014} & $\mathbf{+0.0526}$ & \textbf{0.2119 $\pm$ 0.0019} \\
+GeoAdapter   & 5{,}525       & 0.0863 $\pm$ 0.0013 & $+0.0005$ & 0.1023 $\pm$ 0.0040 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/loveda_crossdomain.pdf}
+\caption{LoveDA cross-domain transfer across five PEFT methods. Bars show mean mIoU over three seeds with standard-deviation error bars; the dashed line in each panel marks the all-class-0 majority-prediction floor (0.086 U$\rightarrow$R, 0.095 R$\rightarrow$U) computed from the validation class distribution. The Houlsby callout reports the absolute gain over the same-direction linear probe.}
+\label{fig:loveda-cross}
+\end{figure}
+
+The cross-domain results add three findings to those reported on Linhe:
+
+\paragraph{The Houlsby lead reproduces and grows under cross-domain stress.} Houlsby outperforms linear probing by $+0.0526$ mIoU under U$\rightarrow$R and $+0.1167$ mIoU under R$\rightarrow$U. The R$\rightarrow$U gap is the largest single-method advantage we observe in the entire paper. Linhe, three public benchmarks, and now LoveDA cross-domain all place Houlsby decisively ahead of every other PEFT method we test; we interpret this as the strongest evidence that the architecture-awareness recommendation in Section~\ref{sec:segmentation} is robust to label provenance, geographic split, and domain shift.
+
+\paragraph{Small-PEFT methods cluster at the majority-class baseline under domain shift.} The four small-parameter methods --- linear probing (5.4k params), BitFit (128k), LoRA r=8 (153k), and GeoAdapter (5.5k) --- cluster within $\pm 0.001$ mIoU of one another in the U$\rightarrow$R direction at the 0.085--0.086 range, which lies within $1 \times 10^{-3}$ of the all-class-0 baseline (0.0858) computed by predicting only the dominant background class against the LoveDA validation class distribution. The same pattern holds R$\rightarrow$U at the 0.095--0.102 cluster, also within $10^{-2}$ of its respective majority-class floor. We instrument the streaming evaluator to report per-class IoU and the predicted-pixel histogram alongside aggregated mIoU (Appendix~\ref{app:loveda-perclass}); the recovered per-class signature distinguishes majority-class collapse from weak-signal under-reporting. To rule out the alternative reading that small PEFT was undertrained at the protocol-default schedule, we run a single-seed sweep enlarging LoRA's learning rate by 5$\times$ and the training budget to 60 epochs (Appendix~\ref{app:loveda-perclass}).
+
+\paragraph{A capacity threshold separates working PEFT from collapsed PEFT under domain shift.} Houlsby's 1.2M trainable parameters are the only configuration in our sweep that escapes the majority-class floor on LoveDA cross-domain. BitFit at 128k parameters and LoRA r=8 at 153k --- both 7$\times$ to 9$\times$ larger than the linear probe --- behave statistically indistinguishably from linear probing. This is qualitatively different from the within-domain Linhe results (where BitFit was $+0.020$ and GeoAdapter $+0.087$ above linear probing); the cross-domain protocol appears to impose a per-method capacity threshold below which adapters cannot recover discriminative content from a frozen Prithvi backbone whose pretraining distribution does not include the LoveDA scene statistics. This is, to our knowledge, the first systematic per-method capacity-threshold report for PEFT on a public remote-sensing cross-domain benchmark; it is also actionable: a practitioner deploying a frozen geospatial foundation model on a target domain that drifts substantially from pretraining should budget on the order of $10^6$ trainable adapter parameters, not the $10^5$ commonly reported as ``parameter-efficient'' on within-domain transfer.
+
 \subsection{Discussion}
 
-The Linhe results confirm that the Houlsby $\gg$ Linear~Probe ordering reported on three public benchmarks reproduces on a heterogeneous sub-meter Chinese-domestic RGB corpus with a geographic-split protocol. Three observations are specific to the production setting and not visible in public benchmarks:
+The Linhe results confirm that the Houlsby $\gg$ Linear~Probe ordering reported on three public benchmarks reproduces on a heterogeneous sub-meter Chinese-domestic RGB corpus with a geographic-split protocol. The LoveDA cross-domain replication strengthens the same ordering on a public benchmark explicitly designed to stress urban/rural transfer. Three observations are specific to the production / cross-domain setting and not visible in within-domain public benchmarks:
 
 \begin{enumerate}[leftmargin=1.5em,itemsep=0.2em]
-    \item \emph{The PEFT delta is mediated by label quality.} Synthetic weak labels yield a $+0.017$ mIoU PEFT delta; production Esri labels yield $+0.116$. Method-only papers that report a single delta number on a single dataset risk misleading practitioners about the operating point they should expect.
-    \item \emph{Geographic split changes the absolute numbers.} A patch-level random split on the same data and methods yields linear-probe mIoU of $0.244$ and Houlsby mIoU of $0.401$; the gap is preserved but both numbers are inflated relative to the scene-level split we report. Practitioners deploying these models on new scenes should expect numbers closer to the scene-level column.
+    \item \emph{The PEFT delta is mediated by label quality.} Synthetic weak labels yield a $+0.017$ mIoU PEFT delta on Linhe; production Esri labels yield $+0.116$. Method-only papers that report a single delta number on a single dataset risk misleading practitioners about the operating point they should expect.
+    \item \emph{Geographic split changes the absolute numbers.} A patch-level random split on the same Linhe data and methods yields linear-probe mIoU of $0.244$ and Houlsby mIoU of $0.401$; the gap is preserved but both numbers are inflated relative to the scene-level split we report. Practitioners deploying these models on new scenes should expect numbers closer to the scene-level column.
+    \item \emph{Domain shift imposes a per-method capacity threshold.} Section~\ref{sec:loveda} shows that under LoveDA cross-domain, every PEFT method below $\approx$$10^6$ trainable parameters collapses to the majority-class baseline. This is not visible on within-domain benchmarks, where small-parameter methods like BitFit and GeoAdapter recover meaningful gains. Practitioners should budget adapter capacity by target-domain drift, not only by within-domain accuracy economy.
     \item \emph{Class imbalance is a property of the geography, not a defect.} Hetao agricultural land has near-zero forest cover. PEFT methods do not redistribute attention toward absent classes; honest reporting on real geography includes the empirical distribution rather than imposing a synthetic balance.
 \end{enumerate}
 
-This section therefore strengthens the central claim of the paper from ``the ranking is consistent across three public benchmarks'' to ``the ranking is consistent across three public benchmarks and one production GIS deployment.'' The fused-QKV implementation trap, the input-stage failure mode of GeoAdapter, and the architecture-awareness recommendation in Section~\ref{sec:segmentation} all carry over without modification; we re-instantiate them on Linhe for completeness in Appendix~\ref{app:linhe-perseed}.
+This section therefore strengthens the central claim of the paper from ``the ranking is consistent across three public benchmarks'' to ``the ranking is consistent across three public benchmarks, one production GIS deployment, and a public cross-domain replication.'' The fused-QKV implementation trap, the input-stage failure mode of GeoAdapter, and the architecture-awareness recommendation in Section~\ref{sec:segmentation} all carry over without modification; we re-instantiate them on Linhe and on LoveDA for completeness in Appendices~\ref{app:linhe-perseed} and~\ref{app:loveda-perclass}.

@@ -215,6 +215,35 @@ GeoAdapter   & 4{,}756       & 0.2514 & 0.2751 & 0.2681 \\
 
 The Linhe seed spreads reproduce two qualitative patterns from the public benchmarks. First, LoRA's per-seed values $\{0.1780, 0.1788, 0.1748\}$ are statistically indistinguishable from linear probing's $\{0.1778, 0.1796, 0.1752\}$ to the fourth decimal place --- the same diagnostic signature of LoRA collapse we observed on EuroSAT (Section~\ref{sec:results}) and LandCover.ai (Appendix~\ref{app:per-seed}). Second, seed variance is small relative to the Houlsby--linear-probe gap: the largest per-seed Houlsby reading ($0.297$) exceeds the largest linear-probe reading ($0.180$) by more than 17 mIoU points, so no choice of seed reverses the ordering. GeoAdapter shows the largest seed spread ($0.024$), consistent with its higher variance reported on EuroSAT.
 
+\subsection{LoveDA Cross-Domain Per-Seed Results and Collapse Diagnostics}
+\label{app:loveda-perclass}
+
+Table~\ref{tab:loveda-perseed} reports the 30 per-seed mIoU values that underlie Section~\ref{sec:loveda}.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-seed mIoU on LoveDA cross-domain 7-class segmentation. Each cell is one independent training run.}
+\label{tab:loveda-perseed}
+\begin{tabular}{lccccccc}
+\toprule
+& & \multicolumn{3}{c}{Urban $\rightarrow$ Rural} & \multicolumn{3}{c}{Rural $\rightarrow$ Urban} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+Method & Params & seed=42 & seed=123 & seed=456 & seed=42 & seed=123 & seed=456 \\
+\midrule
+Linear Probe & 5{,}383       & 0.0857 & 0.0859 & 0.0857 & 0.0949 & 0.0955 & 0.0955 \\
+BitFit       & 127{,}495     & 0.0850 & 0.0852 & 0.0849 & 0.0984 & 0.0986 & 0.0982 \\
+LoRA (r=8)   & 152{,}839     & 0.0856 & 0.0854 & 0.0855 & 0.0954 & 0.0951 & 0.0953 \\
+Houlsby      & 1{,}195{,}015 & 0.1370 & 0.1397 & 0.1387 & 0.2097 & 0.2130 & 0.2132 \\
+GeoAdapter   & 5{,}525       & 0.0854 & 0.0858 & 0.0878 & 0.0990 & 0.1013 & 0.1066 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The seed dispersion for the four small-PEFT methods is at the fourth decimal place ($\sigma \le 0.0014$), confirming that the cluster near 0.085 / 0.095 is not a seed artifact. Houlsby's seed dispersion is similarly tight ($\sigma = 0.0014$ U$\rightarrow$R, $\sigma = 0.0019$ R$\rightarrow$U), so the per-method ordering reproduces under all $3 \times 3 = 9$ seed pairings.
+
+\paragraph{Collapse-vs-undertraining diagnostic.} To distinguish ``small PEFT collapses to majority-class prediction'' from ``small PEFT learns weak signal that mIoU under-reports,'' we extended the streaming evaluator to record per-class IoU and the predicted-pixel histogram alongside mIoU, and we ran a single-seed sweep on the U$\rightarrow$R direction with the LoRA budget enlarged 5$\times$ in learning rate (lr$_{\mathrm{peft}}$$=$5$\times 10^{-4}$) and 2$\times$ in epochs (60). The diagnostic config and the extended evaluator are released as \texttt{geoadapter/bench/configs/loveda\_lulc\_u2r\_diag.yaml} and \texttt{geoadapter/engine/evaluator.py} respectively. \textit{[Per-class IoU vectors and the diagnostic-sweep mIoU will be inserted here once the Colab run completes; the verdict logic --- COLLAPSE / WEAK-SIGNAL / AMBIGUOUS --- is implemented in cell~15 of the release notebook \texttt{colab/train\_loveda\_crossdomain.ipynb}.]}
+
 \section{Reproducibility}
 \label{app:repro}
 

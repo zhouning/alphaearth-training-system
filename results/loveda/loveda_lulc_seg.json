@@ -1,0 +1,242 @@
+[
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 5383,
+    "mIoU": 0.08566164867887284,
+    "direction": "U->R"
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 5383,
+    "mIoU": 0.0859079958957278,
+    "direction": "U->R"
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 5383,
+    "mIoU": 0.0857110852600227,
+    "direction": "U->R"
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 127495,
+    "mIoU": 0.08496741692067121,
+    "direction": "U->R"
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 127495,
+    "mIoU": 0.08517806339181752,
+    "direction": "U->R"
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 127495,
+    "mIoU": 0.08490516582958375,
+    "direction": "U->R"
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 152839,
+    "mIoU": 0.08555447012877361,
+    "direction": "U->R"
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 152839,
+    "mIoU": 0.0854365197979361,
+    "direction": "U->R"
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 152839,
+    "mIoU": 0.08548554293181596,
+    "direction": "U->R"
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 1195015,
+    "mIoU": 0.13696604732169307,
+    "direction": "U->R"
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 1195015,
+    "mIoU": 0.13965150795625364,
+    "direction": "U->R"
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 1195015,
+    "mIoU": 0.13868389164431974,
+    "direction": "U->R"
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 5525,
+    "mIoU": 0.08535612664504107,
+    "direction": "U->R"
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 5525,
+    "mIoU": 0.08580088182016692,
+    "direction": "U->R"
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 5525,
+    "mIoU": 0.08776927185046653,
+    "direction": "U->R"
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 5383,
+    "mIoU": 0.09485306525915034,
+    "direction": "R->U"
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 5383,
+    "mIoU": 0.09545503595661158,
+    "direction": "R->U"
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 5383,
+    "mIoU": 0.09546436206337391,
+    "direction": "R->U"
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 127495,
+    "mIoU": 0.09841918259867025,
+    "direction": "R->U"
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 127495,
+    "mIoU": 0.09862856305945553,
+    "direction": "R->U"
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 127495,
+    "mIoU": 0.09821832380007499,
+    "direction": "R->U"
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 152839,
+    "mIoU": 0.09540835763933865,
+    "direction": "R->U"
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 152839,
+    "mIoU": 0.09513364376522905,
+    "direction": "R->U"
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 152839,
+    "mIoU": 0.09524916300440808,
+    "direction": "R->U"
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 1195015,
+    "mIoU": 0.2096978412743742,
+    "direction": "R->U"
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 1195015,
+    "mIoU": 0.21295677323402137,
+    "direction": "R->U"
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 1195015,
+    "mIoU": 0.21317325636089604,
+    "direction": "R->U"
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 5525,
+    "mIoU": 0.09904074467361149,
+    "direction": "R->U"
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 5525,
+    "mIoU": 0.1013446507818199,
+    "direction": "R->U"
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 5525,
+    "mIoU": 0.10658481518673005,
+    "direction": "R->U"
+  }
+]
