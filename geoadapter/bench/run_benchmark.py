@@ -239,7 +239,16 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
                 cm.update(batch_y.numpy(), preds)
             eval_metrics = cm.compute()
             metrics.update(eval_metrics)
-            print(f"  [{tag}] mIoU={eval_metrics.get('mIoU', 0):.4f}")
+            pcs = eval_metrics.get("per_class_iou") or []
+            pred_hist = eval_metrics.get("pred_pixel_count") or []
+            iou_str = " ".join(f"{i}:{v:.3f}" if v is not None else f"{i}:nan"
+                                for i, v in enumerate(pcs))
+            total_px = sum(pred_hist) or 1
+            top_pred = max(range(len(pred_hist)), key=lambda i: pred_hist[i]) if pred_hist else -1
+            top_share = pred_hist[top_pred] / total_px if pred_hist else 0.0
+            collapse_flag = " [COLLAPSE]" if top_share > 0.95 else ""
+            print(f"  [{tag}] mIoU={eval_metrics.get('mIoU', 0):.4f} "
+                  f"per-class[{iou_str}] dom_pred={top_pred}({top_share:.2%}){collapse_flag}")
         else:
             all_preds, all_labels = [], []
             for batch_x, batch_y in val_loader:

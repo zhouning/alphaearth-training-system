@@ -59,3 +59,19 @@ class TestSegmentationConfusionMatrix:
         y_pred = np.zeros((4, 4))
         cm.update(y_true, y_pred)
         assert cm.compute()["mIoU"] == pytest.approx(0.0, abs=1e-9)
+
+    def test_per_class_iou_and_pred_histogram_for_collapse_diagnosis(self):
+        # Collapse case: model predicts class 0 everywhere; class 0 is 60% of GT
+        # (mirrors LoveDA bg distribution). Per-class IoU and pred_pixel_count
+        # are what Step 8.5 of the LoveDA notebook uses to detect majority-class
+        # collapse separately from raw mIoU.
+        cm = SegmentationConfusionMatrix(num_classes=3, ignore_index=255)
+        y_true = np.array([0, 0, 0, 0, 0, 0, 1, 1, 2, 2])
+        y_pred = np.zeros_like(y_true)
+        cm.update(y_true, y_pred)
+        m = cm.compute()
+        assert m["per_class_iou"][0] == pytest.approx(0.6, abs=1e-9)
+        assert m["per_class_iou"][1] == pytest.approx(0.0, abs=1e-9)
+        assert m["per_class_iou"][2] == pytest.approx(0.0, abs=1e-9)
+        assert m["gt_pixel_count"] == [6, 2, 2]
+        assert m["pred_pixel_count"] == [10, 0, 0]

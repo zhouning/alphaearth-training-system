@@ -1,0 +1,37 @@
+experiment:
+  name: loveda_lulc_u2r_diag
+  task: segmentation
+  dataset: loveda
+  dataset_root: data/weights/raw_data/loveda
+  num_classes: 7
+  epochs: 60
+  batch_size: 16
+  seeds: [42]
+  split_mode: cross_domain
+  train_domain: urban
+  val_domain: rural
+  positive_min_share: 0.0
+
+modalities:
+  - preset: rgb_3band
+
+methods:
+  - name: lora_r8_diag
+    adapter: zero_pad
+    peft: lora
+    rank: 8
+  - name: lora_r16_diag
+    adapter: zero_pad
+    peft: lora
+    rank: 16
+
+training:
+  lr: 3.0e-3
+  lr_peft: 5.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+  loss: ce
+
+prithvi:
+  pretrained: true
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt

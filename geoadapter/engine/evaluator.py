@@ -70,4 +70,11 @@ class SegmentationConfusionMatrix:
         union = tp + fp + fn
         ious = np.where(union > 0, tp / np.maximum(union, 1), np.nan)
         miou = float(np.nanmean(ious)) if np.isfinite(ious).any() else 0.0
-        return {"mIoU": miou}
+        gt_total = cm.sum(axis=1).astype(np.int64)
+        pred_total = cm.sum(axis=0).astype(np.int64)
+        return {
+            "mIoU": miou,
+            "per_class_iou": [None if not np.isfinite(v) else float(v) for v in ious],
+            "gt_pixel_count": gt_total.tolist(),
+            "pred_pixel_count": pred_total.tolist(),
+        }
