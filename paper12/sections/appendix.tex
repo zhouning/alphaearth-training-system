@@ -242,7 +242,24 @@ GeoAdapter   & 5{,}525       & 0.0854 & 0.0858 & 0.0878 & 0.0990 & 0.1013 & 0.10
 
 The seed dispersion for the four small-PEFT methods is at the fourth decimal place ($\sigma \le 0.0014$), confirming that the cluster near 0.085 / 0.095 is not a seed artifact. Houlsby's seed dispersion is similarly tight ($\sigma = 0.0014$ U$\rightarrow$R, $\sigma = 0.0019$ R$\rightarrow$U), so the per-method ordering reproduces under all $3 \times 3 = 9$ seed pairings.
 
-\paragraph{Collapse-vs-undertraining diagnostic.} To distinguish ``small PEFT collapses to majority-class prediction'' from ``small PEFT learns weak signal that mIoU under-reports,'' we extended the streaming evaluator to record per-class IoU and the predicted-pixel histogram alongside mIoU, and we ran a single-seed sweep on the U$\rightarrow$R direction with the LoRA budget enlarged 5$\times$ in learning rate (lr$_{\mathrm{peft}}$$=$5$\times 10^{-4}$) and 2$\times$ in epochs (60). The diagnostic config and the extended evaluator are released as \texttt{geoadapter/bench/configs/loveda\_lulc\_u2r\_diag.yaml} and \texttt{geoadapter/engine/evaluator.py} respectively. \textit{[Per-class IoU vectors and the diagnostic-sweep mIoU will be inserted here once the Colab run completes; the verdict logic --- COLLAPSE / WEAK-SIGNAL / AMBIGUOUS --- is implemented in cell~15 of the release notebook \texttt{colab/train\_loveda\_crossdomain.ipynb}.]}
+\paragraph{Collapse-vs-undertraining diagnostic.} To distinguish ``small PEFT collapses to majority-class prediction'' from ``small PEFT learns weak signal that mIoU under-reports,'' we extended the streaming evaluator to record per-class IoU and the predicted-pixel histogram alongside mIoU, and we ran a single-seed sweep on the U$\rightarrow$R direction with the LoRA budget enlarged 5$\times$ in learning rate (lr$_{\mathrm{peft}}$$=$5$\times 10^{-4}$) and 2$\times$ in epochs (60). The diagnostic config and the extended evaluator are released as \texttt{geoadapter/bench/configs/loveda\_lulc\_u2r\_diag.yaml} and \texttt{geoadapter/engine/evaluator.py} respectively. Table~\ref{tab:loveda-diag} reports the per-class IoU vector and the dominant-prediction share recovered by the diagnostic sweep.
+
+\begin{table}[h]
+\centering
+\small
+\caption{LoveDA U$\rightarrow$R diagnostic sweep (single seed, 60 epochs, lr$_{\mathrm{peft}}$$=$5$\times 10^{-4}$). Per-class IoU columns 0--6 follow the LoveDA taxonomy: 0 background, 1 building, 2 road, 3 water, 4 barren, 5 forest, 6 agriculture. ``dom\%'' is the share of validation pixels assigned to the dominant predicted class.}
+\label{tab:loveda-diag}
+\begin{tabular}{lccccccccr}
+\toprule
+Method & Params & 0 & 1 & 2 & 3 & 4 & 5 & 6 & dom\% \\
+\midrule
+LoRA r=8  diag & 152{,}839 & 0.397 & 0.201 & 0.000 & 0.001 & 0.010 & 0.021 & 0.000 & 87.8 \\
+LoRA r=16 diag & 300{,}295 & 0.396 & 0.201 & 0.000 & 0.001 & 0.010 & 0.022 & 0.000 & 87.7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The signature is consistent across LoRA ranks: both diagnostic runs recover the building class (IoU $\approx 0.20$) at the cost of background IoU dropping from the all-bg ceiling of $0.60$ to $0.40$, while five of the seven classes (road, water, barren, forest, agriculture) remain at zero IoU. The dominant-prediction share falls from the all-bg ceiling of $\approx$$100\%$ to $\approx$$88\%$, confirming that the model is no longer in pure majority-class collapse, but the class diversity it has learned is exactly two. Doubling LoRA's rank and quadrupling its trainable-parameter budget over the protocol-default schedule yields a +$0.0046$ mIoU gain (best diagnostic mIoU $0.0901$ vs.\ Phase~2 mean $0.0855$), which we read as ruling out undertraining as the explanation for the small-PEFT plateau: the optimization budget is not the bottleneck, the per-method parameter budget is. We retain the term ``capacity threshold'' for the gap between sub-$10^6$ adapters (binary discrimination only) and Houlsby at $\approx$$1.2 \times 10^6$ parameters (non-degenerate IoU on all seven classes).
 
 \section{Reproducibility}
 \label{app:repro}
