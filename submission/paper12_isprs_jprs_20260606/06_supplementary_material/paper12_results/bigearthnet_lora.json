@@ -1,0 +1,44 @@
+[
+  {
+    "method": "lora_r8",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 162067,
+    "mAP": 0.35816174733835854
+  },
+  {
+    "method": "lora_r8",
+    "modality": "s2_full",
+    "seed": 123,
+    "trainable_params": 162067,
+    "mAP": 0.3606248769274641
+  },
+  {
+    "method": "lora_r8",
+    "modality": "s2_full",
+    "seed": 456,
+    "trainable_params": 162067,
+    "mAP": 0.35453910046511306
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 162067,
+    "mAP": 0.3345881658350605
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 162067,
+    "mAP": 0.334963675104397
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 162067,
+    "mAP": 0.3363336299381265
+  }
+]

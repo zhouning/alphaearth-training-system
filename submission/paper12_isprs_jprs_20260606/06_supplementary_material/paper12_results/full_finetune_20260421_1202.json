@@ -1,0 +1,10 @@
+[
+  {
+    "method": "full_finetune",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 86244874,
+    "overall_accuracy": 0.8685185185185185,
+    "macro_f1": 0.8624744043404347
+  }
+]

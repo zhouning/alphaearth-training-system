@@ -1,0 +1,56 @@
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,calc}
+
+\journal{ISPRS Journal of Photogrammetry and Remote Sensing}
+\biboptions{authoryear,round}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Architecture-Aware Parameter-Efficient Adaptation of Prithvi-100M for Heterogeneous Remote Sensing Inputs: Benchmark, Production Validation, and Cross-Domain Stress Tests}
+
+% ACTION REQUIRED: Confirm formal author list, order, affiliation, and corresponding author email before submission.
+\author[alphaearth]{Zhouning\corref{cor1}}
+\cortext[cor1]{Corresponding author. Email address to be confirmed before submission.}
+\affiliation[alphaearth]{
+  organization={AlphaEarth-System Project},
+  country={China}
+}
+
+\input{sections/abstract}
+
+\begin{keyword}
+geospatial foundation models \sep parameter-efficient fine-tuning \sep Prithvi-100M \sep remote sensing benchmark \sep semantic segmentation \sep domain shift \sep land-use/land-cover mapping
+\end{keyword}
+
+\end{frontmatter}
+
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/method}
+\input{sections/results}
+\input{sections/segmentation}
+\input{sections/linhe_validation}
+\input{sections/discussion}
+\input{sections/conclusion}
+
+\bibliographystyle{elsarticle-harv}
+\bibliography{references}
+
+\input{sections/appendix}
+
+\end{document}

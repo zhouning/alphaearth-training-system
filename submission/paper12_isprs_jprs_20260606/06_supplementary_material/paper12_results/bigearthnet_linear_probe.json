@@ -1,0 +1,44 @@
+[
+  {
+    "method": "linear_probe",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 14611,
+    "mAP": 0.3577910352311462
+  },
+  {
+    "method": "linear_probe",
+    "modality": "s2_full",
+    "seed": 123,
+    "trainable_params": 14611,
+    "mAP": 0.36060724095669094
+  },
+  {
+    "method": "linear_probe",
+    "modality": "s2_full",
+    "seed": 456,
+    "trainable_params": 14611,
+    "mAP": 0.3548117403063273
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 14611,
+    "mAP": 0.3344380967778699
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 14611,
+    "mAP": 0.3342925106548645
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 14611,
+    "mAP": 0.33631333090365284
+  }
+]

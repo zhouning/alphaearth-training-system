@@ -1,0 +1,152 @@
+[
+  {
+    "overall_accuracy": 0.5270370370370371,
+    "macro_f1": 0.5256648417101248,
+    "method": "geoadapter_v2",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 7874,
+    "train_time_sec": 1339.1,
+    "final_residual_scale": 1.232197
+  },
+  {
+    "overall_accuracy": 0.5009259259259259,
+    "macro_f1": 0.4944471460001597,
+    "method": "geoadapter_v2",
+    "modality": "s2_full",
+    "seed": 123,
+    "trainable_params": 7874,
+    "train_time_sec": 1334.6,
+    "final_residual_scale": 1.229988
+  },
+  {
+    "overall_accuracy": 0.5757407407407408,
+    "macro_f1": 0.5691500838719834,
+    "method": "geoadapter_v2",
+    "modality": "s2_full",
+    "seed": 456,
+    "trainable_params": 7874,
+    "train_time_sec": 1336.4,
+    "final_residual_scale": -1.071444
+  },
+  {
+    "overall_accuracy": 0.34833333333333333,
+    "macro_f1": 0.31963270550447753,
+    "method": "geoadapter_v2",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 7832,
+    "train_time_sec": 1168.8,
+    "final_residual_scale": 1.493674
+  },
+  {
+    "overall_accuracy": 0.3448148148148148,
+    "macro_f1": 0.32368724963387585,
+    "method": "geoadapter_v2",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 7832,
+    "train_time_sec": 1164.6,
+    "final_residual_scale": 1.477114
+  },
+  {
+    "overall_accuracy": 0.302962962962963,
+    "macro_f1": 0.27958958717866544,
+    "method": "geoadapter_v2",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 7832,
+    "train_time_sec": 1168.9,
+    "final_residual_scale": 1.500245
+  },
+  {
+    "overall_accuracy": 0.4766666666666667,
+    "macro_f1": 0.4646359158110525,
+    "method": "geoadapter_v2",
+    "modality": "rgb_sar",
+    "seed": 42,
+    "trainable_params": 7838,
+    "train_time_sec": 1192.8,
+    "final_residual_scale": -1.397057
+  },
+  {
+    "overall_accuracy": 0.3501851851851852,
+    "macro_f1": 0.33070426122508295,
+    "method": "geoadapter_v2",
+    "modality": "rgb_sar",
+    "seed": 123,
+    "trainable_params": 7838,
+    "train_time_sec": 1195.0,
+    "final_residual_scale": 1.50559
+  },
+  {
+    "overall_accuracy": 0.4701851851851852,
+    "macro_f1": 0.4634255775880516,
+    "method": "geoadapter_v2",
+    "modality": "rgb_sar",
+    "seed": 456,
+    "trainable_params": 7838,
+    "train_time_sec": 1194.0,
+    "final_residual_scale": -1.367788
+  },
+  {
+    "overall_accuracy": 0.3812962962962963,
+    "macro_f1": 0.36633964422806037,
+    "method": "geoadapter_v2",
+    "modality": "gf2",
+    "seed": 42,
+    "trainable_params": 7838,
+    "train_time_sec": 1189.3,
+    "final_residual_scale": -1.384011
+  },
+  {
+    "overall_accuracy": 0.4109259259259259,
+    "macro_f1": 0.4052612511002791,
+    "method": "geoadapter_v2",
+    "modality": "gf2",
+    "seed": 123,
+    "trainable_params": 7838,
+    "train_time_sec": 1193.5,
+    "final_residual_scale": 1.277354
+  },
+  {
+    "overall_accuracy": 0.5425925925925926,
+    "macro_f1": 0.5328055238634894,
+    "method": "geoadapter_v2",
+    "modality": "gf2",
+    "seed": 456,
+    "trainable_params": 7838,
+    "train_time_sec": 1194.5,
+    "final_residual_scale": 1.199809
+  },
+  {
+    "overall_accuracy": 0.35185185185185186,
+    "macro_f1": 0.3272953918819693,
+    "method": "geoadapter_v2",
+    "modality": "sar_only",
+    "seed": 42,
+    "trainable_params": 7826,
+    "train_time_sec": 1144.9,
+    "final_residual_scale": -1.67916
+  },
+  {
+    "overall_accuracy": 0.3661111111111111,
+    "macro_f1": 0.3585588842781922,
+    "method": "geoadapter_v2",
+    "modality": "sar_only",
+    "seed": 123,
+    "trainable_params": 7826,
+    "train_time_sec": 1162.9,
+    "final_residual_scale": -1.730297
+  },
+  {
+    "overall_accuracy": 0.3498148148148148,
+    "macro_f1": 0.32975433415358,
+    "method": "geoadapter_v2",
+    "modality": "sar_only",
+    "seed": 456,
+    "trainable_params": 7826,
+    "train_time_sec": 1145.0,
+    "final_residual_scale": 2.060319
+  }
+]
