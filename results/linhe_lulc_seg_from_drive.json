@@ -1,0 +1,107 @@
+[
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 4614,
+    "mIoU": 0.17784363309509255
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 4614,
+    "mIoU": 0.1796266255058972
+  },
+  {
+    "method": "linear_probe",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 4614,
+    "mIoU": 0.17521385146110732
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 1194246,
+    "mIoU": 0.29662872643069826
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 1194246,
+    "mIoU": 0.29709631787044355
+  },
+  {
+    "method": "houlsby",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 1194246,
+    "mIoU": 0.2860121014993896
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 107526,
+    "mIoU": 0.19769858947516794
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 107526,
+    "mIoU": 0.20025414694791946
+  },
+  {
+    "method": "bitfit",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 107526,
+    "mIoU": 0.1946217545985379
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 152070,
+    "mIoU": 0.1780490715422986
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 152070,
+    "mIoU": 0.17883284382017434
+  },
+  {
+    "method": "lora_r8",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 152070,
+    "mIoU": 0.17482700418259162
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 42,
+    "trainable_params": 4756,
+    "mIoU": 0.2514162582497871
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 123,
+    "trainable_params": 4756,
+    "mIoU": 0.27509126671608697
+  },
+  {
+    "method": "geoadapter",
+    "modality": "rgb_3band",
+    "seed": 456,
+    "trainable_params": 4756,
+    "mIoU": 0.2681437214213419
+  }
+]

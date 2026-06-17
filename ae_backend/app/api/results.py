@@ -33,7 +33,8 @@ SUMMARY = {
             "delta": 0.116,
             "delta_relative": 0.655,
             "label_type": "Esri LULC 2021-2023",
-            "classes": ["water", "trees", "crops", "built", "rangeland", "bare"],
+            "classes": ["background", "built", "crops", "trees", "water", "rangeland_bare"],
+            "class_schema": "linhe_esri_6class",
             "note": "真业务标签, PEFT 相对增益 65% — 核心故事",
         },
         "change_2025": {

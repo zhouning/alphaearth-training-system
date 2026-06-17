@@ -1,0 +1,31 @@
+experiment:
+  name: linhe_lulc_api_smoke
+  task: segmentation
+  dataset: linhe_lulc
+  dataset_root: .
+  num_classes: 6
+  epochs: 1
+  batch_size: 1
+  seeds: [42]
+  max_samples: 4
+  val_max_samples: 2
+  year: 2022
+
+modalities:
+  - preset: rgb_3band
+
+methods:
+  - name: linear_probe
+    adapter: zero_pad
+    peft: null
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+  loss: ce
+
+prithvi:
+  pretrained: true
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt

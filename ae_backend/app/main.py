@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
-from app.api import pipeline, training, satellites, areas, models, results
+from app.api import pipeline, training, satellites, areas, models, results, inference
 from app.core.config import settings
 
 app = FastAPI(
@@ -51,6 +51,11 @@ app.include_router(
     results.router,
     prefix=f"{settings.API_V1_STR}/results",
     tags=["results"]
+)
+app.include_router(
+    inference.router,
+    prefix=f"{settings.API_V1_STR}/inference",
+    tags=["inference"]
 )
 
 # Mount results artifacts (GeoJSON, PNGs from change-detection runs)

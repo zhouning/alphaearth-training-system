@@ -85,6 +85,12 @@
                         </a>
                     </li>
                     <li>
+                        <a href="#" @click.prevent="currentTab = 'lulc'" :class="currentTab === 'lulc' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l7-3 7 3 4-2v14l-4 2-7-3-7 3V6zm7-3v14m7-11v14"></path></svg>
+                            <span>LULC 工具</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="#" @click.prevent="currentTab = 'demo'" :class="currentTab === 'demo' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m-6 3l6-3"></path></svg>
                             <span>演示成果</span>
@@ -399,6 +405,181 @@
                 </div>
             </div>
 
+            <!-- LULC Tool Tab -->
+            <div v-show="currentTab === 'lulc'" class="max-w-7xl mx-auto space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">LULC 工具</h2>
+                        <p class="text-sm text-gray-500 mt-1">公共产品模式用于区域级现成地物图，本地模型模式用于上传影像 patch 推理与验收。</p>
+                    </div>
+                    <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer" @click="fetchLulcModes">
+                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        刷新能力
+                    </button>
+                </div>
+
+                <div v-if="lulcStatus" class="glass-card p-3 text-sm" :class="lulcStatus.type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-blue-50 border-blue-200 text-blue-800'">
+                    {{ lulcStatus.message }}
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <section class="glass-card p-5 space-y-4">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">公共产品模式</h3>
+                                <p class="text-sm text-gray-500 mt-1">按 bbox/year 查询本地缓存的 10 m 公共 LULC 产品。</p>
+                            </div>
+                            <span class="px-2 py-1 text-xs rounded border" :class="publicProductsReady ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'">
+                                {{ publicProductsReady ? '缓存可用' : '等待配置' }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="text-sm text-gray-700">
+                                <span class="block mb-1 font-medium">Provider</span>
+                                <select v-model="publicLulcForm.provider_id" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-primary focus:border-primary outline-none">
+                                    <option v-for="product in lulcPublicProducts" :key="product.id" :value="product.id">{{ product.id }} · {{ product.status }}</option>
+                                </select>
+                            </label>
+                            <label class="text-sm text-gray-700">
+                                <span class="block mb-1 font-medium">Year</span>
+                                <select v-model.number="publicLulcForm.year" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-primary focus:border-primary outline-none">
+                                    <option v-for="year in publicAvailableYears" :key="year" :value="year">{{ year }}</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div>
+                            <div class="text-sm font-medium text-gray-700 mb-2">bbox ({{ publicLulcForm.bbox_crs }})</div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <input v-model.number="publicLulcForm.minx" type="number" step="any" class="px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="minx">
+                                <input v-model.number="publicLulcForm.miny" type="number" step="any" class="px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="miny">
+                                <input v-model.number="publicLulcForm.maxx" type="number" step="any" class="px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="maxx">
+                                <input v-model.number="publicLulcForm.maxy" type="number" step="any" class="px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="maxy">
+                            </div>
+                        </div>
+
+                        <label class="text-sm text-gray-700 block">
+                            <span class="block mb-1 font-medium">CRS</span>
+                            <input v-model="publicLulcForm.bbox_crs" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="EPSG:3857">
+                        </label>
+
+                        <div class="flex justify-between items-center">
+                            <button class="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-blue-600 transition-colors disabled:opacity-50" :disabled="loadingPublicLulc" @click="queryPublicLulc">
+                                {{ loadingPublicLulc ? '查询中...' : '查询公共 LULC' }}
+                            </button>
+                            <button class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50" @click="fillLinhePublicBbox">填入临河示例 bbox</button>
+                        </div>
+
+                        <div v-if="publicLulcResult" class="border border-gray-200 rounded-md overflow-hidden">
+                            <div class="px-3 py-2 bg-gray-50 text-sm font-semibold text-gray-700">公共产品结果 · {{ publicLulcResult.mask_shape?.join(' × ') }}</div>
+                            <div class="p-3 grid grid-cols-2 gap-2 text-sm">
+                                <div v-for="(count, name) in publicLulcResult.class_pixel_counts" :key="name" class="flex justify-between border-b border-gray-100 py-1">
+                                    <span class="text-gray-600">{{ name }}</span>
+                                    <span class="data-font text-gray-900">{{ count }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="glass-card p-5 space-y-4">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">本地模型模式</h3>
+                                <p class="text-sm text-gray-500 mt-1">上传 RGB patch 推理；上传 label 后可直接计算 mIoU 和 per-class IoU。</p>
+                            </div>
+                            <span class="px-2 py-1 text-xs rounded border bg-blue-50 text-primary border-blue-200">{{ lulcLocalModels.length }} 个模型</span>
+                        </div>
+
+                        <label class="text-sm text-gray-700 block">
+                            <span class="block mb-1 font-medium">本地模型</span>
+                            <select v-model="localLulcForm.model_id" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-primary focus:border-primary outline-none">
+                                <option v-for="model in lulcLocalModels" :key="model.id" :value="model.id">
+                                    {{ model.id }} · mIoU {{ model.validation?.mIoU ? model.validation.mIoU.toFixed(3) : '--' }}
+                                </option>
+                            </select>
+                        </label>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label class="block text-sm text-gray-700">
+                                <span class="block mb-1 font-medium">RGB 影像</span>
+                                <input type="file" accept="image/*" class="block w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-2 file:border-0 file:rounded-md file:bg-blue-50 file:text-primary" @change="onLocalLulcFileChange">
+                            </label>
+                            <label class="block text-sm text-gray-700">
+                                <span class="block mb-1 font-medium">Label mask</span>
+                                <input type="file" accept="image/*" class="block w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-2 file:border-0 file:rounded-md file:bg-gray-100 file:text-gray-700" @change="onLocalLulcLabelChange">
+                            </label>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <button class="px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-blue-600 transition-colors disabled:opacity-50" :disabled="loadingLocalLulc || !localLulcFile" @click="runLocalLulcInference">
+                                {{ loadingLocalLulc ? '推理中...' : '本地模型推理' }}
+                            </button>
+                            <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors disabled:opacity-50" :disabled="loadingLocalLulc || !localLulcFile || !localLulcLabel" @click="runLocalLulcEvaluation">
+                                上传 label 并评估
+                            </button>
+                        </div>
+
+                        <div v-if="localLulcResult" class="border border-gray-200 rounded-md overflow-hidden">
+                            <div class="px-3 py-2 bg-gray-50 text-sm font-semibold text-gray-700">本地模型结果 · {{ localLulcResult.model_id }}</div>
+                            <div class="p-3 space-y-3 text-sm">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="bg-gray-50 rounded p-2">
+                                        <div class="text-xs text-gray-500">mask shape</div>
+                                        <div class="data-font text-gray-900">{{ localLulcResult.mask_shape?.join(' × ') }}</div>
+                                    </div>
+                                    <div class="bg-gray-50 rounded p-2">
+                                        <div class="text-xs text-gray-500">mean confidence</div>
+                                        <div class="data-font text-gray-900">{{ localLulcResult.confidence_summary?.mean_max_probability?.toFixed(3) ?? '--' }}</div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div v-for="(count, name) in localLulcResult.class_pixel_counts" :key="name" class="flex justify-between border-b border-gray-100 py-1">
+                                        <span class="text-gray-600">{{ name }}</span>
+                                        <span class="data-font text-gray-900">{{ count }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="localLulcEvaluation" class="border border-green-200 bg-green-50 rounded-md p-3 text-sm">
+                            <div class="font-semibold text-green-800 mb-2">评估结果</div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>Pixel accuracy: <span class="data-font">{{ localLulcEvaluation.pixel_accuracy?.toFixed(3) }}</span></div>
+                                <div>mIoU: <span class="data-font">{{ localLulcEvaluation.mIoU?.toFixed(3) }}</span></div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="glass-card p-5">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">能力注册表</h3>
+                    <div v-if="loadingLulcModes" class="text-sm text-gray-500">正在加载 LULC 能力...</div>
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-800 mb-2">本地模型</h4>
+                            <div class="space-y-2">
+                                <div v-for="model in lulcLocalModels" :key="model.id" class="border border-gray-200 rounded-md p-3 text-sm">
+                                    <div class="font-medium text-gray-900">{{ model.id }}</div>
+                                    <div class="text-gray-500 mt-1">{{ model.adapter }} · ready={{ model.ready }}</div>
+                                    <div class="text-gray-500">mIoU={{ model.validation?.mIoU ? model.validation.mIoU.toFixed(4) : '--' }} · params={{ model.validation?.trainable_params ?? '--' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-800 mb-2">公共产品</h4>
+                            <div class="space-y-2">
+                                <div v-for="product in lulcPublicProducts" :key="product.id" class="border border-gray-200 rounded-md p-3 text-sm">
+                                    <div class="font-medium text-gray-900">{{ product.id }}</div>
+                                    <div class="text-gray-500 mt-1">{{ product.product }}</div>
+                                    <div class="text-gray-500">status={{ product.status }} · years={{ product.available_years?.join(', ') || '--' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Demo Showcase Tab -->
             <div v-show="currentTab === 'demo'" class="max-w-7xl mx-auto space-y-6">
                 <div class="flex justify-between items-center">
@@ -531,7 +712,7 @@
 </div>
 
 <script>
-    const { createApp, ref, onMounted, nextTick, watch } = Vue;
+            const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
     createApp({
         setup() {
@@ -571,6 +752,38 @@
             // Models refs
             const models = ref([]);
             const loadingModels = ref(false);
+
+            // LULC tool refs
+            const lulcCapabilities = ref(null);
+            const loadingLulcModes = ref(false);
+            const loadingPublicLulc = ref(false);
+            const loadingLocalLulc = ref(false);
+            const lulcStatus = ref(null);
+            const publicLulcResult = ref(null);
+            const localLulcResult = ref(null);
+            const localLulcEvaluation = ref(null);
+            const localLulcFile = ref(null);
+            const localLulcLabel = ref(null);
+            const publicLulcForm = ref({
+                provider_id: 'esri_lulc_cache',
+                year: 2022,
+                minx: 11857090,
+                miny: 4829270,
+                maxx: 11858090,
+                maxy: 4830270,
+                bbox_crs: 'EPSG:3857',
+            });
+            const localLulcForm = ref({
+                model_id: 'linhe-lulc-geoadapter-seed123',
+            });
+            const lulcLocalModels = computed(() => lulcCapabilities.value?.local_models || []);
+            const lulcPublicProducts = computed(() => lulcCapabilities.value?.public_products || []);
+            const publicProductsReady = computed(() => lulcPublicProducts.value.some(p => p.id === 'esri_lulc_cache' && p.status === 'ready'));
+            const publicAvailableYears = computed(() => {
+                const product = lulcPublicProducts.value.find(p => p.id === publicLulcForm.value.provider_id);
+                const years = product?.available_years || [2022];
+                return years.length > 0 ? years : [2022];
+            });
 
             // Demo refs
             const demoSummary = ref(null);
@@ -1022,6 +1235,155 @@
                     alert("激活请求失败");
                 }
             };
+
+            const setLulcStatus = (type, message) => {
+                lulcStatus.value = { type, message };
+            };
+
+            const fetchLulcModes = async () => {
+                loadingLulcModes.value = true;
+                try {
+                    const response = await fetch('/api/ae/inference/lulc/modes');
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+                    lulcCapabilities.value = data;
+
+                    const defaultModel = data.default_local_model_id || data.local_models?.[0]?.id;
+                    if (defaultModel && !localLulcForm.value.model_id) {
+                        localLulcForm.value.model_id = defaultModel;
+                    }
+                    const publicProduct = (data.public_products || []).find(p => p.id === publicLulcForm.value.provider_id);
+                    if (publicProduct?.available_years?.length && !publicProduct.available_years.includes(publicLulcForm.value.year)) {
+                        publicLulcForm.value.year = publicProduct.available_years[0];
+                    }
+                    setLulcStatus('info', 'LULC 能力已加载：可使用公共产品模式或本地模型模式。');
+                } catch (e) {
+                    console.error('Failed to load LULC modes', e);
+                    setLulcStatus('error', '加载 LULC 能力失败，请确认后端 /api/ae/inference/lulc/modes 可访问。');
+                } finally {
+                    loadingLulcModes.value = false;
+                }
+            };
+
+            const fillLinhePublicBbox = () => {
+                publicLulcForm.value = {
+                    ...publicLulcForm.value,
+                    provider_id: 'esri_lulc_cache',
+                    year: 2022,
+                    minx: 11857090,
+                    miny: 4829270,
+                    maxx: 11858090,
+                    maxy: 4830270,
+                    bbox_crs: 'EPSG:3857',
+                };
+            };
+
+            const queryPublicLulc = async () => {
+                loadingPublicLulc.value = true;
+                publicLulcResult.value = null;
+                try {
+                    const params = new URLSearchParams({
+                        provider_id: publicLulcForm.value.provider_id,
+                        year: String(publicLulcForm.value.year),
+                        minx: String(publicLulcForm.value.minx),
+                        miny: String(publicLulcForm.value.miny),
+                        maxx: String(publicLulcForm.value.maxx),
+                        maxy: String(publicLulcForm.value.maxy),
+                        bbox_crs: publicLulcForm.value.bbox_crs,
+                    });
+                    const response = await fetch(`/api/ae/inference/lulc/public?${params.toString()}`);
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+                    publicLulcResult.value = data;
+                    setLulcStatus('info', `公共产品查询完成：${data.provider_id} ${data.year}，mask=${data.mask_shape.join('×')}。`);
+                } catch (e) {
+                    console.error('Public LULC query failed', e);
+                    setLulcStatus('error', `公共产品查询失败：${e.message}`);
+                } finally {
+                    loadingPublicLulc.value = false;
+                }
+            };
+
+            const onLocalLulcFileChange = (event) => {
+                localLulcFile.value = event.target.files?.[0] || null;
+                localLulcResult.value = null;
+                localLulcEvaluation.value = null;
+            };
+
+            const onLocalLulcLabelChange = (event) => {
+                localLulcLabel.value = event.target.files?.[0] || null;
+                localLulcEvaluation.value = null;
+            };
+
+            const selectedLocalModel = () => lulcLocalModels.value.find(m => m.id === localLulcForm.value.model_id);
+
+            const appendLocalModelFormFields = (formData) => {
+                const model = selectedLocalModel();
+                if (model?.checkpoint) {
+                    formData.append('checkpoint_path', model.checkpoint);
+                }
+                if (localLulcForm.value.model_id) {
+                    formData.append('model_id', localLulcForm.value.model_id);
+                }
+            };
+
+            const runLocalLulcInference = async () => {
+                if (!localLulcFile.value) {
+                    setLulcStatus('error', '请先选择 RGB 影像文件。');
+                    return;
+                }
+                loadingLocalLulc.value = true;
+                localLulcResult.value = null;
+                localLulcEvaluation.value = null;
+                try {
+                    const formData = new FormData();
+                    formData.append('file', localLulcFile.value);
+                    appendLocalModelFormFields(formData);
+                    const response = await fetch('/api/ae/inference/lulc', {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+                    localLulcResult.value = data;
+                    setLulcStatus('info', `本地模型推理完成：${data.model_id}，mask=${data.mask_shape.join('×')}。`);
+                } catch (e) {
+                    console.error('Local LULC inference failed', e);
+                    setLulcStatus('error', `本地模型推理失败：${e.message}`);
+                } finally {
+                    loadingLocalLulc.value = false;
+                }
+            };
+
+            const runLocalLulcEvaluation = async () => {
+                if (!localLulcFile.value || !localLulcLabel.value) {
+                    setLulcStatus('error', '请同时选择 RGB 影像和 label mask。');
+                    return;
+                }
+                loadingLocalLulc.value = true;
+                localLulcResult.value = null;
+                localLulcEvaluation.value = null;
+                try {
+                    const formData = new FormData();
+                    formData.append('file', localLulcFile.value);
+                    formData.append('label_file', localLulcLabel.value);
+                    appendLocalModelFormFields(formData);
+                    const response = await fetch('/api/ae/inference/lulc/evaluate', {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+                    localLulcResult.value = data.prediction;
+                    localLulcEvaluation.value = data.evaluation;
+                    setLulcStatus('info', `本地模型评估完成：mIoU=${data.evaluation.mIoU.toFixed(3)}。`);
+                } catch (e) {
+                    console.error('Local LULC evaluation failed', e);
+                    setLulcStatus('error', `本地模型评估失败：${e.message}`);
+                } finally {
+                    loadingLocalLulc.value = false;
+                }
+            };
             
             const isEvaluating = ref(false);
             const evaluateModel = async (modelId, modelName) => {
@@ -1237,6 +1599,8 @@
                     if (areas.value.length === 0) fetchAreas();
                 } else if (newTab === 'models') {
                     fetchModels();
+                } else if (newTab === 'lulc') {
+                    if (!lulcCapabilities.value) fetchLulcModes();
                 } else if (newTab === 'demo') {
                     if (!demoSummary.value) {
                         loadDemoData();
@@ -1265,6 +1629,12 @@
                 isPipelineRunning, pipelineStatus, pipelineTaskId, startPipeline, inMemoryMode,
                 availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
+                lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
+                lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
+                publicLulcForm, publicLulcResult, localLulcForm, localLulcFile, localLulcLabel,
+                localLulcResult, localLulcEvaluation, fetchLulcModes, fillLinhePublicBbox,
+                queryPublicLulc, onLocalLulcFileChange, onLocalLulcLabelChange,
+                runLocalLulcInference, runLocalLulcEvaluation,
                 isEvaluating, evaluateModel,
                 demoSummary, demoPairs, selectedPair, heatmapTop, loadDemoData, basemapKey, setBasemap
             };
