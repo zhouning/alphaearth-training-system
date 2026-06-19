@@ -1,0 +1,32 @@
+experiment:
+  name: loveda_lulc_full_finetune_r2u
+  task: segmentation
+  dataset: loveda
+  dataset_root: data/weights/raw_data/loveda
+  num_classes: 7
+  epochs: 30
+  batch_size: 8
+  seeds: [42, 123, 456]
+  allow_synthetic_fallback: false
+  split_mode: cross_domain
+  train_domain: rural
+  val_domain: urban
+
+modalities:
+  - preset: rgb_3band
+
+methods:
+  - name: full_finetune
+    adapter: zero_pad
+    peft: full_finetune
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-5
+  scheduler: cosine
+  weight_decay: 0.01
+  loss: ce
+
+prithvi:
+  pretrained: true
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt

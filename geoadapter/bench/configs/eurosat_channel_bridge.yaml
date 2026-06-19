@@ -1,0 +1,37 @@
+experiment:
+  name: eurosat_channel_bridge
+  dataset: eurosat
+  dataset_root: ./data/eurosat
+  epochs: 50
+  batch_size: 64
+  seeds: [42, 123, 456]
+  allow_synthetic_fallback: false
+
+modalities:
+  - preset: s2_full
+
+methods:
+  - name: zero_pad_linear_probe
+    adapter: zero_pad
+    peft: null
+  - name: learned_bridge_linear_probe
+    adapter: learned_channel_bridge
+    peft: null
+  - name: zero_pad_houlsby
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+  - name: learned_bridge_houlsby
+    adapter: learned_channel_bridge
+    peft: houlsby
+    bottleneck_dim: 64
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: null

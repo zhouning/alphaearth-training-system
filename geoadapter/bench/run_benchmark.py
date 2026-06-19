@@ -44,6 +44,23 @@ def _load_ckpt(path, trainer, adapter, head):
     return ck["epoch"]
 
 
+def build_adapter(adapter_kind: str, in_channels: int, out_channels: int = 6):
+    """Instantiate the configured input-stage modality adapter."""
+    from geoadapter.adapters import (
+        GeoAdapter,
+        LearnedChannelBridgeAdapter,
+        ZeroPadAdapter,
+    )
+
+    if adapter_kind == "zero_pad":
+        return ZeroPadAdapter(in_channels=in_channels, out_channels=out_channels)
+    if adapter_kind == "geo_adapter":
+        return GeoAdapter(in_channels=in_channels, out_channels=out_channels)
+    if adapter_kind == "learned_channel_bridge":
+        return LearnedChannelBridgeAdapter(in_channels=in_channels, out_channels=out_channels)
+    raise ValueError(f"unknown adapter: {adapter_kind!r}")
+
+
 def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
                           ckpt_dir=None, ckpt_every=2):
     """Run one (method, modality, seed) combination. Returns metrics dict."""
@@ -51,7 +68,6 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
     from torch.utils.data import DataLoader, TensorDataset
     from geoadapter.models.prithvi import PrithviBackbone
     from geoadapter.models.heads import ClassificationHead
-    from geoadapter.adapters import GeoAdapter, ZeroPadAdapter
     from geoadapter.adapters.lora import inject_lora
     from geoadapter.adapters.bitfit import configure_bitfit
     from geoadapter.adapters.houlsby import inject_houlsby_adapters
@@ -93,10 +109,7 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
         for block in backbone.blocks:
             split_qkv_and_inject_lora(block, rank=method_cfg.get("rank", 8))
 
-    if method_cfg["adapter"] == "geo_adapter":
-        adapter = GeoAdapter(in_channels=cfg_m.c_in, out_channels=6)
-    else:
-        adapter = ZeroPadAdapter(in_channels=cfg_m.c_in, out_channels=6)
+    adapter = build_adapter(method_cfg["adapter"], in_channels=cfg_m.c_in, out_channels=6)
 
     task_type = global_cfg["experiment"].get("task", "classification")
     num_classes = global_cfg["experiment"].get("num_classes", 10)
@@ -127,7 +140,7 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
     tag = f"{method_cfg['name']}|{modality_cfg['preset']}|seed={seed}"
     print(f"  [{tag}] device={device}, trainable_params={n_trainable:,}")
 
-    # Try to load real dataset; fall back to synthetic for smoke test
+    # Try to load real dataset; optionally fall back to synthetic for smoke tests.
     train_loader = None
     val_loader = None
     try:
@@ -181,6 +194,10 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
         val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2)
         print(f"  [{tag}] Loaded {dataset_name}: {len(train_ds)} train, {len(val_ds)} val")
     except Exception as e:
+        if not global_cfg["experiment"].get("allow_synthetic_fallback", True):
+            raise RuntimeError(
+                f"[{tag}] Dataset not available and synthetic fallback disabled: {e}"
+            ) from e
         print(f"  [{tag}] Dataset not available ({e}), using synthetic data")
         x_syn = torch.randn(64, cfg_m.c_in, 64, 64)
         if task_type == "multilabel":
