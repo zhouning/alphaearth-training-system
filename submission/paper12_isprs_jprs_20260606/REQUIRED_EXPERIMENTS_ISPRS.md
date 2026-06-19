@@ -58,6 +58,13 @@ Decision rule:
 
 Purpose: address the concern that all cross-domain mIoU values are close to majority/background baselines.
 
+Current status:
+
+- LoveDA full fine-tuning U->R: completed with three seeds. Full fine-tuning reaches 0.1145 $\pm$ 0.0028 mIoU from seed values 0.1119, 0.1142, and 0.1175.
+- LoveDA full fine-tuning R->U: still open. No `loveda_full_finetune_r2u.json` was present in Drive at this update.
+- The completed U->R result is now recorded in `paper12_results/loveda_full_finetune_u2r.json` and summarized in `paper12_results/loveda_full_finetune_summary.json`.
+- The U->R result does not remove the LoveDA concern: full fine-tuning improves over the small-PEFT/all-background cluster but remains below Houlsby on the same direction.
+
 Minimum design:
 
 - Add full fine-tuning or a stronger unfrozen segmentation baseline on LoveDA U->R and R->U.
@@ -73,6 +80,13 @@ Decision rule:
 
 Purpose: clarify how 10-band Sentinel-2 inputs are reduced to Prithvi's six-channel template.
 
+Current status:
+
+- The EuroSAT channel-bridge Colab notebook has been exercised and a result JSON was written.
+- The initially published `eurosat_channel_bridge.json` was generated before the EuroSAT config loaded the staged Prithvi checkpoint, so it is archived provenance data rather than manuscript-ready evidence.
+- The EuroSAT config is now fixed locally to point at `data/weights/prithvi/Prithvi_100M.pt`.
+- EuroSAT channel-bridge ablation: completed only as pre-fix archive data; rerun required for manuscript evidence.
+
 Minimum design:
 
 - Compare deterministic truncate/pad bridge against a learned 10->6 projection or a reinitialized 10-channel patch embedding.
@@ -84,6 +98,7 @@ Decision rule:
 
 - If learned bridge changes the ranking, the current channel-bridge design must become a main limitation.
 - If ranking is stable, the current deterministic bridge is defensible.
+- Until the rerun is completed with the checkpoint-loaded config, treat the existing channel-bridge JSON as pre-fix archive data only.
 
 ## Priority B: Recommended If Time Allows
 
@@ -106,6 +121,7 @@ This is not required for the current claim, but it would reduce the limitation t
 - The introduction removes the unqualified "first systematic benchmark" wording.
 - The methods define standard LoRA versus split-QKV LoRA.
 - The methods define the six-channel bridge boundary.
+- The EuroSAT channel-bridge notebook and config are now aligned with the staged Prithvi checkpoint, but the earlier Drive JSON was produced before that fix and still needs rerun confirmation.
 - The Linhe section now treats Esri-derived labels as supervisory labels, not independent ground truth.
 - The LoveDA threshold is now framed as a supported hypothesis, not a universal rule.
 - The conclusion now includes Linhe/LoveDA and names the remaining evidence gaps.

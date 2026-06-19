@@ -95,6 +95,8 @@ GeoAdapter   & 5{,}525       & 0.0863 $\pm$ 0.0013 & $+0.0005$ & 0.1023 $\pm$ 0.
 \label{fig:loveda-cross}
 \end{figure}
 
+\paragraph{A U$\rightarrow$R full fine-tuning baseline sits above the small-PEFT cluster but below Houlsby.} We additionally ran full fine-tuning on the U$\rightarrow$R direction. The three-seed mean is 0.1145 $\pm$ 0.0028 mIoU, with seed values 0.1119, 0.1142, and 0.1175. This is well above the small-PEFT cluster and the all-background floor, but it still falls below Houlsby's 0.1384 $\pm$ 0.0014 on the same transfer direction. The companion R$\rightarrow$U full fine-tuning run is still pending, so we treat this as a directional baseline rather than a complete pair.
+
 The cross-domain results add three findings to those reported on Linhe:
 
 \paragraph{The Houlsby lead reproduces and grows under cross-domain stress.} Houlsby outperforms linear probing by $+0.0526$ mIoU under U$\rightarrow$R and $+0.1167$ mIoU under R$\rightarrow$U. The R$\rightarrow$U gap is the largest single-method advantage we observe in the entire paper. Linhe, three public benchmarks, and now LoveDA cross-domain all place Houlsby decisively ahead of every other PEFT method we test; we interpret this as the strongest evidence that the architecture-awareness recommendation in Section~\ref{sec:segmentation} is robust to label provenance, geographic split, and domain shift.

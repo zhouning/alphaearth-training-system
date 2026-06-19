@@ -34,4 +34,4 @@ training:
 
 prithvi:
   pretrained: true
-  checkpoint: null
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt

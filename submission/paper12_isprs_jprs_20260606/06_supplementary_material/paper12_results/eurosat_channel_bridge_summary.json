@@ -1,0 +1,46 @@
+{
+  "learned_bridge_houlsby": {
+    "overall_accuracy_mean": 0.933641975308642,
+    "overall_accuracy_std": 0.001496834031232362,
+    "macro_f1_mean": 0.9304142061108783,
+    "macro_f1_std": 0.0015029468844347466,
+    "seeds": [
+      42,
+      123,
+      456
+    ]
+  },
+  "learned_bridge_linear_probe": {
+    "overall_accuracy_mean": 0.7638271604938272,
+    "overall_accuracy_std": 0.003894763346752432,
+    "macro_f1_mean": 0.7532010740692103,
+    "macro_f1_std": 0.004024586915147649,
+    "seeds": [
+      42,
+      123,
+      456
+    ]
+  },
+  "zero_pad_houlsby": {
+    "overall_accuracy_mean": 0.9251234567901234,
+    "overall_accuracy_std": 0.0005657500857970411,
+    "macro_f1_mean": 0.9216502787000835,
+    "macro_f1_std": 0.0006983419224585568,
+    "seeds": [
+      42,
+      123,
+      456
+    ]
+  },
+  "zero_pad_linear_probe": {
+    "overall_accuracy_mean": 0.5584567901234568,
+    "overall_accuracy_std": 0.010833465230810416,
+    "macro_f1_mean": 0.5345537880822485,
+    "macro_f1_std": 0.010649412974021435,
+    "seeds": [
+      42,
+      123,
+      456
+    ]
+  }
+}

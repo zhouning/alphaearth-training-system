@@ -29,7 +29,7 @@ We define five input configurations on EuroSAT to stress-test adaptation under h
     \item \textbf{sar\_only}: 2-band extreme out-of-distribution configuration.
 \end{itemize}
 
-Because Prithvi expects six channels, all non-matching inputs are bridged either by zero-padding or by GeoAdapter. The zero-padding setup is not merely a preprocessing trick; it is part of the evaluation, since it reveals whether different PEFT methods can exploit partially missing or mismatched channels.
+Because Prithvi expects six channels, all non-matching inputs are bridged either by the deterministic \texttt{ZeroPadAdapter} or by GeoAdapter. \texttt{ZeroPadAdapter} pads missing channels with zeros when $c_{\mathrm{in}}<6$ and truncates excess selected channels when $c_{\mathrm{in}}>6$. The zero-padding/truncation setup is not merely a preprocessing trick; it is part of the evaluation, since it reveals whether different PEFT methods can exploit partially missing or mismatched channels. This design also defines the boundary of the present results: the \texttt{s2\_full} preset uses selected Sentinel-2 channels before the six-channel Prithvi bridge, not a newly trained 10-channel patch embedding.
 
 For BigEarthNet-S2, we evaluate two configurations: \texttt{s2\_full} and \texttt{rgb}. This is sufficient to test whether the main EuroSAT conclusions transfer to a second dataset and a multi-label task.
 
