@@ -326,7 +326,29 @@ def eurosat_notebook() -> dict:
             ),
             code_cell(
                 """
-                # 8. Run the 4-method x 3-seed EuroSAT benchmark. Checkpoints stay on local SSD.
+                # 8. Archive any pre-rerun EuroSAT JSON files so the benchmark cannot resume from archive output.
+                from datetime import datetime
+                import shutil
+                from pathlib import Path
+
+                results_dir = Path("/content/drive/MyDrive/paper12_results")
+                archive_dir = results_dir / "eurosat_channel_bridge_archive_pre_rerun"
+                archive_dir.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                for name in ["eurosat_channel_bridge.json", "eurosat_channel_bridge_summary.json"]:
+                    src = results_dir / name
+                    if src.exists():
+                        dst = archive_dir / f"{stamp}_{name}"
+                        shutil.move(str(src), str(dst))
+                        print("Archived", src, "->", dst)
+                    else:
+                        print("No existing", src)
+                """
+            ),
+            code_cell(
+                """
+                # 9. Run the 4-method x 3-seed EuroSAT benchmark. Checkpoints stay on local SSD.
                 %cd /content/AlphaEarth-System
                 !mkdir -p /content/eurosat_channel_bridge_runs
                 !python -m geoadapter.bench.run_benchmark --config geoadapter/bench/configs/eurosat_channel_bridge.yaml --output /content/drive/MyDrive/paper12_results/eurosat_channel_bridge.json --checkpoint-dir /content/eurosat_channel_bridge_runs --checkpoint-every 5
@@ -334,7 +356,7 @@ def eurosat_notebook() -> dict:
             ),
             code_cell(
                 """
-                # 9. Verify result counts, aggregate OA and macro-F1 by method, and persist a compact summary JSON to Drive.
+                # 10. Verify result counts, aggregate OA and macro-F1 by method, and persist a compact summary JSON to Drive.
                 import json
                 from collections import defaultdict
                 from pathlib import Path

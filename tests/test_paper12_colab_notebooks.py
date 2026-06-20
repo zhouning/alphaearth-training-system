@@ -48,6 +48,8 @@ def test_paper12_eurosat_channel_bridge_colab_notebook_contract():
     assert "/content/eurosat_channel_bridge_runs" in text
     assert "scripts/download_public_datasets.py --dataset eurosat" in text
     assert "eurosat_channel_bridge.yaml" in text
+    assert "eurosat_channel_bridge_archive_pre_rerun" in text
+    assert "eurosat_channel_bridge_summary.json" in text
     assert "python -m geoadapter.bench.run_benchmark" in text
     assert "expected_rows = 12" in text
     assert "learned_bridge_houlsby" in text
