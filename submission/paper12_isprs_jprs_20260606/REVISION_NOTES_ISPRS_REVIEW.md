@@ -15,7 +15,7 @@ In Prithvi-100M adaptation under heterogeneous remote sensing inputs, the manusc
 - Reframed Linhe as production-style validation with Esri-derived supervisory labels.
 - Clarified that Linhe split-QKV LoRA weakness is not merely the original fused-QKV insertion bug.
 - Reframed the LoveDA capacity threshold as a deployment hypothesis.
-- Added the completed LoveDA U->R full fine-tuning baseline; it improves over the small-PEFT cluster but remains below Houlsby, while R->U full fine-tuning remains open.
+- Added the completed LoveDA two-direction full fine-tuning baseline; it improves over the small-PEFT cluster but remains below Houlsby in both transfer directions.
 - Updated discussion and conclusion limitations.
 
 ## Remaining High-Risk Reviewer Questions
@@ -23,6 +23,6 @@ In Prithvi-100M adaptation under heterogeneous remote sensing inputs, the manusc
 - Does the PEFT ranking hold on any backbone other than Prithvi-100M?
 - Is Houlsby's advantage architectural or mainly due to a larger parameter budget?
 - How reliable are the Esri-derived Linhe labels for 2025 imagery?
-- Are LoveDA cross-domain scores too close to background baselines to support a capacity-threshold claim? The U->R full fine-tuning baseline partially addresses this by reaching 0.1145 mIoU, but the R->U full fine-tuning run is still needed.
+- Are LoveDA cross-domain scores too close to background baselines to support a capacity-threshold claim? The full fine-tuning baseline partially addresses this by reaching 0.1145 mIoU on U->R and 0.1391 mIoU on R->U, but Houlsby remains higher in both directions.
 - Does the six-channel bridge discard important information from `s2_full`? The Colab path and config are now aligned, but the pre-fix EuroSAT bridge JSON should be rerun before manuscript use.
 

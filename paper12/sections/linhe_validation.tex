@@ -64,9 +64,9 @@ The same patch corpus, when paired across quarters along the lattice, yields 6{,
 
 The Linhe deployment demonstrates that the Houlsby $\gg$ Linear~Probe ordering reproduces on a real-world production corpus, but a single production dataset cannot rule out the alternative reading that the ordering is a Linhe-specific artifact (e.g., of the agricultural label distribution, the 73-scene geographic split, or the GF/JL/ZY sensor mix). To close this gap with a public benchmark that explicitly stresses cross-domain transfer, we replicate the same five-method protocol on LoveDA~\cite{wang2021loveda}, a 7-class semantic-segmentation dataset whose canonical evaluation protocol partitions the imagery into an \emph{urban} and a \emph{rural} domain and reports both transfer directions separately.
 
-\paragraph{Setup.} We use the LoveDA train splits as released and respect the published urban/rural partition. The same five PEFT methods (linear probing, BitFit, LoRA r=8, Houlsby with bottleneck dimension 64, GeoAdapter) are trained for 30 epochs at batch size 16 with lr$=$1$\times 10^{-3}$ for the head/adapter and lr$_{\mathrm{peft}}$$=$1$\times 10^{-4}$ for trainable backbone parameters --- the same hyperparameters used for Linhe and for the main public-benchmark sweep, so that no tuning is performed against the LoveDA validation set. Each (method, direction) pair is repeated under three seeds $\{42, 123, 456\}$ on a Colab Pro L4 GPU. Training is run end-to-end on the urban domain and evaluated on the rural domain (U$\rightarrow$R) and vice versa (R$\rightarrow$U), giving 30 independent runs in total.
+\paragraph{Setup.} We use the LoveDA train splits as released and respect the published urban/rural partition. The same five PEFT methods (linear probing, BitFit, LoRA r=8, Houlsby with bottleneck dimension 64, GeoAdapter) are trained for 30 epochs at batch size 16 with lr$=$1$\times 10^{-3}$ for the head/adapter and lr$_{\mathrm{peft}}$$=$1$\times 10^{-4}$ for trainable backbone parameters --- the same hyperparameters used for Linhe and for the main public-benchmark sweep, so that no tuning is performed against the LoveDA validation set. Each (method, direction) pair is repeated under three seeds $\{42, 123, 456\}$ on a Colab Pro L4 GPU. Training is run end-to-end on the urban domain and evaluated on the rural domain (U$\rightarrow$R) and vice versa (R$\rightarrow$U), giving 30 PEFT runs in total. We additionally run full fine-tuning under the same three seeds in both directions, adding six unfrozen-baseline runs.
 
-\paragraph{Results.} Table~\ref{tab:loveda-cross} reports per-direction aggregated mIoU. Figure~\ref{fig:loveda-cross} renders the same data in two panels.
+\paragraph{Results.} Table~\ref{tab:loveda-cross} reports per-direction aggregated mIoU, including the additional full fine-tuning baseline. Figure~\ref{fig:loveda-cross} renders the five-method PEFT sweep in two panels.
 
 \begin{table}[h]
 \centering
@@ -84,6 +84,7 @@ BitFit       & 127{,}495     & 0.0850 $\pm$ 0.0001 & $-0.0008$ & 0.0984 $\pm$ 0.
 LoRA (r=8)   & 152{,}839     & 0.0855 $\pm$ 0.0001 & $-0.0003$ & 0.0953 $\pm$ 0.0001 \\
 Houlsby      & 1{,}195{,}015 & \textbf{0.1384 $\pm$ 0.0014} & $\mathbf{+0.0526}$ & \textbf{0.2119 $\pm$ 0.0019} \\
 GeoAdapter   & 5{,}525       & 0.0863 $\pm$ 0.0013 & $+0.0005$ & 0.1023 $\pm$ 0.0040 \\
+Full fine-tuning & 86{,}242{,}567 & 0.1145 $\pm$ 0.0028 & $+0.0287$ & 0.1391 $\pm$ 0.0085 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -95,7 +96,7 @@ GeoAdapter   & 5{,}525       & 0.0863 $\pm$ 0.0013 & $+0.0005$ & 0.1023 $\pm$ 0.
 \label{fig:loveda-cross}
 \end{figure}
 
-\paragraph{A U$\rightarrow$R full fine-tuning baseline sits above the small-PEFT cluster but below Houlsby.} We additionally ran full fine-tuning on the U$\rightarrow$R direction. The three-seed mean is 0.1145 $\pm$ 0.0028 mIoU, with seed values 0.1119, 0.1142, and 0.1175. This is well above the small-PEFT cluster and the all-background floor, but it still falls below Houlsby's 0.1384 $\pm$ 0.0014 on the same transfer direction. The companion R$\rightarrow$U full fine-tuning run is still pending, so we treat this as a directional baseline rather than a complete pair.
+\paragraph{Full fine-tuning improves over the small-PEFT cluster but does not overtake Houlsby.} We additionally ran the Table~\ref{tab:loveda-cross} full fine-tuning baseline in both transfer directions. The U$\rightarrow$R seed values are 0.1119, 0.1142, and 0.1175; the R$\rightarrow$U seed values are 0.1481, 0.1381, and 0.1311. Both directions sit well above the small-PEFT cluster and the all-background floor, but they remain below Houlsby on the same directions. We therefore treat full fine-tuning as a stronger unfrozen baseline that narrows, but does not remove, the LoveDA cross-domain gap.
 
 The cross-domain results add three findings to those reported on Linhe:
 

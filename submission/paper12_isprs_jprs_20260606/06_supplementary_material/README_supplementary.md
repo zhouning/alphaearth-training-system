@@ -4,7 +4,7 @@ This directory contains reproducibility artifacts for the Paper 12 ISPRS JPRS su
 
 ## Contents
 
-- `paper12_results/` - BigEarthNet, LandCover.ai, LoRA ablation, full-finetuning, rank-sensitivity, LoveDA full-finetuning U->R, and EuroSAT channel-bridge result files.
+- `paper12_results/` - BigEarthNet, LandCover.ai, LoRA ablation, full-finetuning, rank-sensitivity, LoveDA two-direction full-finetuning, and EuroSAT channel-bridge result files.
 - `results/` - EuroSAT and GeoAdapter result JSON files copied from the AlphaEarth-System working tree.
 - `scripts/` - figure-generation and diagnostic scripts copied from the manuscript source tree.
 
@@ -21,7 +21,7 @@ Compress-Archive -Path .\06_supplementary_material\* -DestinationPath .\paper12_
 ## Checks Before Upload
 
 - Confirm that all result files cited in the manuscript are present.
-- Confirm that `loveda_full_finetune_r2u.json` has been generated before claiming a two-direction LoveDA full fine-tuning baseline.
+- Confirm that `loveda_full_finetune_u2r.json`, `loveda_full_finetune_r2u.json`, and `loveda_full_finetune_summary.json` remain synchronized before citing the two-direction LoveDA full fine-tuning baseline.
 - Rerun the EuroSAT channel-bridge ablation with the checkpoint-loaded config before moving it into manuscript tables.
 - Confirm that any Linhe data-sharing restrictions are documented in the data availability statement.
 - Confirm that logs do not expose local machine paths, private tokens, or restricted dataset locations.

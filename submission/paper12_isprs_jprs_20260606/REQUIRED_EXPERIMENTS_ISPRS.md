@@ -61,9 +61,9 @@ Purpose: address the concern that all cross-domain mIoU values are close to majo
 Current status:
 
 - LoveDA full fine-tuning U->R: completed with three seeds. Full fine-tuning reaches 0.1145 $\pm$ 0.0028 mIoU from seed values 0.1119, 0.1142, and 0.1175.
-- LoveDA full fine-tuning R->U: still open. No `loveda_full_finetune_r2u.json` was present in Drive at this update.
-- The completed U->R result is now recorded in `paper12_results/loveda_full_finetune_u2r.json` and summarized in `paper12_results/loveda_full_finetune_summary.json`.
-- The U->R result does not remove the LoveDA concern: full fine-tuning improves over the small-PEFT/all-background cluster but remains below Houlsby on the same direction.
+- LoveDA full fine-tuning R->U: completed with three seeds. Full fine-tuning reaches 0.1391 $\pm$ 0.0085 mIoU from seed values 0.1481, 0.1381, and 0.1311.
+- The completed two-direction result is recorded in `paper12_results/loveda_full_finetune_u2r.json`, `paper12_results/loveda_full_finetune_r2u.json`, and summarized in `paper12_results/loveda_full_finetune_summary.json`.
+- The completed full fine-tuning baseline does not remove the LoveDA concern: it improves over the small-PEFT/all-background cluster but remains below Houlsby in both directions.
 
 Minimum design:
 

@@ -33,7 +33,7 @@ These items require author confirmation before the package is uploaded.
 - Regenerate all figures from the latest result files.
 - Reconcile the conclusion count: the abstract mentions public benchmarks plus production and LoveDA; the conclusion currently says "109 total experiments" and should be checked against the latest expanded experiment count.
 - Check every table value against `paper12_results/summary.csv`, `results/eurosat_results.json`, and the Linhe/LoveDA result files.
-- Complete `loveda_full_finetune_r2u.json` before describing LoveDA full fine-tuning as a two-direction baseline.
+- Recheck that the LoveDA table values for the completed two-direction full fine-tuning baseline match `loveda_full_finetune_summary.json` and the two raw direction JSON files.
 - Rerun EuroSAT channel-bridge with `geoadapter/bench/configs/eurosat_channel_bridge.yaml` after the Prithvi checkpoint path fix; the existing Drive JSON is archive output from the pre-fix config.
 - Remove or explain any claims using "first" unless the literature search is up to date.
 - Review `REQUIRED_EXPERIMENTS_ISPRS.md` and decide which Priority A experiments will be completed before initial submission.

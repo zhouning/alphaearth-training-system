@@ -59,7 +59,7 @@ All numerical values in tables and figures trace back to:
 - `paper12_results/full_finetune_20260421_1202.json` — full fine-tuning baseline (single seed)
 - `paper12_results/lora_ablation_20260421_1240.json` — split-QKV diagnostic ablation
 
-- `paper12_results/loveda_full_finetune_u2r.json` and `paper12_results/loveda_full_finetune_summary.json` - LoveDA U->R full fine-tuning baseline (3 seeds; R->U still open)
+- `paper12_results/loveda_full_finetune_u2r.json`, `paper12_results/loveda_full_finetune_r2u.json`, and `paper12_results/loveda_full_finetune_summary.json` - LoveDA two-direction full fine-tuning baseline (3 seeds per direction)
 - `paper12_results/eurosat_channel_bridge.json` and `paper12_results/eurosat_channel_bridge_summary.json` - EuroSAT channel-bridge archive output. The config has since been fixed to load `data/weights/prithvi/Prithvi_100M.pt`; rerun before using these values as manuscript evidence.
 
 ## Status
