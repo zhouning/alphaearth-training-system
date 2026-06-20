@@ -82,10 +82,9 @@ Purpose: clarify how 10-band Sentinel-2 inputs are reduced to Prithvi's six-chan
 
 Current status:
 
-- The EuroSAT channel-bridge Colab notebook has been exercised and a result JSON was written.
-- The initially published `eurosat_channel_bridge.json` was generated before the EuroSAT config loaded the staged Prithvi checkpoint, so it is archived provenance data rather than manuscript-ready evidence.
-- The EuroSAT config is now fixed locally to point at `data/weights/prithvi/Prithvi_100M.pt`.
-- EuroSAT channel-bridge ablation: completed only as pre-fix archive data; rerun required for manuscript evidence.
+- The EuroSAT channel-bridge rerun has completed and produced a 12-row JSON plus summary.
+- The EuroSAT config now loads `data/weights/prithvi/Prithvi_100M.pt`.
+- EuroSAT channel-bridge ablation: completed and manuscript-ready.
 
 Minimum design:
 
@@ -98,7 +97,7 @@ Decision rule:
 
 - If learned bridge changes the ranking, the current channel-bridge design must become a main limitation.
 - If ranking is stable, the current deterministic bridge is defensible.
-- Until the rerun is completed with the checkpoint-loaded config, treat the existing channel-bridge JSON as pre-fix archive data only.
+- Treat the current channel-bridge JSON as the final rerun evidence unless a later rerun changes the numbers.
 
 ## Priority B: Recommended If Time Allows
 
@@ -121,7 +120,7 @@ This is not required for the current claim, but it would reduce the limitation t
 - The introduction removes the unqualified "first systematic benchmark" wording.
 - The methods define standard LoRA versus split-QKV LoRA.
 - The methods define the six-channel bridge boundary.
-- The EuroSAT channel-bridge notebook and config are now aligned with the staged Prithvi checkpoint, but the earlier Drive JSON was produced before that fix and still needs rerun confirmation.
+- The EuroSAT channel-bridge notebook and config are aligned with the staged Prithvi checkpoint, and the rerun evidence is complete.
 - The Linhe section now treats Esri-derived labels as supervisory labels, not independent ground truth.
 - The LoveDA threshold is now framed as a supported hypothesis, not a universal rule.
 - The conclusion now includes Linhe/LoveDA and names the remaining evidence gaps.

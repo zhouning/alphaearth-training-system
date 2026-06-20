@@ -8,7 +8,7 @@ This directory contains reproducibility artifacts for the Paper 12 ISPRS JPRS su
 - `results/` - EuroSAT and GeoAdapter result JSON files copied from the AlphaEarth-System working tree.
 - `scripts/` - figure-generation and diagnostic scripts copied from the manuscript source tree.
 
-Note: `paper12_results/eurosat_channel_bridge*.json` is retained as archive output from the first Colab run. The config now loads `data/weights/prithvi/Prithvi_100M.pt`, so the channel-bridge ablation should be rerun before these values are cited as manuscript evidence.
+Note: `paper12_results/eurosat_channel_bridge*.json` is the rerun output after the checkpoint-path fix and can be cited as manuscript evidence once the package is uploaded.
 
 ## Recommended Supplementary Archive
 
@@ -22,7 +22,7 @@ Compress-Archive -Path .\06_supplementary_material\* -DestinationPath .\paper12_
 
 - Confirm that all result files cited in the manuscript are present.
 - Confirm that `loveda_full_finetune_u2r.json`, `loveda_full_finetune_r2u.json`, and `loveda_full_finetune_summary.json` remain synchronized before citing the two-direction LoveDA full fine-tuning baseline.
-- Rerun the EuroSAT channel-bridge ablation with the checkpoint-loaded config before moving it into manuscript tables.
+- Confirm that the EuroSAT channel-bridge rerun JSON and summary are mirrored into the supplementary package before upload.
 - Confirm that any Linhe data-sharing restrictions are documented in the data availability statement.
 - Confirm that logs do not expose local machine paths, private tokens, or restricted dataset locations.
 

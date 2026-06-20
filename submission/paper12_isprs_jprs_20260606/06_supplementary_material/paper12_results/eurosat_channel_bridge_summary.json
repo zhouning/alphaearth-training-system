@@ -1,9 +1,9 @@
 {
   "learned_bridge_houlsby": {
-    "overall_accuracy_mean": 0.933641975308642,
-    "overall_accuracy_std": 0.001496834031232362,
-    "macro_f1_mean": 0.9304142061108783,
-    "macro_f1_std": 0.0015029468844347466,
+    "overall_accuracy_mean": 0.9095679012345679,
+    "overall_accuracy_std": 0.0005952870840119482,
+    "macro_f1_mean": 0.9057847269502198,
+    "macro_f1_std": 0.0007678184751607037,
     "seeds": [
       42,
       123,
@@ -11,10 +11,10 @@
     ]
   },
   "learned_bridge_linear_probe": {
-    "overall_accuracy_mean": 0.7638271604938272,
-    "overall_accuracy_std": 0.003894763346752432,
-    "macro_f1_mean": 0.7532010740692103,
-    "macro_f1_std": 0.004024586915147649,
+    "overall_accuracy_mean": 0.7627160493827161,
+    "overall_accuracy_std": 0.002170172324845312,
+    "macro_f1_mean": 0.7512562431264029,
+    "macro_f1_std": 0.0025207174379287193,
     "seeds": [
       42,
       123,
@@ -22,10 +22,10 @@
     ]
   },
   "zero_pad_houlsby": {
-    "overall_accuracy_mean": 0.9251234567901234,
-    "overall_accuracy_std": 0.0005657500857970411,
-    "macro_f1_mean": 0.9216502787000835,
-    "macro_f1_std": 0.0006983419224585568,
+    "overall_accuracy_mean": 0.8987037037037037,
+    "overall_accuracy_std": 0.0033995481019788343,
+    "macro_f1_mean": 0.8944104052228151,
+    "macro_f1_std": 0.003262424590691322,
     "seeds": [
       42,
       123,
@@ -33,10 +33,10 @@
     ]
   },
   "zero_pad_linear_probe": {
-    "overall_accuracy_mean": 0.5584567901234568,
-    "overall_accuracy_std": 0.010833465230810416,
-    "macro_f1_mean": 0.5345537880822485,
-    "macro_f1_std": 0.010649412974021435,
+    "overall_accuracy_mean": 0.6893209876543209,
+    "overall_accuracy_std": 0.000748417015616149,
+    "macro_f1_mean": 0.6735935755780438,
+    "macro_f1_std": 0.0019307793661079292,
     "seeds": [
       42,
       123,

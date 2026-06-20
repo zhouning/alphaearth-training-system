@@ -11,7 +11,7 @@ In Prithvi-100M adaptation under heterogeneous remote sensing inputs, the manusc
 - Rewrote the introduction contribution list to separate supported findings from hypotheses.
 - Added explicit definitions of standard LoRA and split-QKV LoRA.
 - Added the six-channel Prithvi input-bridge boundary.
-- Fixed the EuroSAT channel-bridge ablation config so future Colab runs load the staged Prithvi checkpoint.
+- Completed the EuroSAT channel-bridge rerun after the Prithvi checkpoint-path fix.
 - Reframed Linhe as production-style validation with Esri-derived supervisory labels.
 - Clarified that Linhe split-QKV LoRA weakness is not merely the original fused-QKV insertion bug.
 - Reframed the LoveDA capacity threshold as a deployment hypothesis.
@@ -24,5 +24,5 @@ In Prithvi-100M adaptation under heterogeneous remote sensing inputs, the manusc
 - Is Houlsby's advantage architectural or mainly due to a larger parameter budget?
 - How reliable are the Esri-derived Linhe labels for 2025 imagery?
 - Are LoveDA cross-domain scores too close to background baselines to support a capacity-threshold claim? The full fine-tuning baseline partially addresses this by reaching 0.1145 mIoU on U->R and 0.1391 mIoU on R->U, but Houlsby remains higher in both directions.
-- Does the six-channel bridge discard important information from `s2_full`? The Colab path and config are now aligned, but the pre-fix EuroSAT bridge JSON should be rerun before manuscript use.
+- Does the six-channel bridge discard important information from `s2_full`? The rerun now supports manuscript use, but the learned bridge still slightly changes the ranking and should be discussed as a limitation/ablation result.
 

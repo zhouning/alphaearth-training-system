@@ -4,95 +4,95 @@
     "modality": "s2_full",
     "seed": 42,
     "trainable_params": 7690,
-    "overall_accuracy": 0.5692592592592592,
-    "macro_f1": 0.545232315678812
+    "overall_accuracy": 0.6894444444444444,
+    "macro_f1": 0.6751665458737416
   },
   {
     "method": "zero_pad_linear_probe",
     "modality": "s2_full",
     "seed": 123,
     "trainable_params": 7690,
-    "overall_accuracy": 0.5475925925925926,
-    "macro_f1": 0.5239337305019365
+    "overall_accuracy": 0.6885185185185185,
+    "macro_f1": 0.671438795031815
   },
   {
     "method": "zero_pad_linear_probe",
     "modality": "s2_full",
     "seed": 456,
     "trainable_params": 7690,
-    "overall_accuracy": 0.5585185185185185,
-    "macro_f1": 0.5344953180659969
+    "overall_accuracy": 0.69,
+    "macro_f1": 0.6741753858285746
   },
   {
     "method": "learned_bridge_linear_probe",
     "modality": "s2_full",
     "seed": 42,
     "trainable_params": 7750,
-    "overall_accuracy": 0.7675925925925926,
-    "macro_f1": 0.7571375226375529
+    "overall_accuracy": 0.7611111111111111,
+    "macro_f1": 0.7493864989051198
   },
   {
     "method": "learned_bridge_linear_probe",
     "modality": "s2_full",
     "seed": 123,
     "trainable_params": 7750,
-    "overall_accuracy": 0.7598148148148148,
-    "macro_f1": 0.7490937893980529
+    "overall_accuracy": 0.7618518518518519,
+    "macro_f1": 0.7502592615127395
   },
   {
     "method": "learned_bridge_linear_probe",
     "modality": "s2_full",
     "seed": 456,
     "trainable_params": 7750,
-    "overall_accuracy": 0.7640740740740741,
-    "macro_f1": 0.7533719101720251
+    "overall_accuracy": 0.7651851851851852,
+    "macro_f1": 0.7541229689613497
   },
   {
     "method": "zero_pad_houlsby",
     "modality": "s2_full",
     "seed": 42,
     "trainable_params": 1197322,
-    "overall_accuracy": 0.9257407407407408,
-    "macro_f1": 0.9223612728199588
+    "overall_accuracy": 0.9001851851851852,
+    "macro_f1": 0.8957091427200176
   },
   {
     "method": "zero_pad_houlsby",
     "modality": "s2_full",
     "seed": 123,
     "trainable_params": 1197322,
-    "overall_accuracy": 0.9246296296296296,
-    "macro_f1": 0.920965316980751
+    "overall_accuracy": 0.9011111111111111,
+    "macro_f1": 0.8968234497211431
   },
   {
     "method": "zero_pad_houlsby",
     "modality": "s2_full",
     "seed": 456,
     "trainable_params": 1197322,
-    "overall_accuracy": 0.925,
-    "macro_f1": 0.9216242462995409
+    "overall_accuracy": 0.8948148148148148,
+    "macro_f1": 0.8906986232272847
   },
   {
     "method": "learned_bridge_houlsby",
     "modality": "s2_full",
     "seed": 42,
     "trainable_params": 1197382,
-    "overall_accuracy": 0.9327777777777778,
-    "macro_f1": 0.9295643520414039
+    "overall_accuracy": 0.91,
+    "macro_f1": 0.9060669518567336
   },
   {
     "method": "learned_bridge_houlsby",
     "modality": "s2_full",
     "seed": 123,
     "trainable_params": 1197382,
-    "overall_accuracy": 0.9353703703703704,
-    "macro_f1": 0.9321495378094047
+    "overall_accuracy": 0.9098148148148149,
+    "macro_f1": 0.9063714929465722
   },
   {
     "method": "learned_bridge_houlsby",
     "modality": "s2_full",
     "seed": 456,
     "trainable_params": 1197382,
-    "overall_accuracy": 0.9327777777777778,
-    "macro_f1": 0.9295287284818263
+    "overall_accuracy": 0.9088888888888889,
+    "macro_f1": 0.9049157360473536
   }
 ]

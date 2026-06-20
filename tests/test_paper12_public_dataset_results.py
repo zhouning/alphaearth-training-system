@@ -92,10 +92,10 @@ def test_loveda_full_finetune_summary_records_completed_two_direction_results():
 def test_required_experiments_tracks_colab_result_status():
     text = REQUIRED_EXPERIMENTS.read_text(encoding="utf-8")
 
-    assert "EuroSAT channel-bridge ablation: completed only as pre-fix archive data" in text
+    assert "EuroSAT channel-bridge ablation: completed and manuscript-ready." in text
     assert "LoveDA full fine-tuning U->R: completed" in text
     assert "LoveDA full fine-tuning R->U: completed" in text
-    assert "rerun required for manuscript evidence" in text
+    assert "The EuroSAT channel-bridge rerun has completed and produced a 12-row JSON plus summary." in text
 
 
 def test_loveda_table_includes_completed_full_finetuning_baseline():
@@ -138,3 +138,18 @@ def test_public_dataset_results_are_mirrored_in_supplementary_package():
         assert (SUPPLEMENTARY_RESULTS / name).read_text(encoding="utf-8") == (
             PAPER12_RESULTS / name
         ).read_text(encoding="utf-8")
+
+
+def test_eurosat_channel_bridge_rerun_records_final_counts():
+    rows = json.loads(
+        (PAPER12_RESULTS / "eurosat_channel_bridge.json").read_text(encoding="utf-8")
+    )
+    summary = json.loads(
+        (PAPER12_RESULTS / "eurosat_channel_bridge_summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert len(rows) == 12
+    assert summary["learned_bridge_houlsby"]["seeds"] == [42, 123, 456]
+    assert summary["zero_pad_linear_probe"]["seeds"] == [42, 123, 456]
