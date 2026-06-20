@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COLAB_DIR = ROOT / "colab"
 LOVE_OUT = COLAB_DIR / "paper12_loveda_full_finetune_colab.ipynb"
 EURO_OUT = COLAB_DIR / "paper12_eurosat_channel_bridge_colab.ipynb"
+PAPER12_RESULTS_BRANCH = "paper12-results-colab-20260619"
 
 
 def markdown_cell(source: str) -> dict:
@@ -54,7 +55,7 @@ def loveda_notebook() -> dict:
         [
             markdown_cell(
                 """
-                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/master/colab/paper12_loveda_full_finetune_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/paper12-results-colab-20260619/colab/paper12_loveda_full_finetune_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
                 # Paper 12 LoveDA Full Fine-Tuning Baseline
 
@@ -93,11 +94,13 @@ def loveda_notebook() -> dict:
             ),
             code_cell(
                 """
-                # 3. Clone the public training repo into local SSD.
+                # 3. Clone the Paper 12 results branch into local SSD.
                 %cd /content
                 !rm -rf /content/AlphaEarth-System
-                !git clone https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System
+                !git clone --branch paper12-results-colab-20260619 https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System
                 %cd /content/AlphaEarth-System
+                !git rev-parse --abbrev-ref HEAD
+                !git rev-parse HEAD
                 !git log --oneline -3
                 """
             ),
@@ -224,7 +227,7 @@ def eurosat_notebook() -> dict:
         [
             markdown_cell(
                 """
-                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/master/colab/paper12_eurosat_channel_bridge_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/paper12-results-colab-20260619/colab/paper12_eurosat_channel_bridge_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
                 # Paper 12 EuroSAT Channel-Bridge Ablation
 
@@ -260,11 +263,13 @@ def eurosat_notebook() -> dict:
             ),
             code_cell(
                 """
-                # 3. Clone the public training repo into local SSD.
+                # 3. Clone the Paper 12 results branch into local SSD.
                 %cd /content
                 !rm -rf /content/AlphaEarth-System
-                !git clone https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System
+                !git clone --branch paper12-results-colab-20260619 https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System
                 %cd /content/AlphaEarth-System
+                !git rev-parse --abbrev-ref HEAD
+                !git rev-parse HEAD
                 !git log --oneline -3
                 """
             ),

@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 COLAB_DIR = REPO_ROOT / "colab"
+PAPER12_RESULTS_BRANCH = "paper12-results-colab-20260619"
 
 
 def read_notebook_text(path: Path) -> str:
@@ -20,6 +21,9 @@ def test_paper12_loveda_full_finetune_colab_notebook_contract():
     path = COLAB_DIR / "paper12_loveda_full_finetune_colab.ipynb"
     text = read_notebook_text(path)
 
+    assert f"blob/{PAPER12_RESULTS_BRANCH}/colab/paper12_loveda_full_finetune_colab.ipynb" in text
+    assert f"--branch {PAPER12_RESULTS_BRANCH}" in text
+    assert "git rev-parse --abbrev-ref HEAD" in text
     assert "Colab Pro+ A100 40GB" in text
     assert "/content/AlphaEarth-System/data/weights/raw_data/loveda" in text
     assert "/content/drive/MyDrive/paper12_results" in text
@@ -35,6 +39,9 @@ def test_paper12_eurosat_channel_bridge_colab_notebook_contract():
     path = COLAB_DIR / "paper12_eurosat_channel_bridge_colab.ipynb"
     text = read_notebook_text(path)
 
+    assert f"blob/{PAPER12_RESULTS_BRANCH}/colab/paper12_eurosat_channel_bridge_colab.ipynb" in text
+    assert f"--branch {PAPER12_RESULTS_BRANCH}" in text
+    assert "git rev-parse --abbrev-ref HEAD" in text
     assert "Colab Pro L4" in text
     assert "/content/AlphaEarth-System/data/eurosat" in text
     assert "/content/drive/MyDrive/paper12_results" in text
