@@ -26,6 +26,16 @@ Decision rule:
 
 Purpose: separate method architecture from trainable-parameter budget.
 
+Current status:
+
+- Prepared and awaiting Colab execution.
+- Config: `geoadapter/bench/configs/eurosat_peft_capacity_sweep.yaml`.
+- Notebook: `colab/paper12_peft_capacity_sweep_colab.ipynb`.
+- Expected output files:
+  - `/content/drive/MyDrive/paper12_results/peft_capacity_sweep.json`
+  - `/content/drive/MyDrive/paper12_results/peft_capacity_sweep_summary.json`
+- Expected matrix: 10 methods x 1 EuroSAT `s2_full` modality x 3 seeds = 30 rows.
+
 Minimum design:
 
 - Dataset: EuroSAT `s2_full`, plus one harder setting such as LoveDA R->U or Linhe.
@@ -37,6 +47,7 @@ Decision rule:
 
 - If high-rank LoRA remains below smaller Houlsby, the architecture claim is stronger.
 - If high-rank LoRA catches up, revise the claim to capacity rather than method family.
+- Until these JSON files are returned and verified, manuscript language should treat the LoveDA capacity boundary as a supported hypothesis, not a general adapter-capacity rule.
 
 ### 3. Linhe label-quality validation
 
@@ -121,6 +132,7 @@ This is not required for the current claim, but it would reduce the limitation t
 - The methods define standard LoRA versus split-QKV LoRA.
 - The methods define the six-channel bridge boundary.
 - The EuroSAT channel-bridge notebook and config are aligned with the staged Prithvi checkpoint, and the rerun evidence is complete.
+- The EuroSAT PEFT capacity-sweep notebook and config are prepared, but the result JSON files are not yet manuscript evidence.
 - The Linhe section now treats Esri-derived labels as supervisory labels, not independent ground truth.
 - The LoveDA threshold is now framed as a supported hypothesis, not a universal rule.
 - The conclusion now includes Linhe/LoveDA and names the remaining evidence gaps.

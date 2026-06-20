@@ -1,6 +1,6 @@
 # Paper 12 LaTeX Draft
 
-**Title**: *How Well Do PEFT Methods Adapt Geospatial Foundation Models to Heterogeneous Inputs? A Systematic Evaluation on Prithvi-100M*
+**Title**: *Architecture-Aware Diagnosis of Parameter-Efficient Adaptation in Prithvi-100M: Fused-QKV Failure, Capacity Boundaries, and Cross-Domain Remote-Sensing Validation*
 
 ## Structure
 
@@ -61,7 +61,8 @@ All numerical values in tables and figures trace back to:
 
 - `paper12_results/loveda_full_finetune_u2r.json`, `paper12_results/loveda_full_finetune_r2u.json`, and `paper12_results/loveda_full_finetune_summary.json` - LoveDA two-direction full fine-tuning baseline (3 seeds per direction)
 - `paper12_results/eurosat_channel_bridge.json` and `paper12_results/eurosat_channel_bridge_summary.json` - EuroSAT channel-bridge rerun output after the checkpoint-path fix. These values are now manuscript-ready evidence.
+- `paper12_results/peft_capacity_sweep.json` and `paper12_results/peft_capacity_sweep_summary.json` - prepared EuroSAT parameter-capacity sweep outputs. These files are expected from `colab/paper12_peft_capacity_sweep_colab.ipynb` and should not be cited as completed evidence until returned from Colab.
 
 ## Status
 
-Current state: complete second-pass academic polish with formal citations, mechanism-level Discussion, full per-seed Appendix, and CVPR template variant. See `SUBMISSION_CHECKLIST.md` for remaining tasks before submission.
+Current state: ISPRS JPRS revision framing is updated around architecture-aware PEFT diagnosis. EuroSAT channel-bridge and LoveDA full fine-tuning evidence are complete; the PEFT capacity-sweep notebook/config are prepared and awaiting Colab execution before capacity-curve claims can be finalized. See `SUBMISSION_CHECKLIST.md` and `submission/paper12_isprs_jprs_20260606/REQUIRED_EXPERIMENTS_ISPRS.md` for remaining tasks before submission.

@@ -30,8 +30,10 @@ These items require author confirmation before the package is uploaded.
 
 ## Technical Checks
 
+- Run the prepared PEFT capacity-sweep notebook if this experiment will be included before submission: `colab/paper12_peft_capacity_sweep_colab.ipynb`.
+- After the capacity sweep completes, copy back and verify `/content/drive/MyDrive/paper12_results/peft_capacity_sweep.json` and `/content/drive/MyDrive/paper12_results/peft_capacity_sweep_summary.json`; do not cite the capacity curve as completed evidence until those files are present and checked.
 - Regenerate all figures from the latest result files.
-- Reconcile the conclusion count: the abstract mentions public benchmarks plus production and LoveDA; the conclusion currently says "109 total experiments" and should be checked against the latest expanded experiment count.
+- Reconcile experiment counts in the abstract, introduction, and conclusion against the latest expanded experiment set.
 - Check every table value against `paper12_results/summary.csv`, `results/eurosat_results.json`, and the Linhe/LoveDA result files.
 - Recheck that the LoveDA table values for the completed two-direction full fine-tuning baseline match `loveda_full_finetune_summary.json` and the two raw direction JSON files.
 - Verify the EuroSAT channel-bridge rerun JSON and summary against `paper12_results/eurosat_channel_bridge.json` and `paper12_results/eurosat_channel_bridge_summary.json` before final upload.

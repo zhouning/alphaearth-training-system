@@ -23,6 +23,20 @@ REQUIRED_EXPERIMENTS = (
     / "paper12_isprs_jprs_20260606"
     / "REQUIRED_EXPERIMENTS_ISPRS.md"
 )
+ACTION_REQUIRED = (
+    REPO_ROOT
+    / "submission"
+    / "paper12_isprs_jprs_20260606"
+    / "00_ACTION_REQUIRED.md"
+)
+SUBMISSION_METHOD_SECTION = (
+    REPO_ROOT
+    / "submission"
+    / "paper12_isprs_jprs_20260606"
+    / "02_latex_source"
+    / "sections"
+    / "method.tex"
+)
 MANUSCRIPT_LOVEDA_SECTION = REPO_ROOT / "paper12" / "sections" / "linhe_validation.tex"
 SUBMISSION_LOVEDA_SECTION = (
     REPO_ROOT
@@ -96,6 +110,26 @@ def test_required_experiments_tracks_colab_result_status():
     assert "LoveDA full fine-tuning U->R: completed" in text
     assert "LoveDA full fine-tuning R->U: completed" in text
     assert "The EuroSAT channel-bridge rerun has completed and produced a 12-row JSON plus summary." in text
+    assert "Prepared and awaiting Colab execution." in text
+    assert "colab/paper12_peft_capacity_sweep_colab.ipynb" in text
+    assert "peft_capacity_sweep_summary.json" in text
+    assert "not yet manuscript evidence" in text
+
+
+def test_capacity_sweep_is_prepared_but_not_marked_complete():
+    required = REQUIRED_EXPERIMENTS.read_text(encoding="utf-8")
+    action = ACTION_REQUIRED.read_text(encoding="utf-8")
+    method = SUBMISSION_METHOD_SECTION.read_text(encoding="utf-8")
+
+    assert "Capacity-Audit Extension Prepared for Revision" in method
+    assert "until the sweep is run" in method
+    assert "Prepared and awaiting Colab execution." in required
+    assert "PEFT capacity-sweep notebook and config are prepared" in required
+    assert "PEFT capacity sweep: completed" not in required
+    assert "PEFT capacity sweep: completed and manuscript-ready" not in required
+    assert "do not cite the capacity curve as completed evidence" in action
+    assert "peft_capacity_sweep.json" in action
+    assert "peft_capacity_sweep_summary.json" in action
 
 
 def test_loveda_table_includes_completed_full_finetuning_baseline():

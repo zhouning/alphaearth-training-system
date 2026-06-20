@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COLAB_DIR = ROOT / "colab"
 LOVE_OUT = COLAB_DIR / "paper12_loveda_full_finetune_colab.ipynb"
 EURO_OUT = COLAB_DIR / "paper12_eurosat_channel_bridge_colab.ipynb"
+CAPACITY_OUT = COLAB_DIR / "paper12_peft_capacity_sweep_colab.ipynb"
 PAPER12_RESULTS_BRANCH = "paper12-results-colab-20260619"
 
 
@@ -397,15 +398,187 @@ def eurosat_notebook() -> dict:
     )
 
 
+def capacity_sweep_notebook() -> dict:
+    return notebook(
+        [
+            markdown_cell(
+                """
+                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/paper12-results-colab-20260619/colab/paper12_peft_capacity_sweep_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+
+                # Paper 12 PEFT Capacity Sweep
+
+                This notebook runs the reviewer-strengthening EuroSAT capacity sweep for Paper 12. It compares split-QKV LoRA ranks against Houlsby bottleneck widths under the same Prithvi-100M checkpoint, dataset, modality, seeds, and metrics.
+
+                **Required runtime:** Colab Pro L4. A100 is faster but not required. T4 is acceptable only for a smoke run after reducing the matrix manually.
+
+                **Storage policy:** download EuroSAT to Colab local SSD under `/content/AlphaEarth-System/data/eurosat`, keep checkpoints under `/content/peft_capacity_sweep_runs`, and only persist result JSON files to `/content/drive/MyDrive/paper12_results`.
+
+                **Outputs written to Drive:**
+                - `peft_capacity_sweep.json`
+                - `peft_capacity_sweep_summary.json`
+
+                **Methods in this run:** `linear_probe`, `lora_split_qkv_r4`, `lora_split_qkv_r8`, `lora_split_qkv_r16`, `lora_split_qkv_r32`, `lora_split_qkv_r64`, `houlsby_d8`, `houlsby_d16`, `houlsby_d32`, `houlsby_d64`.
+
+                **Expected matrix:** 10 methods x 1 modality x 3 seeds = 30 rows.
+                """
+            ),
+            code_cell(
+                """
+                # 1. Mount Drive and create the results directory.
+                from google.colab import drive
+                drive.mount("/content/drive")
+
+                import os
+
+                RESULTS_DIR = "/content/drive/MyDrive/paper12_results"
+                os.makedirs(RESULTS_DIR, exist_ok=True)
+                print("Drive results directory:", RESULTS_DIR)
+                """
+            ),
+            code_cell(
+                """
+                # 2. GPU, Python, and disk sanity check.
+                !nvidia-smi
+                !python --version
+                !df -h /content
+                """
+            ),
+            code_cell(
+                """
+                # 3. Clone the Paper 12 results branch into local SSD.
+                %cd /content
+                !rm -rf /content/AlphaEarth-System
+                !git clone --branch paper12-results-colab-20260619 https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System
+                %cd /content/AlphaEarth-System
+                !git rev-parse --abbrev-ref HEAD
+                !git rev-parse HEAD
+                !git log --oneline -3
+                """
+            ),
+            code_cell(
+                """
+                # 4. Install the local package and notebook-only helpers.
+                %cd /content/AlphaEarth-System
+                !pip install -q -e . torchgeo pyyaml huggingface_hub
+                """
+            ),
+            code_cell(
+                """
+                # 5. Stage Prithvi weights at the path the benchmark expects.
+                %cd /content/AlphaEarth-System
+                import os
+                import shutil
+                from huggingface_hub import hf_hub_download
+
+                DRIVE_WEIGHTS = "/content/drive/MyDrive/Prithvi_100M.pt"
+                LOCAL_WEIGHTS = "/content/AlphaEarth-System/data/weights/prithvi/Prithvi_100M.pt"
+                os.makedirs(os.path.dirname(LOCAL_WEIGHTS), exist_ok=True)
+
+                if os.path.exists(DRIVE_WEIGHTS):
+                    shutil.copy(DRIVE_WEIGHTS, LOCAL_WEIGHTS)
+                    print("Copied Prithvi weights from Drive.")
+                elif not os.path.exists(LOCAL_WEIGHTS):
+                    downloaded = hf_hub_download(
+                        repo_id="ibm-nasa-geospatial/Prithvi-100M",
+                        filename="Prithvi_100M.pt",
+                    )
+                    shutil.copy(downloaded, LOCAL_WEIGHTS)
+                    print("Downloaded Prithvi weights from Hugging Face.")
+                else:
+                    print("Prithvi weights already present locally.")
+
+                !ls -lh /content/AlphaEarth-System/data/weights/prithvi
+                """
+            ),
+            code_cell(
+                """
+                # 6. Download the public EuroSAT cache into local SSD and smoke one sample per split.
+                %cd /content/AlphaEarth-System
+                EUROSAT_ROOT = "/content/AlphaEarth-System/data/eurosat"
+                !python scripts/download_public_datasets.py --dataset eurosat --eurosat-root data/eurosat --max-samples 1
+                !du -sh /content/AlphaEarth-System/data/eurosat
+                """
+            ),
+            code_cell(
+                """
+                # 7. Dry-run the full capacity-sweep matrix before training.
+                %cd /content/AlphaEarth-System
+                !python -m geoadapter.bench.run_benchmark --config geoadapter/bench/configs/eurosat_peft_capacity_sweep.yaml --dry-run
+                """
+            ),
+            code_cell(
+                """
+                # 8. Run the 10-method x 3-seed EuroSAT capacity sweep.
+                # The runner resumes from existing rows in peft_capacity_sweep.json if the Colab session restarts.
+                %cd /content/AlphaEarth-System
+                !mkdir -p /content/peft_capacity_sweep_runs
+                !python -m geoadapter.bench.run_benchmark --config geoadapter/bench/configs/eurosat_peft_capacity_sweep.yaml --output /content/drive/MyDrive/paper12_results/peft_capacity_sweep.json --checkpoint-dir /content/peft_capacity_sweep_runs --checkpoint-every 5
+                """
+            ),
+            code_cell(
+                """
+                # 9. Verify result counts, aggregate OA and macro-F1 by method, and persist a compact summary JSON to Drive.
+                import json
+                from collections import defaultdict
+                from pathlib import Path
+                from statistics import mean, stdev
+
+                results_dir = Path("/content/drive/MyDrive/paper12_results")
+                results_path = results_dir / "peft_capacity_sweep.json"
+                summary_path = results_dir / "peft_capacity_sweep_summary.json"
+
+                rows = json.loads(results_path.read_text(encoding="utf-8"))
+                expected_rows = 30
+                assert len(rows) == expected_rows, f"expected {expected_rows} rows, got {len(rows)}"
+
+                grouped = defaultdict(list)
+                for row in rows:
+                    grouped[row["method"]].append(row)
+
+                summary = {}
+                for method, method_rows in sorted(grouped.items()):
+                    oa = [float(row["overall_accuracy"]) for row in method_rows]
+                    f1 = [float(row["macro_f1"]) for row in method_rows]
+                    params = sorted({int(row["trainable_params"]) for row in method_rows})
+                    summary[method] = {
+                        "trainable_params": params[0] if len(params) == 1 else params,
+                        "overall_accuracy_mean": mean(oa),
+                        "overall_accuracy_std": stdev(oa) if len(oa) > 1 else 0.0,
+                        "macro_f1_mean": mean(f1),
+                        "macro_f1_std": stdev(f1) if len(f1) > 1 else 0.0,
+                        "seeds": [int(row["seed"]) for row in method_rows],
+                    }
+
+                for method, payload in summary.items():
+                    print(method, payload)
+
+                summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+                print("Wrote", summary_path)
+                """
+            ),
+        ]
+    )
+
+
 def main() -> None:
     COLAB_DIR.mkdir(parents=True, exist_ok=True)
     outputs = {
+        CAPACITY_OUT: capacity_sweep_notebook(),
         LOVE_OUT: loveda_notebook(),
         EURO_OUT: eurosat_notebook(),
     }
     for path, payload in outputs.items():
-        path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
-        print(f"[ok] wrote {path}")
+        rendered = json.dumps(payload, indent=1)
+        if path.exists() and path.read_text(encoding="utf-8") == rendered:
+            print(f"[ok] unchanged {path}")
+            continue
+        try:
+            path.write_text(rendered, encoding="utf-8")
+            print(f"[ok] wrote {path}")
+        except PermissionError:
+            if path == CAPACITY_OUT or not path.exists():
+                raise
+            print(f"[warn] skipped locked existing notebook {path}")
 
 
 if __name__ == "__main__":

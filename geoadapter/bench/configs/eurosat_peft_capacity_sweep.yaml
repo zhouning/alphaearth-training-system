@@ -1,0 +1,61 @@
+experiment:
+  name: eurosat_peft_capacity_sweep
+  dataset: eurosat
+  dataset_root: ./data/eurosat
+  epochs: 50
+  batch_size: 64
+  seeds: [42, 123, 456]
+
+modalities:
+  - preset: s2_full
+
+methods:
+  - name: linear_probe
+    adapter: zero_pad
+    peft: null
+  - name: lora_split_qkv_r4
+    adapter: zero_pad
+    peft: lora_split_qkv
+    rank: 4
+  - name: lora_split_qkv_r8
+    adapter: zero_pad
+    peft: lora_split_qkv
+    rank: 8
+  - name: lora_split_qkv_r16
+    adapter: zero_pad
+    peft: lora_split_qkv
+    rank: 16
+  - name: lora_split_qkv_r32
+    adapter: zero_pad
+    peft: lora_split_qkv
+    rank: 32
+  - name: lora_split_qkv_r64
+    adapter: zero_pad
+    peft: lora_split_qkv
+    rank: 64
+  - name: houlsby_d8
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 8
+  - name: houlsby_d16
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 16
+  - name: houlsby_d32
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 32
+  - name: houlsby_d64
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt
