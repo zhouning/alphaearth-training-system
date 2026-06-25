@@ -30,8 +30,8 @@ These items require author confirmation before the package is uploaded.
 
 ## Technical Checks
 
-- Run the prepared PEFT capacity-sweep notebook if this experiment will be included before submission: `colab/paper12_peft_capacity_sweep_colab.ipynb`.
-- After the capacity sweep completes, copy back and verify `/content/drive/MyDrive/paper12_results/peft_capacity_sweep.json` and `/content/drive/MyDrive/paper12_results/peft_capacity_sweep_summary.json`; do not cite the capacity curve as completed evidence until those files are present and checked.
+- Verify the completed PEFT capacity-sweep artifacts from `colab/paper12_peft_capacity_sweep_colab.ipynb`: `paper12_results/peft_capacity_sweep.json` and `paper12_results/peft_capacity_sweep_summary.json`.
+- Confirm both capacity-sweep files are mirrored into `06_supplementary_material/paper12_results/` before final upload.
 - Regenerate all figures from the latest result files.
 - Reconcile experiment counts in the abstract, introduction, and conclusion against the latest expanded experiment set.
 - Check every table value against `paper12_results/summary.csv`, `results/eurosat_results.json`, and the Linhe/LoveDA result files.

@@ -28,13 +28,13 @@ Purpose: separate method architecture from trainable-parameter budget.
 
 Current status:
 
-- Prepared and awaiting Colab execution.
+- PEFT capacity sweep: completed and manuscript-ready.
 - Config: `geoadapter/bench/configs/eurosat_peft_capacity_sweep.yaml`.
 - Notebook: `colab/paper12_peft_capacity_sweep_colab.ipynb`.
-- Expected output files:
+- Output files verified in `paper12_results/` and mirrored into `06_supplementary_material/paper12_results/`:
   - `/content/drive/MyDrive/paper12_results/peft_capacity_sweep.json`
   - `/content/drive/MyDrive/paper12_results/peft_capacity_sweep_summary.json`
-- Expected matrix: 10 methods x 1 EuroSAT `s2_full` modality x 3 seeds = 30 rows.
+- The EuroSAT PEFT capacity sweep has completed and produced a 30-row JSON plus summary.
 
 Minimum design:
 
@@ -47,7 +47,7 @@ Decision rule:
 
 - If high-rank LoRA remains below smaller Houlsby, the architecture claim is stronger.
 - If high-rank LoRA catches up, revise the claim to capacity rather than method family.
-- Until these JSON files are returned and verified, manuscript language should treat the LoveDA capacity boundary as a supported hypothesis, not a general adapter-capacity rule.
+- The completed sweep shows that split-QKV LoRA plateaus near 0.707 OA across ranks 4--64 even as trainable parameters rise from 302,602 to 4,726,282, whereas Houlsby rises from 0.864 OA at d=8 to 0.901 OA at d=64 with 164,458 to 1,197,322 parameters. The largest LoRA setting still trails the smallest Houlsby adapter by 15.6 OA points, so the gap is not explained by budget alone.
 
 ### 3. Linhe label-quality validation
 
@@ -132,8 +132,8 @@ This is not required for the current claim, but it would reduce the limitation t
 - The methods define standard LoRA versus split-QKV LoRA.
 - The methods define the six-channel bridge boundary.
 - The EuroSAT channel-bridge notebook and config are aligned with the staged Prithvi checkpoint, and the rerun evidence is complete.
-- The EuroSAT PEFT capacity-sweep notebook and config are prepared, but the result JSON files are not yet manuscript evidence.
+- The EuroSAT PEFT capacity-sweep notebook, config, raw 30-row JSON, and summary JSON are complete and manuscript-ready.
 - The Linhe section now treats Esri-derived labels as supervisory labels, not independent ground truth.
-- The LoveDA threshold is now framed as a supported hypothesis, not a universal rule.
+- The LoveDA threshold remains framed as Prithvi-specific evidence, now supported by the completed EuroSAT capacity sweep rather than left as a pending hypothesis.
 - The conclusion now includes Linhe/LoveDA and names the remaining evidence gaps.
 

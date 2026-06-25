@@ -1,0 +1,122 @@
+{
+    "houlsby_d16":  {
+                        "trainable_params":  312010,
+                        "overall_accuracy_mean":  0.88148148148148142,
+                        "overall_accuracy_std":  0.0033333333333333548,
+                        "macro_f1_mean":  0.876364389730794,
+                        "macro_f1_std":  0.00352215161705838,
+                        "seeds":  [
+                                      42,
+                                      123,
+                                      456
+                                  ]
+                    },
+    "houlsby_d32":  {
+                        "trainable_params":  607114,
+                        "overall_accuracy_mean":  0.89320987654320982,
+                        "overall_accuracy_std":  0.00095029656286055406,
+                        "macro_f1_mean":  0.88845077952192864,
+                        "macro_f1_std":  0.0011556446784318198,
+                        "seeds":  [
+                                      42,
+                                      123,
+                                      456
+                                  ]
+                    },
+    "houlsby_d64":  {
+                        "trainable_params":  1197322,
+                        "overall_accuracy_mean":  0.90074074074074073,
+                        "overall_accuracy_std":  0.0022452510468484975,
+                        "macro_f1_mean":  0.89649869576651753,
+                        "macro_f1_std":  0.0027711206842048189,
+                        "seeds":  [
+                                      42,
+                                      123,
+                                      456
+                                  ]
+                    },
+    "houlsby_d8":  {
+                       "trainable_params":  164458,
+                       "overall_accuracy_mean":  0.86444444444444446,
+                       "overall_accuracy_std":  0.0032128428838698714,
+                       "macro_f1_mean":  0.85866486261473207,
+                       "macro_f1_std":  0.0038739448654182096,
+                       "seeds":  [
+                                     42,
+                                     123,
+                                     456
+                                 ]
+                   },
+    "linear_probe":  {
+                         "trainable_params":  7690,
+                         "overall_accuracy_mean":  0.69308641975308627,
+                         "overall_accuracy_std":  0.0012330237256443423,
+                         "macro_f1_mean":  0.677352463333245,
+                         "macro_f1_std":  0.0023487654601654193,
+                         "seeds":  [
+                                       42,
+                                       123,
+                                       456
+                                   ]
+                     },
+    "lora_split_qkv_r16":  {
+                               "trainable_params":  1187338,
+                               "overall_accuracy_mean":  0.706851851851852,
+                               "overall_accuracy_std":  0.0012962962962962399,
+                               "macro_f1_mean":  0.69219379810178394,
+                               "macro_f1_std":  0.000802576438081613,
+                               "seeds":  [
+                                             42,
+                                             123,
+                                             456
+                                         ]
+                           },
+    "lora_split_qkv_r32":  {
+                               "trainable_params":  2366986,
+                               "overall_accuracy_mean":  0.70641975308641969,
+                               "overall_accuracy_std":  0.0016700925010455546,
+                               "macro_f1_mean":  0.69200534932299107,
+                               "macro_f1_std":  0.00088665292158685775,
+                               "seeds":  [
+                                             42,
+                                             123,
+                                             456
+                                         ]
+                           },
+    "lora_split_qkv_r4":  {
+                              "trainable_params":  302602,
+                              "overall_accuracy_mean":  0.708888888888889,
+                              "overall_accuracy_std":  0.0018238625558881954,
+                              "macro_f1_mean":  0.6944556932000574,
+                              "macro_f1_std":  0.0011731786753542809,
+                              "seeds":  [
+                                            42,
+                                            123,
+                                            456
+                                        ]
+                          },
+    "lora_split_qkv_r64":  {
+                               "trainable_params":  4726282,
+                               "overall_accuracy_mean":  0.70783950617283953,
+                               "overall_accuracy_std":  0.0022093247121201254,
+                               "macro_f1_mean":  0.69350113038992778,
+                               "macro_f1_std":  0.0017043438761689519,
+                               "seeds":  [
+                                             42,
+                                             123,
+                                             456
+                                         ]
+                           },
+    "lora_split_qkv_r8":  {
+                              "trainable_params":  597514,
+                              "overall_accuracy_mean":  0.70697530864197533,
+                              "overall_accuracy_std":  0.002906483300492234,
+                              "macro_f1_mean":  0.69246632813538211,
+                              "macro_f1_std":  0.0031531407081793928,
+                              "seeds":  [
+                                            42,
+                                            123,
+                                            456
+                                        ]
+                          }
+}

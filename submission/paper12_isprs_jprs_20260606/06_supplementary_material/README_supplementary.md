@@ -10,7 +10,7 @@ This directory contains reproducibility artifacts for the Paper 12 ISPRS JPRS su
 
 Note: `paper12_results/eurosat_channel_bridge*.json` is the rerun output after the checkpoint-path fix and can be cited as manuscript evidence once the package is uploaded.
 
-Pending: the prepared PEFT capacity sweep writes `paper12_results/peft_capacity_sweep.json` and `paper12_results/peft_capacity_sweep_summary.json` from `colab/paper12_peft_capacity_sweep_colab.ipynb`. Add and mirror those files only after the Colab run completes and the 30-row count is verified.
+Completed: `paper12_results/peft_capacity_sweep.json` and `paper12_results/peft_capacity_sweep_summary.json` are mirrored from `colab/paper12_peft_capacity_sweep_colab.ipynb` and are manuscript-ready once the package is uploaded.
 
 ## Recommended Supplementary Archive
 

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from statistics import mean, stdev
 
+import pytest
 import yaml
 
 
@@ -110,27 +111,66 @@ def test_required_experiments_tracks_colab_result_status():
     assert "LoveDA full fine-tuning U->R: completed" in text
     assert "LoveDA full fine-tuning R->U: completed" in text
     assert "The EuroSAT channel-bridge rerun has completed and produced a 12-row JSON plus summary." in text
-    assert "Prepared and awaiting Colab execution." in text
+    assert "PEFT capacity sweep: completed and manuscript-ready." in text
     assert "colab/paper12_peft_capacity_sweep_colab.ipynb" in text
     assert "peft_capacity_sweep_summary.json" in text
-    assert "not yet manuscript evidence" in text
+    assert "The EuroSAT PEFT capacity sweep has completed and produced a 30-row JSON plus summary." in text
 
 
-def test_capacity_sweep_is_prepared_but_not_marked_complete():
+def test_capacity_sweep_is_completed_and_marked_manuscript_ready():
     required = REQUIRED_EXPERIMENTS.read_text(encoding="utf-8")
     action = ACTION_REQUIRED.read_text(encoding="utf-8")
     method = SUBMISSION_METHOD_SECTION.read_text(encoding="utf-8")
 
-    assert "Capacity-Audit Extension Prepared for Revision" in method
-    assert "until the sweep is run" in method
-    assert "Prepared and awaiting Colab execution." in required
-    assert "PEFT capacity-sweep notebook and config are prepared" in required
-    assert "PEFT capacity sweep: completed" not in required
-    assert "PEFT capacity sweep: completed and manuscript-ready" not in required
-    assert "do not cite the capacity curve as completed evidence" in action
+    assert "Completed EuroSAT Capacity-Audit Extension" in method
+    assert "30-run EuroSAT capacity sweep" in method
+    assert "PEFT capacity sweep: completed and manuscript-ready." in required
+    assert "Prepared and awaiting Colab execution." not in required
+    assert "PEFT capacity-sweep notebook and config are prepared" not in required
+    assert "do not cite the capacity curve as completed evidence" not in action
     assert "peft_capacity_sweep.json" in action
     assert "peft_capacity_sweep_summary.json" in action
 
+
+def test_peft_capacity_sweep_summary_matches_raw_results():
+    rows = json.loads(
+        (PAPER12_RESULTS / "peft_capacity_sweep.json").read_text(encoding="utf-8")
+    )
+    summary = json.loads(
+        (PAPER12_RESULTS / "peft_capacity_sweep_summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    expected_methods = {
+        "linear_probe",
+        "lora_split_qkv_r4",
+        "lora_split_qkv_r8",
+        "lora_split_qkv_r16",
+        "lora_split_qkv_r32",
+        "lora_split_qkv_r64",
+        "houlsby_d8",
+        "houlsby_d16",
+        "houlsby_d32",
+        "houlsby_d64",
+    }
+
+    assert len(rows) == 30
+    assert set(summary) == expected_methods
+
+    for method in expected_methods:
+        method_rows = [row for row in rows if row["method"] == method]
+        assert [row["seed"] for row in method_rows] == [42, 123, 456]
+        assert summary[method]["seeds"] == [42, 123, 456]
+        params = {int(row["trainable_params"]) for row in method_rows}
+        assert len(params) == 1
+        assert summary[method]["trainable_params"] == params.pop()
+        oa = [float(row["overall_accuracy"]) for row in method_rows]
+        macro_f1 = [float(row["macro_f1"]) for row in method_rows]
+        assert summary[method]["overall_accuracy_mean"] == pytest.approx(mean(oa))
+        assert summary[method]["overall_accuracy_std"] == pytest.approx(stdev(oa))
+        assert summary[method]["macro_f1_mean"] == pytest.approx(mean(macro_f1))
+        assert summary[method]["macro_f1_std"] == pytest.approx(stdev(macro_f1))
 
 def test_loveda_table_includes_completed_full_finetuning_baseline():
     expected_row = (
@@ -165,6 +205,8 @@ def test_public_dataset_results_are_mirrored_in_supplementary_package():
     for name in [
         "eurosat_channel_bridge.json",
         "eurosat_channel_bridge_summary.json",
+        "peft_capacity_sweep.json",
+        "peft_capacity_sweep_summary.json",
         "loveda_full_finetune_r2u.json",
         "loveda_full_finetune_u2r.json",
         "loveda_full_finetune_summary.json",
