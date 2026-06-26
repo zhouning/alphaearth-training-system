@@ -85,6 +85,12 @@
                         </a>
                     </li>
                     <li>
+                        <a href="#" @click.prevent="currentTab = 'modelHub'" :class="currentTab === 'modelHub' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                            <span>模型中心</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="#" @click.prevent="currentTab = 'lulc'" :class="currentTab === 'lulc' ? 'tab-active' : 'tab-inactive'" class="flex items-center space-x-3 px-3 py-2 rounded-md transition-colors duration-200 cursor-pointer">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l7-3 7 3 4-2v14l-4 2-7-3-7 3V6zm7-3v14m7-11v14"></path></svg>
                             <span>LULC 工具</span>
@@ -405,6 +411,63 @@
                 </div>
             </div>
 
+            <!-- Model Hub Tab -->
+            <div v-show="currentTab === 'modelHub'" class="max-w-7xl mx-auto space-y-6">
+                <div class="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900">模型中心</h2>
+                        <p class="text-sm text-gray-500 mt-1">商业模型包目录、演示任务和可交付产物入口</p>
+                    </div>
+                    <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="loadingModelHubModels" @click="fetchModelHubModels">
+                        <svg class="w-4 h-4 inline-block mr-1" :class="loadingModelHubModels ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        {{ loadingModelHubModels ? '加载中...' : '刷新模型' }}
+                    </button>
+                </div>
+
+                <div v-if="modelHubStatus" class="border rounded-md px-3 py-2 text-sm" :class="modelHubStatus.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'">
+                    {{ modelHubStatus.message }}
+                </div>
+
+                <div v-if="loadingModelHubModels" class="p-12 text-center text-gray-500">
+                    <svg class="w-8 h-8 animate-spin mx-auto mb-2 text-primary" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    正在加载模型中心...
+                </div>
+
+                <div v-else-if="modelHubModels.length === 0" class="glass-card p-12 text-center text-gray-500">
+                    暂无模型包。
+                </div>
+
+                <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div v-for="model in modelHubModels" :key="model.model_id" class="glass-card p-5 flex flex-col gap-4 hover:shadow-md transition-shadow duration-200">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <h3 class="text-base font-semibold text-gray-900 break-words">{{ model.display_name }}</h3>
+                                <p class="text-xs text-gray-500 mt-1 data-font break-all">{{ model.model_id }} · {{ model.task_type }}</p>
+                            </div>
+                            <span class="px-2 py-1 rounded text-xs border shrink-0" :class="model.status === 'ready' ? 'bg-green-50 text-green-700 border-green-200' : (model.status === 'demo_only' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200')">{{ model.status }}</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
+                            <div><span class="text-gray-500">Backbone:</span> <span class="data-font text-gray-800">{{ model.backbone }}</span></div>
+                            <div><span class="text-gray-500">Adapter:</span> <span class="data-font text-gray-800">{{ model.adapter }}</span></div>
+                            <div class="sm:col-span-2"><span class="text-gray-500">Classes:</span> <span class="data-font text-gray-800 break-words">{{ (model.class_schema || []).join(', ') }}</span></div>
+                        </div>
+                        <div class="mt-auto flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                            <span class="text-xs text-gray-500">{{ isModelHubRunnable(model) ? '可运行演示' : '计划中' }}</span>
+                            <button class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" :disabled="!isModelHubRunnable(model) || runningModelHubJob" @click="runModelHubDemo(model)">
+                                {{ runningModelHubJob ? '运行中...' : '运行演示任务' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="modelHubJob" class="glass-card p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-gray-700">最近任务</h3>
+                        <span class="px-2 py-1 rounded text-xs border" :class="modelHubJob.status === 'succeeded' ? 'bg-green-50 text-green-700 border-green-200' : (modelHubJob.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200')">{{ modelHubJob.status }}</span>
+                    </div>
+                    <pre class="text-xs bg-gray-900 text-green-300 rounded p-3 overflow-auto max-h-80 data-font">{{ JSON.stringify(modelHubJob, null, 2) }}</pre>
+                </div>
+            </div>
             <!-- LULC Tool Tab -->
             <div v-show="currentTab === 'lulc'" class="max-w-7xl mx-auto space-y-6">
                 <div class="flex justify-between items-center">
@@ -752,6 +815,13 @@
             // Models refs
             const models = ref([]);
             const loadingModels = ref(false);
+
+            // Model Hub refs
+            const modelHubModels = ref([]);
+            const modelHubJob = ref(null);
+            const modelHubStatus = ref(null);
+            const loadingModelHubModels = ref(false);
+            const runningModelHubJob = ref(false);
 
             // LULC tool refs
             const lulcCapabilities = ref(null);
@@ -1236,6 +1306,61 @@
                 }
             };
 
+            const setModelHubStatus = (type, message) => {
+                modelHubStatus.value = { type, message };
+            };
+
+            const fetchModelHubModels = async () => {
+                loadingModelHubModels.value = true;
+                try {
+                    const res = await fetch('/api/ae/model-hub/models');
+                    if (!res.ok) throw new Error(await res.text());
+                    const body = await res.json();
+                    modelHubModels.value = body.models || [];
+                    setModelHubStatus('info', `已加载 ${modelHubModels.value.length} 个模型包。`);
+                } catch (e) {
+                    console.error('Failed to load model hub models', e);
+                    setModelHubStatus('error', '加载模型中心失败，请确认后端 /api/ae/model-hub/models 可访问。');
+                } finally {
+                    loadingModelHubModels.value = false;
+                }
+            };
+
+            const isModelHubRunnable = (model) => {
+                return model && [
+                    'lulc_6class_prithvi_houlsby',
+                    'semantic_change_prithvi',
+                ].includes(model.model_id);
+            };
+
+            const runModelHubDemo = async (model) => {
+                if (!isModelHubRunnable(model)) {
+                    setModelHubStatus('info', `${model.display_name} 仍在计划中。`);
+                    return;
+                }
+                const inputMode = model.model_id === 'semantic_change_prithvi' ? 'cached_demo' : 'demo_patch';
+                runningModelHubJob.value = true;
+                try {
+                    const res = await fetch('/api/ae/model-hub/jobs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model_id: model.model_id,
+                            input_mode: inputMode,
+                            options: { output_formats: ['png', 'geojson', 'csv'], top: 20 },
+                        }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    modelHubJob.value = await res.json();
+                    setModelHubStatus('info', `任务 ${modelHubJob.value.job_id} 状态：${modelHubJob.value.status}`);
+                } catch (e) {
+                    console.error('Failed to run model hub job', e);
+                    setModelHubStatus('error', '模型中心任务运行失败，请查看后端日志。');
+                } finally {
+                    runningModelHubJob.value = false;
+                }
+            };
+
             const setLulcStatus = (type, message) => {
                 lulcStatus.value = { type, message };
             };
@@ -1599,6 +1724,8 @@
                     if (areas.value.length === 0) fetchAreas();
                 } else if (newTab === 'models') {
                     fetchModels();
+                } else if (newTab === 'modelHub') {
+                    if (modelHubModels.value.length === 0) fetchModelHubModels();
                 } else if (newTab === 'lulc') {
                     if (!lulcCapabilities.value) fetchLulcModes();
                 } else if (newTab === 'demo') {
@@ -1615,6 +1742,7 @@
             });
 
             onMounted(() => {
+                fetchModelHubModels();
                 nextTick(() => {
                     initCharts();
                 });
@@ -1629,6 +1757,8 @@
                 isPipelineRunning, pipelineStatus, pipelineTaskId, startPipeline, inMemoryMode,
                 availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
+                modelHubModels, modelHubJob, modelHubStatus, loadingModelHubModels,
+                runningModelHubJob, fetchModelHubModels, isModelHubRunnable, runModelHubDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
                 lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
                 publicLulcForm, publicLulcResult, localLulcForm, localLulcFile, localLulcLabel,
