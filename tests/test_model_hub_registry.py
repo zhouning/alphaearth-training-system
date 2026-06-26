@@ -9,6 +9,8 @@ sys.path.insert(0, str(repo_root / "ae_backend"))
 
 from app.services.model_hub_registry import RegistryValidationError, load_model_registry
 
+REGISTRY_DATA_PATH = repo_root / "ae_backend" / "app" / "data" / "model_hub_models.json"
+
 
 def _model_record(model_id: str, *, task_type: str = "semantic_segmentation", status: str = "ready") -> dict:
     return {
@@ -78,3 +80,94 @@ def test_load_model_registry_requires_task_type(tmp_path: Path):
 
     with pytest.raises(RegistryValidationError, match="task_type"):
         load_model_registry(registry_path)
+
+
+def test_load_model_registry_rejects_invalid_status(tmp_path: Path):
+    registry_path = tmp_path / "model_hub_models.json"
+    _write_registry(registry_path, [_model_record("lulc_6class_prithvi_houlsby", status="retired")])
+
+    with pytest.raises(RegistryValidationError, match="status"):
+        load_model_registry(registry_path)
+
+
+def test_load_model_registry_requires_top_level_json_list(tmp_path: Path):
+    registry_path = tmp_path / "model_hub_models.json"
+    registry_path.write_text(json.dumps({"models": [_model_record("lulc_6class_prithvi_houlsby")]}), encoding="utf-8")
+
+    with pytest.raises(RegistryValidationError, match="JSON list"):
+        load_model_registry(registry_path)
+
+
+def test_load_model_registry_wraps_json_syntax_errors(tmp_path: Path):
+    registry_path = tmp_path / "model_hub_models.json"
+    registry_path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(RegistryValidationError, match="Invalid JSON"):
+        load_model_registry(registry_path)
+
+
+def test_load_model_registry_requires_checkpoint_path_field(tmp_path: Path):
+    registry_path = tmp_path / "model_hub_models.json"
+    record = _model_record("lulc_6class_prithvi_houlsby")
+    del record["checkpoint_path"]
+    _write_registry(registry_path, [record])
+
+    with pytest.raises(RegistryValidationError, match="checkpoint_path"):
+        load_model_registry(registry_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("input_spec", [["shape", "H x W x 3"]]),
+        ("output_spec", [["type", "class_mask"]]),
+        ("class_schema", "background"),
+        ("metrics", [["mIoU", 0.2971]]),
+        ("supported_sensors", "RGB"),
+        ("example_inputs", "examples/linhe_rgb.png"),
+    ],
+)
+def test_load_model_registry_rejects_invalid_container_field_types(tmp_path: Path, field: str, value: object):
+    registry_path = tmp_path / "model_hub_models.json"
+    record = _model_record("lulc_6class_prithvi_houlsby")
+    record[field] = value
+    _write_registry(registry_path, [record])
+
+    with pytest.raises(RegistryValidationError, match=field):
+        load_model_registry(registry_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("model_id", 123),
+        ("display_name", 123),
+        ("task_type", 123),
+        ("backbone", 123),
+        ("adapter", 123),
+        ("trained_region", 123),
+        ("license", 123),
+        ("checkpoint_path", 123),
+    ],
+)
+def test_load_model_registry_rejects_invalid_scalar_field_types(tmp_path: Path, field: str, value: object):
+    registry_path = tmp_path / "model_hub_models.json"
+    record = _model_record("lulc_6class_prithvi_houlsby")
+    record[field] = value
+    _write_registry(registry_path, [record])
+
+    with pytest.raises(RegistryValidationError, match=field):
+        load_model_registry(registry_path)
+
+
+def test_committed_model_hub_registry_loads_phase_1_models():
+    registry = load_model_registry(REGISTRY_DATA_PATH)
+
+    statuses = {model.model_id: model.status for model in registry.models}
+    assert statuses == {
+        "lulc_6class_prithvi_houlsby": "ready",
+        "building_extraction_prithvi": "planned",
+        "road_hardscape_prithvi": "planned",
+        "water_flood_prithvi": "planned",
+        "semantic_change_prithvi": "demo_only",
+    }

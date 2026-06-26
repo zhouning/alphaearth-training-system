@@ -12,6 +12,7 @@ REQUIRED_FIELDS = {
     "task_type",
     "backbone",
     "adapter",
+    "checkpoint_path",
     "input_spec",
     "output_spec",
     "class_schema",
@@ -28,6 +29,36 @@ VALID_STATUSES = {"ready", "demo_only", "planned", "not_configured"}
 
 class RegistryValidationError(ValueError):
     """Raised when model hub registry data is malformed."""
+
+
+def _require_string(record: dict[str, Any], field: str) -> str:
+    value = record[field]
+    if not isinstance(value, str):
+        raise RegistryValidationError(f"{field} must be a string")
+    return value
+
+
+def _require_optional_string(record: dict[str, Any], field: str) -> str | None:
+    value = record[field]
+    if value is not None and not isinstance(value, str):
+        raise RegistryValidationError(f"{field} must be a string or null")
+    return value
+
+
+def _require_dict(record: dict[str, Any], field: str) -> dict[str, Any]:
+    value = record[field]
+    if not isinstance(value, dict):
+        raise RegistryValidationError(f"{field} must be an object")
+    return dict(value)
+
+
+def _require_string_list(record: dict[str, Any], field: str) -> list[str]:
+    value = record[field]
+    if not isinstance(value, list):
+        raise RegistryValidationError(f"{field} must be a list")
+    if not all(isinstance(item, str) for item in value):
+        raise RegistryValidationError(f"{field} values must be strings")
+    return list(value)
 
 
 @dataclass(frozen=True)
@@ -57,37 +88,41 @@ class ModelHubEntry:
         if missing_fields:
             raise RegistryValidationError(f"Missing required field(s): {', '.join(missing_fields)}")
 
-        status = str(record["status"])
+        model_id = _require_string(record, "model_id")
+        display_name = _require_string(record, "display_name")
+        task_type = _require_string(record, "task_type")
+        backbone = _require_string(record, "backbone")
+        adapter = _require_string(record, "adapter")
+        checkpoint_path = _require_optional_string(record, "checkpoint_path")
+        input_spec = _require_dict(record, "input_spec")
+        output_spec = _require_dict(record, "output_spec")
+        class_schema = _require_string_list(record, "class_schema")
+        metrics = _require_dict(record, "metrics")
+        trained_region = _require_string(record, "trained_region")
+        supported_sensors = _require_string_list(record, "supported_sensors")
+        license = _require_string(record, "license")
+        status = _require_string(record, "status")
+        example_inputs = _require_string_list(record, "example_inputs")
+
         if status not in VALID_STATUSES:
-            raise RegistryValidationError(f"Invalid status for model_id {record['model_id']!r}: {status}")
+            raise RegistryValidationError(f"Invalid status for model_id {model_id!r}: {status}")
 
-        try:
-            input_spec = dict(record["input_spec"])
-            output_spec = dict(record["output_spec"])
-            class_schema = list(record["class_schema"])
-            metrics = dict(record["metrics"])
-            supported_sensors = list(record["supported_sensors"])
-            example_inputs = list(record["example_inputs"])
-        except (TypeError, ValueError) as exc:
-            raise RegistryValidationError(f"Invalid container field for model_id {record['model_id']!r}") from exc
-
-        checkpoint_path = record.get("checkpoint_path")
         return cls(
-            model_id=str(record["model_id"]),
-            display_name=str(record["display_name"]),
-            task_type=str(record["task_type"]),
-            backbone=str(record["backbone"]),
-            adapter=str(record["adapter"]),
-            checkpoint_path=None if checkpoint_path is None else str(checkpoint_path),
+            model_id=model_id,
+            display_name=display_name,
+            task_type=task_type,
+            backbone=backbone,
+            adapter=adapter,
+            checkpoint_path=checkpoint_path,
             input_spec=input_spec,
             output_spec=output_spec,
-            class_schema=[str(value) for value in class_schema],
+            class_schema=class_schema,
             metrics=metrics,
-            trained_region=str(record["trained_region"]),
-            supported_sensors=[str(value) for value in supported_sensors],
-            license=str(record["license"]),
+            trained_region=trained_region,
+            supported_sensors=supported_sensors,
+            license=license,
             status=status,
-            example_inputs=[str(value) for value in example_inputs],
+            example_inputs=example_inputs,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -127,17 +162,13 @@ class ModelHubRegistry:
 
 
 def load_model_registry(path: str | Path) -> ModelHubRegistry:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RegistryValidationError(f"Invalid JSON in model registry: {exc.msg}") from exc
+
     if not isinstance(data, list):
         raise RegistryValidationError("Model registry must be a JSON list")
 
-    entries: list[ModelHubEntry] = []
-    seen_model_ids: set[str] = set()
-    for record in data:
-        entry = ModelHubEntry.from_record(record)
-        if entry.model_id in seen_model_ids:
-            raise RegistryValidationError(f"Duplicate model_id: {entry.model_id}")
-        seen_model_ids.add(entry.model_id)
-        entries.append(entry)
-
+    entries = [ModelHubEntry.from_record(record) for record in data]
     return ModelHubRegistry(entries)
