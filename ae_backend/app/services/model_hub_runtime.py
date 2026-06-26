@@ -31,6 +31,10 @@ def _run_lulc_demo_patch(model_id: str, options: dict) -> dict:
 def run_model_hub_job(*, model_id: str, input_mode: str, options: dict) -> dict:
     if model_id == "lulc_6class_prithvi_houlsby" and input_mode == "demo_patch":
         return _run_lulc_demo_patch(model_id, options)
+    if model_id == "semantic_change_prithvi" and input_mode == "cached_demo":
+        from app.services.model_hub_change import summarize_cached_linhe_change
+
+        return summarize_cached_linhe_change(options=options)
     raise ModelHubRuntimeError(
         f"Unsupported model-hub job: model_id={model_id}, input_mode={input_mode}"
     )

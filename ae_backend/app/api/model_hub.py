@@ -63,8 +63,14 @@ def create_job(request: ModelHubJobRequest):
         options=request.options,
     )
     should_execute_now = (
-        request.model_id == "lulc_6class_prithvi_houlsby"
-        and request.input_mode == "demo_patch"
+        (
+            request.model_id == "lulc_6class_prithvi_houlsby"
+            and request.input_mode == "demo_patch"
+        )
+        or (
+            request.model_id == "semantic_change_prithvi"
+            and request.input_mode == "cached_demo"
+        )
     )
     if not should_execute_now:
         return JOB_STORE.get_job(job["job_id"])

@@ -111,3 +111,32 @@ def test_model_hub_runs_lulc_demo_patch_job(monkeypatch):
     assert body["status"] == "succeeded"
     assert body["result"]["summary"]["class_area_fraction"]["crops"] == 1.0
     assert body["logs"][-1] == "ran fake LULC runtime"
+
+
+def test_model_hub_runs_cached_change_job(monkeypatch, tmp_path: Path):
+    from app.main import app
+    import app.services.model_hub_change as change_service
+
+    change_dir = tmp_path / "linhe_change"
+    pair_dir = change_dir / "2025Q1_vs_2025Q4"
+    pair_dir.mkdir(parents=True)
+    (change_dir / "change_heatmap_2025Q1_vs_2025Q4.geojson").write_text(
+        '{"type":"FeatureCollection","features":[]}',
+        encoding="utf-8",
+    )
+
+    def fake_default_change_dir():
+        return change_dir
+
+    monkeypatch.setattr(change_service, "default_change_dir", fake_default_change_dir)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={"model_id": "semantic_change_prithvi", "input_mode": "cached_demo", "options": {"top": 10}},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["result"]["task"] == "change_detection"
