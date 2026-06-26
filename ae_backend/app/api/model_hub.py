@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.core.config import PROJECT_ROOT
 from app.services.model_hub_jobs import ModelHubJobStore
 from app.services.model_hub_registry import ModelHubRegistry, load_model_registry
+from app.services.model_hub_runtime import ModelHubRuntimeError, run_model_hub_job
 
 
 router = APIRouter()
@@ -55,11 +56,37 @@ def create_job(request: ModelHubJobRequest):
             status_code=404,
             detail=f"Unknown model_id: {request.model_id}",
         ) from exc
-    return JOB_STORE.create_job(
+
+    job = JOB_STORE.create_job(
         model_id=request.model_id,
         input_mode=request.input_mode,
         options=request.options,
     )
+    should_execute_now = (
+        request.model_id == "lulc_6class_prithvi_houlsby"
+        and request.input_mode == "demo_patch"
+    )
+    if not should_execute_now:
+        return JOB_STORE.get_job(job["job_id"])
+
+    try:
+        JOB_STORE.mark_running(job["job_id"], log="job accepted")
+        runtime_result = run_model_hub_job(
+            model_id=request.model_id,
+            input_mode=request.input_mode,
+            options=request.options,
+        )
+        JOB_STORE.mark_succeeded(
+            job["job_id"],
+            result=runtime_result["result"],
+            artifacts=runtime_result["artifacts"],
+            log=runtime_result["logs"][-1] if runtime_result.get("logs") else "job finished",
+        )
+    except ModelHubRuntimeError as exc:
+        JOB_STORE.mark_failed(job["job_id"], error=str(exc))
+    except Exception as exc:
+        JOB_STORE.mark_failed(job["job_id"], error=str(exc))
+    return JOB_STORE.get_job(job["job_id"])
 
 
 @router.get("/jobs/{job_id}")

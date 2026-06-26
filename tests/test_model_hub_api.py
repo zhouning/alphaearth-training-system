@@ -79,3 +79,35 @@ def test_model_hub_rejects_unknown_job_model():
 
     assert response.status_code == 404
     assert "not-a-model" in response.json()["detail"]
+
+
+def test_model_hub_runs_lulc_demo_patch_job(monkeypatch):
+    from app.main import app
+    import app.api.model_hub as model_hub_api
+
+    def fake_run_model_hub_job(*, model_id, input_mode, options):
+        assert model_id == "lulc_6class_prithvi_houlsby"
+        assert input_mode == "demo_patch"
+        return {
+            "result": {
+                "task": "lulc_segmentation",
+                "model_id": model_id,
+                "summary": {"class_area_fraction": {"crops": 1.0}},
+            },
+            "artifacts": [{"kind": "json", "path": "inline"}],
+            "logs": ["ran fake LULC runtime"],
+        }
+
+    monkeypatch.setattr(model_hub_api, "run_model_hub_job", fake_run_model_hub_job)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={"model_id": "lulc_6class_prithvi_houlsby", "input_mode": "demo_patch", "options": {}},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["result"]["summary"]["class_area_fraction"]["crops"] == 1.0
+    assert body["logs"][-1] == "ran fake LULC runtime"
