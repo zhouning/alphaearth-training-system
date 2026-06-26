@@ -1,0 +1,130 @@
+[
+  {
+    "model_id": "lulc_6class_prithvi_houlsby",
+    "display_name": "Linhe 6-Class LULC (Prithvi + Houlsby)",
+    "task_type": "semantic_segmentation",
+    "backbone": "Prithvi",
+    "adapter": "Houlsby",
+    "checkpoint_path": "linhe_lulc/houlsby__rgb_3band__seed123.pt",
+    "input_spec": {
+      "modalities": ["RGB"],
+      "bands": 3,
+      "patch_size": "variable",
+      "normalization": "uint8_0_255_to_float_0_1"
+    },
+    "output_spec": {
+      "type": "class_mask",
+      "classes": 6
+    },
+    "class_schema": ["background", "built", "crops", "trees", "water", "rangeland_bare"],
+    "metrics": {
+      "mIoU": 0.2971,
+      "source": "linhe_results/linhe_lulc_seg.json"
+    },
+    "trained_region": "Linhe",
+    "supported_sensors": ["RGB"],
+    "license": "research_demo",
+    "status": "ready",
+    "example_inputs": ["examples/linhe_rgb_patch.png"]
+  },
+  {
+    "model_id": "building_extraction_prithvi",
+    "display_name": "Building Extraction (Prithvi)",
+    "task_type": "binary_segmentation",
+    "backbone": "Prithvi",
+    "adapter": "planned",
+    "checkpoint_path": null,
+    "input_spec": {
+      "modalities": ["RGB"],
+      "bands": 3,
+      "patch_size": "variable"
+    },
+    "output_spec": {
+      "type": "binary_mask",
+      "classes": 2
+    },
+    "class_schema": ["background", "building"],
+    "metrics": {
+      "label_source": "OSM weak supervision"
+    },
+    "trained_region": "not_configured",
+    "supported_sensors": ["RGB"],
+    "license": "research_demo",
+    "status": "planned",
+    "example_inputs": ["examples/building_rgb_patch.png"]
+  },
+  {
+    "model_id": "road_hardscape_prithvi",
+    "display_name": "Road and Hardscape Segmentation (Prithvi)",
+    "task_type": "semantic_segmentation",
+    "backbone": "Prithvi",
+    "adapter": "planned",
+    "checkpoint_path": null,
+    "input_spec": {
+      "modalities": ["RGB"],
+      "bands": 3,
+      "patch_size": "variable"
+    },
+    "output_spec": {
+      "type": "class_mask",
+      "classes": 2
+    },
+    "class_schema": ["background", "road_hardscape"],
+    "metrics": {},
+    "trained_region": "not_configured",
+    "supported_sensors": ["RGB"],
+    "license": "research_demo",
+    "status": "planned",
+    "example_inputs": ["examples/road_rgb_patch.png"]
+  },
+  {
+    "model_id": "water_flood_prithvi",
+    "display_name": "Water and Flood Candidate Segmentation (Prithvi)",
+    "task_type": "semantic_segmentation",
+    "backbone": "Prithvi",
+    "adapter": "planned",
+    "checkpoint_path": null,
+    "input_spec": {
+      "modalities": ["RGB", "Sentinel-2", "SAR"],
+      "patch_size": "variable"
+    },
+    "output_spec": {
+      "type": "class_mask",
+      "classes": 3
+    },
+    "class_schema": ["background", "water", "flood_candidate"],
+    "metrics": {},
+    "trained_region": "not_configured",
+    "supported_sensors": ["RGB", "Sentinel-2", "SAR"],
+    "license": "research_demo",
+    "status": "planned",
+    "example_inputs": ["examples/water_flood_patch.png"]
+  },
+  {
+    "model_id": "semantic_change_prithvi",
+    "display_name": "Semantic Change Detection (Prithvi Demo)",
+    "task_type": "change_detection",
+    "backbone": "Prithvi",
+    "adapter": "PCA demo head",
+    "checkpoint_path": null,
+    "input_spec": {
+      "modalities": ["RGB", "Sentinel-2"],
+      "temporal_inputs": 2,
+      "patch_size": "variable"
+    },
+    "output_spec": {
+      "type": "change_mask",
+      "classes": 2
+    },
+    "class_schema": ["unchanged", "changed"],
+    "metrics": {
+      "top_pca_score": 0.386,
+      "source": "results/linhe_change"
+    },
+    "trained_region": "Linhe",
+    "supported_sensors": ["RGB", "Sentinel-2"],
+    "license": "research_demo",
+    "status": "demo_only",
+    "example_inputs": ["examples/linhe_change_pair.json"]
+  }
+]
