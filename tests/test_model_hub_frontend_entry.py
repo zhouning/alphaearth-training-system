@@ -42,3 +42,5 @@ def test_frontend_exposes_metadata_driven_crop_raster_demo_controls():
     assert "isModelHubRunnable(model) || supportsModelHubRasterDemo(model)" in html
     assert "modelHubJob.value.status === 'failed'" in html
     assert "modelHubJob.value.error" in html
+    assert "HTTP ${res.status}" in html
+    assert "res.statusText" in html

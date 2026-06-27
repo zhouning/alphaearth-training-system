@@ -1411,7 +1411,12 @@
                             },
                         }),
                     });
-                    if (!res.ok) throw new Error(await res.text());
+                    if (!res.ok) {
+                        const body = await res.text();
+                        const statusText = res.statusText ? ` ${res.statusText}` : '';
+                        const httpDetail = `HTTP ${res.status}${statusText}`;
+                        throw new Error(body ? `${httpDetail}: ${body}` : httpDetail);
+                    }
                     modelHubJob.value = await res.json();
                     if (modelHubJob.value.status === 'failed') {
                         const detail = modelHubJob.value.error ? `：${modelHubJob.value.error}` : '';
