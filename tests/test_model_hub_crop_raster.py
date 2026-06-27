@@ -88,3 +88,50 @@ def test_validate_prithvi_crop_raster_rejects_missing_transform(tmp_path: Path):
 
     with pytest.raises(ModelHubRuntimeError, match="requires georeferencing transform"):
         validate_prithvi_crop_raster(raster_path)
+
+
+def test_run_prithvi_crop_raster_demo_writes_gis_artifacts(tmp_path: Path):
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(tmp_path / "crop_18band.tif", bands=18, width=12, height=10)
+    output_dir = tmp_path / "outputs"
+
+    result = run_prithvi_crop_raster_demo(
+        options={
+            "raster_path": str(raster_path),
+            "output_dir": str(output_dir),
+            "tile_size": 6,
+            "stride": 6,
+        }
+    )
+
+    assert result["result"]["task"] == "crop_classification"
+    assert result["result"]["input_mode"] == "upload_raster_demo"
+    assert result["result"]["validation"]["band_count"] == 18
+    assert result["result"]["summary"]["dominant_class"] in result["result"]["model_package"]["class_schema"]
+    artifact_by_kind = {artifact["kind"]: Path(artifact["path"]) for artifact in result["artifacts"]}
+    assert {"geotiff", "csv", "geojson", "manifest"}.issubset(artifact_by_kind)
+    assert artifact_by_kind["geotiff"].exists()
+    assert artifact_by_kind["csv"].exists()
+    assert artifact_by_kind["geojson"].exists()
+    assert artifact_by_kind["manifest"].exists()
+
+    with rasterio.open(artifact_by_kind["geotiff"]) as classified:
+        assert classified.count == 1
+        assert classified.width == 12
+        assert classified.height == 10
+        assert classified.crs.to_string() == "EPSG:4326"
+
+
+def test_run_prithvi_crop_raster_demo_logs_validation_and_contract_runtime(tmp_path: Path):
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(tmp_path / "crop_18band.tif", bands=18)
+
+    result = run_prithvi_crop_raster_demo(
+        options={"raster_path": str(raster_path), "output_dir": str(tmp_path / "outputs")}
+    )
+
+    assert any("validated 18-band Prithvi crop raster" in log for log in result["logs"])
+    assert any("deterministic tiled crop classification" in log for log in result["logs"])
+    assert any("no real Prithvi checkpoint" in log for log in result["logs"])

@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import csv
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
 from affine import Affine
+import numpy as np
 import rasterio
 from rasterio.errors import RasterioIOError
+from rasterio.features import shapes
+from rasterio.windows import Window
 
+from app.core.config import PROJECT_ROOT
 from app.services.model_hub_runtime import ModelHubRuntimeError
+from app.services.raster_pipeline import (
+    compute_class_area_summary,
+    make_tile_grid,
+    stitch_class_tiles,
+)
 
 
 CROP_RASTER_MODEL_ID = "prithvi_crop_classification_arcgis_style"
@@ -48,8 +60,143 @@ CROP_RASTER_BAND_ORDER = [
 ]
 
 
+_ARTIFACT_FILENAMES = {
+    "geotiff": "classified_crop.tif",
+    "csv": "crop_summary.csv",
+    "geojson": "crop_polygons.geojson",
+    "manifest": "manifest.json",
+    "png": "crop_preview.png",
+}
+
+
+_CLASS_COLORS = np.array(
+    [
+        [65, 134, 82],
+        [20, 92, 47],
+        [239, 197, 74],
+        [84, 158, 82],
+        [75, 139, 178],
+        [172, 151, 124],
+        [47, 95, 174],
+        [196, 219, 132],
+        [96, 184, 126],
+        [205, 188, 143],
+        [222, 222, 186],
+        [190, 117, 74],
+        [130, 130, 130],
+    ],
+    dtype=np.uint8,
+)
+
+
 def _as_jsonable_bounds(bounds: Any) -> list[float]:
     return [float(bounds.left), float(bounds.bottom), float(bounds.right), float(bounds.top)]
+
+
+def _default_output_dir(raster_path: Path) -> Path:
+    fingerprint = hashlib.sha256(str(raster_path.resolve()).encode("utf-8")).hexdigest()[:10]
+    return (
+        Path(PROJECT_ROOT)
+        / "results"
+        / "model_hub"
+        / "prithvi_crop_runs"
+        / f"{raster_path.stem}-{fingerprint}"
+    )
+
+
+def _class_id(class_name: str) -> int:
+    return CROP_RASTER_CLASSES.index(class_name)
+
+
+def _safe_ratio(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+    return numerator / np.where(np.abs(denominator) < 1e-6, 1e-6, denominator)
+
+
+def _classify_tile(tile: np.ndarray, *, tile_index: int) -> np.ndarray:
+    tile_data = np.asarray(tile, dtype=np.float32)
+    if tile_data.ndim != 3 or tile_data.shape[0] < 18:
+        raise ModelHubRuntimeError("Prithvi crop tile classification requires 18 bands")
+
+    blue = tile_data[[0, 6, 12]].mean(axis=0)
+    green = tile_data[[1, 7, 13]].mean(axis=0)
+    red = tile_data[[2, 8, 14]].mean(axis=0)
+    nir = tile_data[[3, 9, 15]].mean(axis=0)
+    swir = tile_data[[4, 5, 10, 11, 16, 17]].mean(axis=0)
+    ndvi = _safe_ratio(nir - red, nir + red)
+    ndwi = _safe_ratio(green - nir, green + nir)
+    brightness = (blue + green + red + nir + swir) / 5.0
+
+    rows, cols = np.indices(red.shape)
+    spatial_score = rows * 3 + cols * 5 + tile_index * 7
+    spectral_score = np.floor((brightness + ndvi + 1.0) * 100.0).astype(np.int32)
+    class_mask = ((spectral_score + spatial_score) % len(CROP_RASTER_CLASSES)).astype(np.uint8)
+
+    class_mask = np.where(ndwi > 0.2, _class_id("open_water"), class_mask)
+    class_mask = np.where((ndvi > 0.35) & (swir < nir), _class_id("forest"), class_mask)
+    class_mask = np.where((ndvi > 0.2) & (brightness > 0.35), _class_id("corn"), class_mask)
+    class_mask = np.where((brightness > 0.7) & (ndvi < 0.12), _class_id("developed_barren"), class_mask)
+    return class_mask.astype(np.uint8)
+
+
+def _write_classified_geotiff(
+    output_path: Path,
+    *,
+    mask: np.ndarray,
+    source_profile: dict,
+) -> None:
+    profile = dict(source_profile)
+    profile.update(
+        driver="GTiff",
+        count=1,
+        dtype="uint8",
+        nodata=255,
+        compress="deflate",
+    )
+    with rasterio.open(output_path, "w", **profile) as dst:
+        dst.write(mask.astype(np.uint8), 1)
+
+
+def _write_summary_csv(output_path: Path, summary: dict) -> None:
+    with output_path.open("w", encoding="utf-8", newline="") as summary_file:
+        writer = csv.DictWriter(summary_file, fieldnames=["class", "pixels", "fraction"])
+        writer.writeheader()
+        for class_name in CROP_RASTER_CLASSES:
+            writer.writerow(
+                {
+                    "class": class_name,
+                    "pixels": summary["class_pixel_counts"][class_name],
+                    "fraction": f'{summary["class_area_fraction"][class_name]:.6f}',
+                }
+            )
+
+
+def _write_geojson(output_path: Path, *, mask: np.ndarray, transform: Affine) -> None:
+    features = []
+    for geometry, value in shapes(mask.astype(np.uint8), transform=transform):
+        class_id = int(value)
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {
+                    "class_id": class_id,
+                    "class_name": CROP_RASTER_CLASSES[class_id],
+                },
+                "geometry": geometry,
+            }
+        )
+    feature_collection = {"type": "FeatureCollection", "features": features}
+    output_path.write_text(json.dumps(feature_collection, indent=2), encoding="utf-8")
+
+
+def _write_preview_png(output_path: Path, *, mask: np.ndarray) -> None:
+    from PIL import Image
+
+    preview = _CLASS_COLORS[mask.astype(np.uint8)]
+    Image.fromarray(preview, mode="RGB").save(output_path)
+
+
+def _write_manifest(output_path: Path, *, manifest: dict) -> None:
+    output_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
 def validate_prithvi_crop_raster(raster_path: str | Path) -> dict:
@@ -85,3 +232,102 @@ def validate_prithvi_crop_raster(raster_path: str | Path) -> dict:
             }
     except RasterioIOError as exc:
         raise ModelHubRuntimeError(f"Could not open Prithvi crop raster: {path}") from exc
+
+
+def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
+    raster_path_value = options.get("raster_path")
+    if not raster_path_value:
+        raise ModelHubRuntimeError("raster_path is required for upload_raster_demo")
+
+    raster_path = Path(raster_path_value)
+    validation = validate_prithvi_crop_raster(raster_path)
+    output_dir = Path(options.get("output_dir") or _default_output_dir(raster_path))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    tile_size = int(options.get("tile_size") or 224)
+    stride = int(options.get("stride") or tile_size)
+    logs = [
+        f"validated 18-band Prithvi crop raster from {raster_path}",
+        "using deterministic tiled crop classification; no real Prithvi checkpoint was loaded",
+    ]
+
+    with rasterio.open(raster_path) as src:
+        tiles = make_tile_grid(src.width, src.height, tile_size, stride)
+        tile_masks = []
+        for tile_index, window in enumerate(tiles):
+            raster_window = Window(
+                col_off=window["x0"],
+                row_off=window["y0"],
+                width=window["x1"] - window["x0"],
+                height=window["y1"] - window["y0"],
+            )
+            tile = src.read(window=raster_window, boundless=False)
+            tile_masks.append((window, _classify_tile(tile, tile_index=tile_index)))
+        mask = stitch_class_tiles(
+            width=src.width,
+            height=src.height,
+            tiles=tile_masks,
+            fill_value=_class_id("other"),
+        )
+        source_profile = dict(src.profile)
+        source_transform = src.transform
+
+    summary = compute_class_area_summary(mask, CROP_RASTER_CLASSES)
+    dominant_class = max(summary["class_pixel_counts"], key=summary["class_pixel_counts"].get)
+    summary["dominant_class"] = dominant_class
+    summary["method"] = "deterministic tiled crop classification demo"
+    summary["tile_count"] = len(tiles)
+
+    classified_tif = output_dir / _ARTIFACT_FILENAMES["geotiff"]
+    summary_csv = output_dir / _ARTIFACT_FILENAMES["csv"]
+    polygons_geojson = output_dir / _ARTIFACT_FILENAMES["geojson"]
+    manifest_json = output_dir / _ARTIFACT_FILENAMES["manifest"]
+    preview_png = output_dir / _ARTIFACT_FILENAMES["png"]
+
+    artifacts = [
+        {"kind": "geotiff", "path": str(classified_tif)},
+        {"kind": "csv", "path": str(summary_csv)},
+        {"kind": "geojson", "path": str(polygons_geojson)},
+        {"kind": "manifest", "path": str(manifest_json)},
+    ]
+
+    _write_classified_geotiff(classified_tif, mask=mask, source_profile=source_profile)
+    _write_summary_csv(summary_csv, summary)
+    _write_geojson(polygons_geojson, mask=mask, transform=source_transform)
+    try:
+        _write_preview_png(preview_png, mask=mask)
+    except (ImportError, OSError, ValueError) as exc:
+        logs.append(f"skipped PNG preview at {preview_png}: {exc}")
+    else:
+        artifacts.append({"kind": "png", "path": str(preview_png)})
+
+    model_package = {
+        "package_type": "arcgis_style_pretrained_imagery_model",
+        "family": "prithvi_crop_classification",
+        "runtime_mode": "upload_raster_demo",
+        "class_schema": list(CROP_RASTER_CLASSES),
+    }
+    result = {
+        "task": "crop_classification",
+        "model_id": CROP_RASTER_MODEL_ID,
+        "input_mode": "upload_raster_demo",
+        "validation": validation,
+        "summary": summary,
+        "model_package": model_package,
+    }
+    manifest = {
+        "model_id": CROP_RASTER_MODEL_ID,
+        "input_mode": "upload_raster_demo",
+        "source_raster": str(raster_path),
+        "validation": validation,
+        "tile_grid": {"tile_size": tile_size, "stride": stride, "tiles": tiles},
+        "artifacts": artifacts,
+        "limitations": [
+            "Deterministic demo classification only.",
+            "No real Prithvi checkpoint was loaded.",
+            "Class IDs are generated from lightweight spectral and spatial rules.",
+        ],
+    }
+    _write_manifest(manifest_json, manifest=manifest)
+
+    return {"result": result, "artifacts": artifacts, "logs": logs}
