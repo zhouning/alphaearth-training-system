@@ -108,69 +108,96 @@
     "adapter": "crop classification head contract",
     "checkpoint_path": null,
     "input_spec": {
-      "modalities": ["multiband_composite"],
-      "bands": "multiband_crop_composite",
-      "patch_size": "variable",
+      "modalities": ["HLS_multitemporal"],
+      "bands": 18,
+      "patch_size": "224 recommended; variable raster accepted for tiled demo",
       "default_demo_input_mode": "cached_demo",
+      "supported_job_input_modes": ["cached_demo", "upload_raster_demo"],
       "normalization": "model_package_defined"
     },
     "output_spec": {
       "type": "categorical_crop_raster",
       "classes": 13,
-      "formats": ["png", "geojson", "csv"]
+      "formats": ["geotiff", "png", "geojson", "csv", "manifest"]
     },
     "class_schema": [
-      "background",
-      "maize",
-      "rice",
-      "wheat",
-      "soybean",
+      "natural_vegetation",
+      "forest",
+      "corn",
+      "soybeans",
+      "wetlands",
+      "developed_barren",
+      "open_water",
+      "winter_wheat",
+      "alfalfa",
+      "fallow_idle_cropland",
       "cotton",
-      "rapeseed",
-      "vegetables",
-      "orchard",
-      "greenhouse",
-      "fallow",
-      "water",
-      "built_or_bare"
+      "sorghum",
+      "other"
     ],
     "metrics": {
       "readiness": "demo_contract_only",
       "validated_accuracy": null
     },
     "trained_region": "demo contract; no production crop checkpoint configured",
-    "supported_sensors": ["multiband crop composite", "future Sentinel-2/HLS composite"],
+    "supported_sensors": ["HLS 3-timestep 18-band composite", "future Sentinel-2/HLS composite"],
     "license": "research_demo",
     "status": "demo_only",
     "example_inputs": ["examples/prithvi_crop_cached_demo.json"],
     "package_profile": {
       "package_type": "arcgis_style_pretrained_imagery_model",
       "family": "prithvi_crop_classification",
-      "runtime_modes": ["cached_demo"],
+      "runtime_modes": ["cached_demo", "upload_raster_demo"],
       "input_profile": {
-        "raster_profile": "multiband_crop_composite",
+        "raster_profile": "18_band_hls_multitemporal_composite",
         "requires_georeferencing": true,
         "requires_crop_season_composite": true,
-        "notes": "Demo contract only; real Prithvi crop-head inference is a later phase."
+        "band_order": [
+          "t1_blue",
+          "t1_green",
+          "t1_red",
+          "t1_narrow_nir",
+          "t1_swir1",
+          "t1_swir2",
+          "t2_blue",
+          "t2_green",
+          "t2_red",
+          "t2_narrow_nir",
+          "t2_swir1",
+          "t2_swir2",
+          "t3_blue",
+          "t3_green",
+          "t3_red",
+          "t3_narrow_nir",
+          "t3_swir1",
+          "t3_swir2"
+        ],
+        "notes": "Phase 3 validates local GeoTIFF inputs and runs deterministic contract inference only."
       },
       "output_profile": {
         "primary_output": "categorical crop raster",
-        "artifacts": ["preview_png", "crop_polygons_geojson", "area_summary_csv"],
+        "artifacts": [
+          "classified_raster_geotiff",
+          "preview_png",
+          "crop_polygons_geojson",
+          "area_summary_csv",
+          "arcgis_style_manifest_json"
+        ],
         "class_count": 13
       },
       "applicability": {
         "readiness": "demo_contract_only",
-        "region": "not production validated",
+        "region": "real ArcGIS/Prithvi model expected to work well in the United States; local runtime is not accuracy validated",
         "limitations": [
           "No crop checkpoint is wired in this phase.",
           "No ArcGIS .dlpk compatibility is claimed.",
-          "Cached demo results are deterministic product-contract artifacts."
+          "Raster demo results are deterministic product-contract artifacts."
         ]
       },
       "model_card": {
-        "summary": "ArcGIS-style Prithvi crop classification package contract for Model Hub demos.",
-        "usage": "Run cached_demo to inspect result schema, crop class summaries, and GIS artifact manifests.",
-        "next_step": "Attach a validated Prithvi crop head and multiband raster preprocessing pipeline."
+        "summary": "ArcGIS-style Prithvi crop classification package contract for 18-band raster demos.",
+        "usage": "Run cached_demo for a quick schema check or upload_raster_demo with a local 18-band GeoTIFF path.",
+        "next_step": "Attach a validated Prithvi crop head and managed upload pipeline."
       }
     }
   },

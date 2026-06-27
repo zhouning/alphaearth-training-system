@@ -220,7 +220,38 @@ def test_committed_model_hub_registry_loads_prithvi_crop_package():
     assert crop["task_type"] == "crop_classification"
     assert crop["status"] == "demo_only"
     assert crop["input_spec"]["default_demo_input_mode"] == "cached_demo"
-    assert "maize" in crop["class_schema"]
+    assert crop["input_spec"]["supported_job_input_modes"] == [
+        "cached_demo",
+        "upload_raster_demo",
+    ]
+    assert crop["class_schema"] == [
+        "natural_vegetation",
+        "forest",
+        "corn",
+        "soybeans",
+        "wetlands",
+        "developed_barren",
+        "open_water",
+        "winter_wheat",
+        "alfalfa",
+        "fallow_idle_cropland",
+        "cotton",
+        "sorghum",
+        "other",
+    ]
     assert crop["package_profile"]["family"] == "prithvi_crop_classification"
-    assert crop["package_profile"]["runtime_modes"] == ["cached_demo"]
+    assert crop["package_profile"]["runtime_modes"] == [
+        "cached_demo",
+        "upload_raster_demo",
+    ]
+    assert len(crop["package_profile"]["input_profile"]["band_order"]) == 18
+    assert crop["package_profile"]["input_profile"]["band_order"][:6] == [
+        "t1_blue",
+        "t1_green",
+        "t1_red",
+        "t1_narrow_nir",
+        "t1_swir1",
+        "t1_swir2",
+    ]
+    assert "classified_raster_geotiff" in crop["package_profile"]["output_profile"]["artifacts"]
     assert crop["package_profile"]["applicability"]["readiness"] == "demo_contract_only"
