@@ -141,7 +141,10 @@ def _resolve_output_dir(options: dict, raster_path: Path) -> Path:
 
 
 def _resolve_input_raster_path(raster_path_value: str | Path) -> Path:
-    raster_path = Path(raster_path_value).expanduser().resolve()
+    raw_path = Path(raster_path_value).expanduser()
+    if not raw_path.is_absolute():
+        raw_path = Path(PROJECT_ROOT) / raw_path
+    raster_path = raw_path.resolve()
     allowed_roots = [
         _default_input_root().resolve(),
         Path(tempfile.gettempdir()).resolve(),

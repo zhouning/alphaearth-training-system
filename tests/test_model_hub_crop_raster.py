@@ -317,6 +317,33 @@ def test_run_prithvi_crop_raster_demo_writes_geojson_wgs84_for_projected_raster(
     assert geojson["features"][0]["properties"]["source_crs"] == "EPSG:3857"
 
 
+def test_run_prithvi_crop_raster_demo_resolves_relative_raster_path_from_project_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    managed_dir = repo_root / "results" / "model_hub" / "prithvi_crop_inputs" / "test_relative"
+    managed_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        raster_path = _write_test_geotiff(managed_dir / "crop_18band.tif")
+        relative_raster_path = raster_path.relative_to(repo_root)
+        monkeypatch.chdir(repo_root / "ae_backend")
+
+        result = run_prithvi_crop_raster_demo(
+            options={
+                "raster_path": str(relative_raster_path),
+                "output_dir": str(tmp_path / "outputs"),
+                "tile_size": 4,
+                "stride": 4,
+            }
+        )
+
+        assert Path(result["result"]["validation"]["path"]) == raster_path.resolve()
+    finally:
+        shutil.rmtree(managed_dir, ignore_errors=True)
+
+
 def test_run_prithvi_crop_raster_demo_rejects_raster_path_outside_allowed_roots(tmp_path: Path):
     from app.services.model_hub_runtime import ModelHubRuntimeError
     from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
