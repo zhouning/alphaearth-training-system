@@ -380,6 +380,8 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
 
     tile_size = _parse_capped_positive_int_option(options, "tile_size", 224, _MAX_TILE_SIZE)
     stride = _parse_capped_positive_int_option(options, "stride", tile_size, _MAX_STRIDE)
+    if stride > tile_size:
+        raise ModelHubRuntimeError("stride must be less than or equal to tile_size")
     max_tiles = _parse_capped_positive_int_option(
         options, "max_tiles", _DEFAULT_MAX_TILES, _DEFAULT_MAX_TILES
     )

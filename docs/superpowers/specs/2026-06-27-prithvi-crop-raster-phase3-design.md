@@ -427,4 +427,3 @@ Phase 3 is complete when:
   `https://huggingface.co/ibm-nasa-geospatial/prithvi-100m-multi-temporal-crop-classification`
 - Phase 2 design:
   `docs/superpowers/specs/2026-06-27-prithvi-crop-model-hub-phase2-design.md`
-

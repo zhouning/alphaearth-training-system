@@ -44,3 +44,5 @@ def test_frontend_exposes_metadata_driven_crop_raster_demo_controls():
     assert "modelHubJob.value.error" in html
     assert "HTTP ${res.status}" in html
     assert "res.statusText" in html
+    assert "prithvi_crop_inputs" in html
+    assert "D:/tmp/crop_18band.tif" not in html

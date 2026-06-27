@@ -193,6 +193,23 @@ def test_run_prithvi_crop_raster_demo_rejects_invalid_tile_options(
         run_prithvi_crop_raster_demo(options=options)
 
 
+def test_run_prithvi_crop_raster_demo_rejects_stride_larger_than_tile_size(tmp_path: Path):
+    from app.services.model_hub_runtime import ModelHubRuntimeError
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(tmp_path / "crop_18band.tif", bands=18)
+
+    with pytest.raises(ModelHubRuntimeError, match="stride.*tile_size"):
+        run_prithvi_crop_raster_demo(
+            options={
+                "raster_path": str(raster_path),
+                "output_dir": str(tmp_path / "outputs"),
+                "tile_size": 3,
+                "stride": 5,
+            }
+        )
+
+
 def test_run_prithvi_crop_raster_demo_records_geojson_feature_limit(tmp_path: Path):
     from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
 
