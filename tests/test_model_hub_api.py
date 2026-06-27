@@ -140,3 +140,55 @@ def test_model_hub_runs_cached_change_job(monkeypatch, tmp_path: Path):
     body = response.json()
     assert body["status"] == "succeeded"
     assert body["result"]["task"] == "change_detection"
+
+
+def test_model_hub_returns_prithvi_crop_model_details():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.get("/api/ae/model-hub/models/prithvi_crop_classification_arcgis_style")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_id"] == "prithvi_crop_classification_arcgis_style"
+    assert body["task_type"] == "crop_classification"
+    assert body["status"] == "demo_only"
+    assert body["package_profile"]["package_type"] == "arcgis_style_pretrained_imagery_model"
+    assert body["package_profile"]["input_profile"]["raster_profile"] == "multiband_crop_composite"
+    assert body["package_profile"]["output_profile"]["primary_output"] == "categorical crop raster"
+
+
+def test_model_hub_runs_prithvi_crop_cached_demo_job(monkeypatch, tmp_path: Path):
+    from app.main import app
+    import app.services.model_hub_crop as crop_service
+
+    crop_dir = tmp_path / "prithvi_crop_demo"
+    crop_dir.mkdir()
+    (crop_dir / "crop_preview.png").write_bytes(b"png")
+    (crop_dir / "crop_polygons.geojson").write_text(
+        '{"type":"FeatureCollection","features":[]}',
+        encoding="utf-8",
+    )
+    (crop_dir / "crop_summary.csv").write_text(
+        "class,pixels,fraction\nmaize,6400,0.64\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(crop_service, "default_crop_demo_dir", lambda: crop_dir)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "prithvi_crop_classification_arcgis_style",
+            "input_mode": "cached_demo",
+            "options": {"output_formats": ["png", "geojson", "csv"]},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["result"]["task"] == "crop_classification"
+    assert body["result"]["summary"]["dominant_class"] == "maize"
+    assert {artifact["kind"] for artifact in body["artifacts"]} == {"png", "geojson", "csv"}

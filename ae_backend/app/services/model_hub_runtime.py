@@ -35,6 +35,10 @@ def run_model_hub_job(*, model_id: str, input_mode: str, options: dict) -> dict:
         from app.services.model_hub_change import summarize_cached_linhe_change
 
         return summarize_cached_linhe_change(options=options)
+    if model_id == "prithvi_crop_classification_arcgis_style" and input_mode == "cached_demo":
+        from app.services.model_hub_crop import summarize_cached_crop_demo
+
+        return summarize_cached_crop_demo(options=options)
     raise ModelHubRuntimeError(
         f"Unsupported model-hub job: model_id={model_id}, input_mode={input_mode}"
     )

@@ -71,6 +71,10 @@ def create_job(request: ModelHubJobRequest):
             request.model_id == "semantic_change_prithvi"
             and request.input_mode == "cached_demo"
         )
+        or (
+            request.model_id == "prithvi_crop_classification_arcgis_style"
+            and request.input_mode == "cached_demo"
+        )
     )
     if not should_execute_now:
         return JOB_STORE.get_job(job["job_id"])
