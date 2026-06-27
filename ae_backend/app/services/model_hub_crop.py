@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import math
 from pathlib import Path
 
 from app.core.config import PROJECT_ROOT
@@ -77,8 +78,14 @@ def _read_crop_summary_csv(summary_csv: Path) -> tuple[dict[str, int], dict[str,
             fraction = (row.get("fraction") or "").strip()
             if not class_name or not pixels or not fraction:
                 raise ValueError("blank class, pixels, or fraction")
-            counts[class_name] = int(pixels)
-            fractions[class_name] = float(fraction)
+            pixel_count = int(pixels)
+            area_fraction = float(fraction)
+            if pixel_count < 0:
+                raise ValueError("negative pixels")
+            if not math.isfinite(area_fraction) or not 0 <= area_fraction <= 1:
+                raise ValueError("fraction outside [0, 1]")
+            counts[class_name] = pixel_count
+            fractions[class_name] = area_fraction
 
     if not counts:
         raise ValueError("no class rows")
