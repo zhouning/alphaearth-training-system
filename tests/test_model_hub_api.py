@@ -1,11 +1,33 @@
 import sys
 from pathlib import Path
 
+import numpy as np
+import rasterio
 from fastapi.testclient import TestClient
+from rasterio.transform import from_origin
 
 
 repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(repo_root / "ae_backend"))
+
+
+def _write_api_test_geotiff(path: Path, *, bands: int = 18) -> Path:
+    data = np.zeros((bands, 8, 8), dtype=np.float32)
+    for band in range(bands):
+        data[band] = (band + 1) / max(bands, 1)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=8,
+        width=8,
+        count=bands,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(100.0, 40.0, 0.01, 0.01),
+    ) as dst:
+        dst.write(data)
+    return path
 
 
 def test_model_hub_lists_phase1_models():
@@ -192,3 +214,88 @@ def test_model_hub_runs_prithvi_crop_cached_demo_job(monkeypatch, tmp_path: Path
     assert body["result"]["task"] == "crop_classification"
     assert body["result"]["summary"]["dominant_class"] == "corn"
     assert {artifact["kind"] for artifact in body["artifacts"]} == {"png", "geojson", "csv"}
+
+
+def test_model_hub_runs_prithvi_crop_upload_raster_demo_job(tmp_path: Path):
+    from app.main import app
+
+    raster_path = _write_api_test_geotiff(tmp_path / "crop_18band.tif", bands=18)
+    output_dir = tmp_path / "outputs"
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "prithvi_crop_classification_arcgis_style",
+            "input_mode": "upload_raster_demo",
+            "options": {
+                "raster_path": str(raster_path),
+                "output_dir": str(output_dir),
+                "tile_size": 4,
+                "stride": 4,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["result"]["input_mode"] == "upload_raster_demo"
+    assert body["result"]["validation"]["band_count"] == 18
+    assert {"geotiff", "csv", "geojson", "manifest"}.issubset(
+        {artifact["kind"] for artifact in body["artifacts"]}
+    )
+    assert any("validated 18-band Prithvi crop raster" in log for log in body["logs"])
+    assert any("deterministic tiled crop classification" in log for log in body["logs"])
+
+
+def test_model_hub_fails_prithvi_crop_upload_raster_demo_for_wrong_band_count(tmp_path: Path):
+    from app.main import app
+
+    raster_path = _write_api_test_geotiff(tmp_path / "crop_6band.tif", bands=6)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "prithvi_crop_classification_arcgis_style",
+            "input_mode": "upload_raster_demo",
+            "options": {"raster_path": str(raster_path)},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert "requires 18 bands" in body["error"]
+
+
+def test_model_hub_api_preserves_all_runtime_logs(monkeypatch):
+    from app.main import app
+    import app.api.model_hub as model_hub_api
+
+    def fake_run_model_hub_job(*, model_id, input_mode, options):
+        assert model_id == "prithvi_crop_classification_arcgis_style"
+        assert input_mode == "upload_raster_demo"
+        return {
+            "result": {"task": "crop_classification", "summary": {"dominant_class": "corn"}},
+            "artifacts": [],
+            "logs": ["first runtime log", "second runtime log"],
+        }
+
+    monkeypatch.setattr(model_hub_api, "run_model_hub_job", fake_run_model_hub_job)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "prithvi_crop_classification_arcgis_style",
+            "input_mode": "upload_raster_demo",
+            "options": {"raster_path": "unused.tif"},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["logs"][-2:] == ["first runtime log", "second runtime log"]

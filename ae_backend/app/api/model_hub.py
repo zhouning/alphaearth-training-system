@@ -31,6 +31,18 @@ def get_model_registry() -> ModelHubRegistry:
     return load_model_registry(DEFAULT_REGISTRY_PATH)
 
 
+def _runtime_modes_for_model(model: dict) -> set[str]:
+    runtime_modes = set(model.get("package_profile", {}).get("runtime_modes", []))
+    default_mode = model.get("input_spec", {}).get("default_demo_input_mode")
+    if default_mode:
+        runtime_modes.add(default_mode)
+    if model.get("status") == "demo_only":
+        runtime_modes.add("cached_demo")
+    if model.get("model_id") == "lulc_6class_prithvi_houlsby":
+        runtime_modes.add("demo_patch")
+    return runtime_modes
+
+
 @router.get("/models")
 def list_models():
     return get_model_registry().to_public_dict()
@@ -50,7 +62,7 @@ def get_model(model_id: str):
 @router.post("/jobs")
 def create_job(request: ModelHubJobRequest):
     try:
-        get_model_registry().get_model(request.model_id)
+        model_entry = get_model_registry().get_model(request.model_id).to_dict()
     except KeyError as exc:
         raise HTTPException(
             status_code=404,
@@ -62,20 +74,7 @@ def create_job(request: ModelHubJobRequest):
         input_mode=request.input_mode,
         options=request.options,
     )
-    should_execute_now = (
-        (
-            request.model_id == "lulc_6class_prithvi_houlsby"
-            and request.input_mode == "demo_patch"
-        )
-        or (
-            request.model_id == "semantic_change_prithvi"
-            and request.input_mode == "cached_demo"
-        )
-        or (
-            request.model_id == "prithvi_crop_classification_arcgis_style"
-            and request.input_mode == "cached_demo"
-        )
-    )
+    should_execute_now = request.input_mode in _runtime_modes_for_model(model_entry)
     if not should_execute_now:
         return JOB_STORE.get_job(job["job_id"])
 
@@ -90,7 +89,7 @@ def create_job(request: ModelHubJobRequest):
             job["job_id"],
             result=runtime_result["result"],
             artifacts=runtime_result["artifacts"],
-            log=runtime_result["logs"][-1] if runtime_result.get("logs") else "job finished",
+            logs=runtime_result.get("logs", []),
         )
     except ModelHubRuntimeError as exc:
         JOB_STORE.mark_failed(job["job_id"], error=str(exc))
