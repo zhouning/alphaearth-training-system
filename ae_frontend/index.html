@@ -1326,11 +1326,17 @@
                 }
             };
 
+            const getModelHubDemoInputMode = (model) => {
+                if (!model) return null;
+                const runtimeModes = model.package_profile?.runtime_modes || [];
+                if (runtimeModes.includes('cached_demo')) return 'cached_demo';
+                if (model.input_spec?.default_demo_input_mode) return model.input_spec.default_demo_input_mode;
+                if (model.model_id === 'lulc_6class_prithvi_houlsby') return 'demo_patch';
+                return null;
+            };
+
             const isModelHubRunnable = (model) => {
-                return model && [
-                    'lulc_6class_prithvi_houlsby',
-                    'semantic_change_prithvi',
-                ].includes(model.model_id);
+                return Boolean(getModelHubDemoInputMode(model));
             };
 
             const runModelHubDemo = async (model) => {
@@ -1338,7 +1344,11 @@
                     setModelHubStatus('info', `${model.display_name} 仍在计划中。`);
                     return;
                 }
-                const inputMode = model.model_id === 'semantic_change_prithvi' ? 'cached_demo' : 'demo_patch';
+                const inputMode = getModelHubDemoInputMode(model);
+                if (!inputMode) {
+                    setModelHubStatus('info', `${model.display_name} 仍在计划中。`);
+                    return;
+                }
                 runningModelHubJob.value = true;
                 try {
                     const res = await fetch('/api/ae/model-hub/jobs', {
@@ -1758,7 +1768,7 @@
                 availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
                 modelHubModels, modelHubJob, modelHubStatus, loadingModelHubModels,
-                runningModelHubJob, fetchModelHubModels, isModelHubRunnable, runModelHubDemo,
+                runningModelHubJob, fetchModelHubModels, getModelHubDemoInputMode, isModelHubRunnable, runModelHubDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
                 lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
                 publicLulcForm, publicLulcResult, localLulcForm, localLulcFile, localLulcLabel,

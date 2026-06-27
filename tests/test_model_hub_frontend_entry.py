@@ -14,3 +14,12 @@ def test_frontend_exposes_model_hub_tab_and_api_actions():
     assert "/api/ae/model-hub/jobs" in html
     assert "runModelHubDemo" in html
     assert "modelHubModels" in html
+
+
+def test_frontend_uses_model_hub_runtime_modes_for_demo_jobs():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "getModelHubDemoInputMode" in html
+    assert "package_profile?.runtime_modes" in html
+    assert "default_demo_input_mode" in html
+    assert "prithvi_crop_classification_arcgis_style" not in html
