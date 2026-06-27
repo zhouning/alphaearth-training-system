@@ -67,6 +67,7 @@ _ARTIFACT_FILENAMES = {
     "manifest": "manifest.json",
     "png": "crop_preview.png",
 }
+_DEFAULT_MAX_GEOJSON_FEATURES = 5000
 
 
 _CLASS_COLORS = np.array(
@@ -106,6 +107,21 @@ def _default_output_dir(raster_path: Path) -> Path:
 
 def _class_id(class_name: str) -> int:
     return CROP_RASTER_CLASSES.index(class_name)
+
+
+def _parse_positive_int_option(options: dict, name: str, default: int) -> int:
+    raw_value = options.get(name, default)
+    if isinstance(raw_value, bool):
+        raise ModelHubRuntimeError(f"{name} must be a positive integer")
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ModelHubRuntimeError(f"{name} must be a positive integer") from exc
+    if isinstance(raw_value, float) and not raw_value.is_integer():
+        raise ModelHubRuntimeError(f"{name} must be a positive integer")
+    if parsed < 1:
+        raise ModelHubRuntimeError(f"{name} must be at least 1")
+    return parsed
 
 
 def _safe_ratio(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
@@ -170,12 +186,25 @@ def _write_summary_csv(output_path: Path, summary: dict) -> None:
             )
 
 
-def _write_geojson(output_path: Path, *, mask: np.ndarray, transform: Affine) -> None:
-    features = []
-    for geometry, value in shapes(mask.astype(np.uint8), transform=transform):
-        class_id = int(value)
-        features.append(
-            {
+def _write_geojson(
+    output_path: Path,
+    *,
+    mask: np.ndarray,
+    transform: Affine,
+    max_features: int,
+) -> dict:
+    features_written = 0
+    features_truncated = False
+    with output_path.open("w", encoding="utf-8") as geojson_file:
+        geojson_file.write('{"type":"FeatureCollection","features":[')
+        for feature_index, (geometry, value) in enumerate(
+            shapes(mask.astype(np.uint8), transform=transform)
+        ):
+            if feature_index >= max_features:
+                features_truncated = True
+                break
+            class_id = int(value)
+            feature = {
                 "type": "Feature",
                 "properties": {
                     "class_id": class_id,
@@ -183,9 +212,17 @@ def _write_geojson(output_path: Path, *, mask: np.ndarray, transform: Affine) ->
                 },
                 "geometry": geometry,
             }
-        )
-    feature_collection = {"type": "FeatureCollection", "features": features}
-    output_path.write_text(json.dumps(feature_collection, indent=2), encoding="utf-8")
+            if features_written:
+                geojson_file.write(",")
+            json.dump(feature, geojson_file, separators=(",", ":"))
+            features_written += 1
+        geojson_file.write("]}")
+    return {
+        "strategy": "streaming_feature_limit",
+        "max_features": max_features,
+        "features_written": features_written,
+        "features_truncated": features_truncated,
+    }
 
 
 def _write_preview_png(output_path: Path, *, mask: np.ndarray) -> None:
@@ -244,8 +281,13 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
     output_dir = Path(options.get("output_dir") or _default_output_dir(raster_path))
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    tile_size = int(options.get("tile_size") or 224)
-    stride = int(options.get("stride") or tile_size)
+    tile_size = _parse_positive_int_option(options, "tile_size", 224)
+    stride = _parse_positive_int_option(options, "stride", tile_size)
+    max_geojson_features = _parse_positive_int_option(
+        options,
+        "max_geojson_features",
+        _DEFAULT_MAX_GEOJSON_FEATURES,
+    )
     logs = [
         f"validated 18-band Prithvi crop raster from {raster_path}",
         "using deterministic tiled crop classification; no real Prithvi checkpoint was loaded",
@@ -293,7 +335,17 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
 
     _write_classified_geotiff(classified_tif, mask=mask, source_profile=source_profile)
     _write_summary_csv(summary_csv, summary)
-    _write_geojson(polygons_geojson, mask=mask, transform=source_transform)
+    geojson_policy = _write_geojson(
+        polygons_geojson,
+        mask=mask,
+        transform=source_transform,
+        max_features=max_geojson_features,
+    )
+    logs.append(
+        "GeoJSON feature limit "
+        f"{geojson_policy['max_features']} wrote {geojson_policy['features_written']} "
+        f"features; truncated={geojson_policy['features_truncated']}"
+    )
     try:
         _write_preview_png(preview_png, mask=mask)
     except (ImportError, OSError, ValueError) as exc:
@@ -321,11 +373,13 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
         "source_raster": str(raster_path),
         "validation": validation,
         "tile_grid": {"tile_size": tile_size, "stride": stride, "tiles": tiles},
+        "geojson_policy": geojson_policy,
         "artifacts": artifacts,
         "limitations": [
             "Deterministic demo classification only.",
             "No real Prithvi checkpoint was loaded.",
             "Class IDs are generated from lightweight spectral and spatial rules.",
+            "GeoJSON polygons are streamed and capped by max_geojson_features.",
         ],
     }
     _write_manifest(manifest_json, manifest=manifest)

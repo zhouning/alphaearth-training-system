@@ -1,3 +1,5 @@
+import csv
+import json
 import sys
 from pathlib import Path
 
@@ -116,11 +118,24 @@ def test_run_prithvi_crop_raster_demo_writes_gis_artifacts(tmp_path: Path):
     assert artifact_by_kind["geojson"].exists()
     assert artifact_by_kind["manifest"].exists()
 
-    with rasterio.open(artifact_by_kind["geotiff"]) as classified:
+    with rasterio.open(raster_path) as source, rasterio.open(artifact_by_kind["geotiff"]) as classified:
         assert classified.count == 1
         assert classified.width == 12
         assert classified.height == 10
         assert classified.crs.to_string() == "EPSG:4326"
+        assert classified.transform == source.transform
+        assert classified.bounds == source.bounds
+
+    with artifact_by_kind["csv"].open(encoding="utf-8", newline="") as summary_file:
+        rows = list(csv.DictReader(summary_file))
+    assert len(rows) == len(result["result"]["model_package"]["class_schema"])
+    assert {row["class"] for row in rows} == set(result["result"]["model_package"]["class_schema"])
+
+    geojson = json.loads(artifact_by_kind["geojson"].read_text(encoding="utf-8"))
+    assert geojson["type"] == "FeatureCollection"
+
+    manifest = json.loads(artifact_by_kind["manifest"].read_text(encoding="utf-8"))
+    assert manifest["artifacts"] == result["artifacts"]
 
 
 def test_run_prithvi_crop_raster_demo_logs_validation_and_contract_runtime(tmp_path: Path):
@@ -135,3 +150,57 @@ def test_run_prithvi_crop_raster_demo_logs_validation_and_contract_runtime(tmp_p
     assert any("validated 18-band Prithvi crop raster" in log for log in result["logs"])
     assert any("deterministic tiled crop classification" in log for log in result["logs"])
     assert any("no real Prithvi checkpoint" in log for log in result["logs"])
+
+
+@pytest.mark.parametrize(
+    ("option_name", "option_value", "message"),
+    [
+        ("tile_size", "not-an-int", "tile_size.*positive integer"),
+        ("tile_size", 0, "tile_size.*at least 1"),
+        ("tile_size", -4, "tile_size.*at least 1"),
+        ("stride", "not-an-int", "stride.*positive integer"),
+        ("stride", 0, "stride.*at least 1"),
+        ("stride", -2, "stride.*at least 1"),
+    ],
+)
+def test_run_prithvi_crop_raster_demo_rejects_invalid_tile_options(
+    tmp_path: Path,
+    option_name: str,
+    option_value: object,
+    message: str,
+):
+    from app.services.model_hub_runtime import ModelHubRuntimeError
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(tmp_path / "crop_18band.tif", bands=18)
+    options = {"raster_path": str(raster_path), "output_dir": str(tmp_path / "outputs")}
+    options[option_name] = option_value
+
+    with pytest.raises(ModelHubRuntimeError, match=message):
+        run_prithvi_crop_raster_demo(options=options)
+
+
+def test_run_prithvi_crop_raster_demo_records_geojson_feature_limit(tmp_path: Path):
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(tmp_path / "crop_18band.tif", bands=18, width=12, height=10)
+
+    result = run_prithvi_crop_raster_demo(
+        options={
+            "raster_path": str(raster_path),
+            "output_dir": str(tmp_path / "outputs"),
+            "tile_size": 2,
+            "stride": 2,
+            "max_geojson_features": 3,
+        }
+    )
+
+    artifact_by_kind = {artifact["kind"]: Path(artifact["path"]) for artifact in result["artifacts"]}
+    geojson = json.loads(artifact_by_kind["geojson"].read_text(encoding="utf-8"))
+    manifest = json.loads(artifact_by_kind["manifest"].read_text(encoding="utf-8"))
+
+    assert geojson["type"] == "FeatureCollection"
+    assert len(geojson["features"]) <= 3
+    assert manifest["geojson_policy"]["max_features"] == 3
+    assert manifest["geojson_policy"]["features_truncated"] is True
+    assert any("GeoJSON feature limit" in log for log in result["logs"])
