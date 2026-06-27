@@ -13,8 +13,16 @@ repo_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(repo_root / "ae_backend"))
 
 
-def _write_test_geotiff(path: Path, *, bands: int = 18, width: int = 8, height: int = 6) -> Path:
-    transform = from_origin(100.0, 40.0, 0.01, 0.01)
+def _write_test_geotiff(
+    path: Path,
+    *,
+    bands: int = 18,
+    width: int = 8,
+    height: int = 6,
+    crs: str = "EPSG:4326",
+    transform=None,
+) -> Path:
+    transform = transform or from_origin(100.0, 40.0, 0.01, 0.01)
     data = np.zeros((bands, height, width), dtype=np.float32)
     for band in range(bands):
         data[band] = (band + 1) / max(bands, 1)
@@ -26,7 +34,7 @@ def _write_test_geotiff(path: Path, *, bands: int = 18, width: int = 8, height: 
         width=width,
         count=bands,
         dtype="float32",
-        crs="EPSG:4326",
+        crs=crs,
         transform=transform,
     ) as dst:
         dst.write(data)
@@ -204,3 +212,84 @@ def test_run_prithvi_crop_raster_demo_records_geojson_feature_limit(tmp_path: Pa
     assert manifest["geojson_policy"]["max_features"] == 3
     assert manifest["geojson_policy"]["features_truncated"] is True
     assert any("GeoJSON feature limit" in log for log in result["logs"])
+
+def _first_geojson_coordinate(geometry: dict) -> tuple[float, float]:
+    coordinates = geometry["coordinates"]
+    while coordinates and isinstance(coordinates[0][0], (list, tuple)):
+        coordinates = coordinates[0]
+    x, y = coordinates[0]
+    return float(x), float(y)
+
+
+def test_run_prithvi_crop_raster_demo_rejects_resource_limits(tmp_path: Path):
+    from app.services.model_hub_runtime import ModelHubRuntimeError
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(tmp_path / "crop_18band.tif", width=8, height=6)
+
+    with pytest.raises(ModelHubRuntimeError, match="max_pixels"):
+        run_prithvi_crop_raster_demo(
+            options={
+                "raster_path": str(raster_path),
+                "output_dir": str(tmp_path / "outputs_pixels"),
+                "max_pixels": 10,
+            }
+        )
+
+    with pytest.raises(ModelHubRuntimeError, match="max_tiles"):
+        run_prithvi_crop_raster_demo(
+            options={
+                "raster_path": str(raster_path),
+                "output_dir": str(tmp_path / "outputs_tiles"),
+                "tile_size": 1,
+                "stride": 1,
+                "max_tiles": 10,
+            }
+        )
+
+
+def test_run_prithvi_crop_raster_demo_rejects_output_dir_outside_allowed_roots(tmp_path: Path):
+    from app.services.model_hub_runtime import ModelHubRuntimeError
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(tmp_path / "crop_18band.tif")
+    unsafe_output_dir = repo_root / "ae_backend" / "not_allowed_crop_outputs"
+
+    with pytest.raises(ModelHubRuntimeError, match="output_dir.*allowed"):
+        run_prithvi_crop_raster_demo(
+            options={"raster_path": str(raster_path), "output_dir": str(unsafe_output_dir)}
+        )
+
+
+def test_run_prithvi_crop_raster_demo_writes_geojson_wgs84_for_projected_raster(tmp_path: Path):
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    raster_path = _write_test_geotiff(
+        tmp_path / "crop_18band_3857.tif",
+        width=6,
+        height=6,
+        crs="EPSG:3857",
+        transform=from_origin(1000000.0, 4000000.0, 30.0, 30.0),
+    )
+
+    result = run_prithvi_crop_raster_demo(
+        options={
+            "raster_path": str(raster_path),
+            "output_dir": str(tmp_path / "outputs_3857"),
+            "tile_size": 3,
+            "stride": 3,
+        }
+    )
+
+    artifact_by_kind = {artifact["kind"]: Path(artifact["path"]) for artifact in result["artifacts"]}
+    geojson = json.loads(artifact_by_kind["geojson"].read_text(encoding="utf-8"))
+    manifest = json.loads(artifact_by_kind["manifest"].read_text(encoding="utf-8"))
+
+    assert manifest["geojson_policy"]["crs"] == "EPSG:4326"
+    assert manifest["geojson_policy"]["source_crs"] == "EPSG:3857"
+    assert manifest["geojson_policy"]["reprojected_to_wgs84"] is True
+    first_x, first_y = _first_geojson_coordinate(geojson["features"][0]["geometry"])
+    assert -180.0 <= first_x <= 180.0
+    assert -90.0 <= first_y <= 90.0
+    assert geojson["features"][0]["properties"]["geojson_crs"] == "EPSG:4326"
+    assert geojson["features"][0]["properties"]["source_crs"] == "EPSG:3857"

@@ -270,6 +270,31 @@ def test_model_hub_fails_prithvi_crop_upload_raster_demo_for_wrong_band_count(tm
     assert "requires 18 bands" in body["error"]
 
 
+
+def test_model_hub_fails_prithvi_crop_upload_raster_demo_for_unsafe_output_dir(tmp_path: Path):
+    from app.main import app
+
+    raster_path = _write_api_test_geotiff(tmp_path / "crop_18band.tif", bands=18)
+    unsafe_output_dir = repo_root / "ae_backend" / "not_allowed_api_outputs"
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "prithvi_crop_classification_arcgis_style",
+            "input_mode": "upload_raster_demo",
+            "options": {
+                "raster_path": str(raster_path),
+                "output_dir": str(unsafe_output_dir),
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert "output_dir" in body["error"]
+    assert "allowed" in body["error"]
 def test_model_hub_api_preserves_all_runtime_logs(monkeypatch):
     from app.main import app
     import app.api.model_hub as model_hub_api

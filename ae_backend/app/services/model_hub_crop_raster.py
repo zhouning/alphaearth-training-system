@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ import numpy as np
 import rasterio
 from rasterio.errors import RasterioIOError
 from rasterio.features import shapes
+from rasterio.warp import transform_geom
 from rasterio.windows import Window
 
 from app.core.config import PROJECT_ROOT
@@ -68,6 +70,11 @@ _ARTIFACT_FILENAMES = {
     "png": "crop_preview.png",
 }
 _DEFAULT_MAX_GEOJSON_FEATURES = 5000
+_DEFAULT_MAX_PIXELS = 2_000_000
+_DEFAULT_MAX_TILES = 4096
+_DEFAULT_MAX_PREVIEW_PIXELS = 1_000_000
+_MAX_TILE_SIZE = 4096
+_MAX_STRIDE = 4096
 
 
 _CLASS_COLORS = np.array(
@@ -94,15 +101,52 @@ def _as_jsonable_bounds(bounds: Any) -> list[float]:
     return [float(bounds.left), float(bounds.bottom), float(bounds.right), float(bounds.top)]
 
 
+def _default_output_root() -> Path:
+    return Path(PROJECT_ROOT) / "results" / "model_hub" / "prithvi_crop_runs"
+
+
 def _default_output_dir(raster_path: Path) -> Path:
     fingerprint = hashlib.sha256(str(raster_path.resolve()).encode("utf-8")).hexdigest()[:10]
-    return (
-        Path(PROJECT_ROOT)
-        / "results"
-        / "model_hub"
-        / "prithvi_crop_runs"
-        / f"{raster_path.stem}-{fingerprint}"
-    )
+    return _default_output_root() / f"{raster_path.stem}-{fingerprint}"
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _resolve_output_dir(options: dict, raster_path: Path) -> Path:
+    output_dir_value = options.get("output_dir")
+    if not output_dir_value:
+        return _default_output_dir(raster_path)
+
+    output_dir = Path(output_dir_value).expanduser().resolve()
+    allowed_roots = [
+        _default_output_root().resolve(),
+        Path(tempfile.gettempdir()).resolve(),
+    ]
+    if not any(output_dir == root or _is_relative_to(output_dir, root) for root in allowed_roots):
+        allowed_text = ", ".join(str(root) for root in allowed_roots)
+        raise ModelHubRuntimeError(
+            f"output_dir must resolve under allowed local demo roots: {allowed_text}"
+        )
+    return output_dir
+
+
+def _estimate_tile_count(width: int, height: int, tile_size: int, stride: int) -> int:
+    def axis_count(size: int) -> int:
+        if size <= tile_size:
+            return 1
+        last = size - tile_size
+        count = (last // stride) + 1
+        if last % stride != 0:
+            count += 1
+        return count
+
+    return axis_count(width) * axis_count(height)
 
 
 def _class_id(class_name: str) -> int:
@@ -168,6 +212,9 @@ def _write_classified_geotiff(
         nodata=255,
         compress="deflate",
     )
+    if not profile.get("tiled"):
+        profile.pop("blockxsize", None)
+        profile.pop("blockysize", None)
     with rasterio.open(output_path, "w", **profile) as dst:
         dst.write(mask.astype(np.uint8), 1)
 
@@ -191,8 +238,12 @@ def _write_geojson(
     *,
     mask: np.ndarray,
     transform: Affine,
+    source_crs: Any,
     max_features: int,
 ) -> dict:
+    source_crs_text = source_crs.to_string() if hasattr(source_crs, "to_string") else str(source_crs)
+    geojson_crs = "EPSG:4326"
+    reproject_to_wgs84 = source_crs_text != geojson_crs
     features_written = 0
     features_truncated = False
     with output_path.open("w", encoding="utf-8") as geojson_file:
@@ -203,12 +254,16 @@ def _write_geojson(
             if feature_index >= max_features:
                 features_truncated = True
                 break
+            if reproject_to_wgs84:
+                geometry = transform_geom(source_crs_text, geojson_crs, geometry, precision=6)
             class_id = int(value)
             feature = {
                 "type": "Feature",
                 "properties": {
                     "class_id": class_id,
                     "class_name": CROP_RASTER_CLASSES[class_id],
+                    "source_crs": source_crs_text,
+                    "geojson_crs": geojson_crs,
                 },
                 "geometry": geometry,
             }
@@ -219,6 +274,9 @@ def _write_geojson(
         geojson_file.write("]}")
     return {
         "strategy": "streaming_feature_limit",
+        "crs": geojson_crs,
+        "source_crs": source_crs_text,
+        "reprojected_to_wgs84": reproject_to_wgs84,
         "max_features": max_features,
         "features_written": features_written,
         "features_truncated": features_truncated,
@@ -278,11 +336,28 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
 
     raster_path = Path(raster_path_value)
     validation = validate_prithvi_crop_raster(raster_path)
-    output_dir = Path(options.get("output_dir") or _default_output_dir(raster_path))
+    pixel_count = int(validation["width"] * validation["height"])
+    max_pixels = _parse_positive_int_option(options, "max_pixels", _DEFAULT_MAX_PIXELS)
+    if pixel_count > max_pixels:
+        raise ModelHubRuntimeError(
+            f"Prithvi crop raster has {pixel_count} pixels, exceeds max_pixels={max_pixels}"
+        )
+
+    output_dir = _resolve_output_dir(options, raster_path)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     tile_size = _parse_positive_int_option(options, "tile_size", 224)
     stride = _parse_positive_int_option(options, "stride", tile_size)
+    if tile_size > _MAX_TILE_SIZE:
+        raise ModelHubRuntimeError(f"tile_size must be at most {_MAX_TILE_SIZE}")
+    if stride > _MAX_STRIDE:
+        raise ModelHubRuntimeError(f"stride must be at most {_MAX_STRIDE}")
+    max_tiles = _parse_positive_int_option(options, "max_tiles", _DEFAULT_MAX_TILES)
+    max_preview_pixels = _parse_positive_int_option(
+        options,
+        "max_preview_pixels",
+        _DEFAULT_MAX_PREVIEW_PIXELS,
+    )
     max_geojson_features = _parse_positive_int_option(
         options,
         "max_geojson_features",
@@ -292,6 +367,17 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
         f"validated 18-band Prithvi crop raster from {raster_path}",
         "using deterministic tiled crop classification; no real Prithvi checkpoint was loaded",
     ]
+
+    estimated_tile_count = _estimate_tile_count(
+        validation["width"],
+        validation["height"],
+        tile_size,
+        stride,
+    )
+    if estimated_tile_count > max_tiles:
+        raise ModelHubRuntimeError(
+            f"Prithvi crop raster requires {estimated_tile_count} tiles, exceeds max_tiles={max_tiles}"
+        )
 
     with rasterio.open(raster_path) as src:
         tiles = make_tile_grid(src.width, src.height, tile_size, stride)
@@ -313,6 +399,7 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
         )
         source_profile = dict(src.profile)
         source_transform = src.transform
+        source_crs = src.crs
 
     summary = compute_class_area_summary(mask, CROP_RASTER_CLASSES)
     dominant_class = max(summary["class_pixel_counts"], key=summary["class_pixel_counts"].get)
@@ -339,6 +426,7 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
         polygons_geojson,
         mask=mask,
         transform=source_transform,
+        source_crs=source_crs,
         max_features=max_geojson_features,
     )
     logs.append(
@@ -346,12 +434,18 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
         f"{geojson_policy['max_features']} wrote {geojson_policy['features_written']} "
         f"features; truncated={geojson_policy['features_truncated']}"
     )
-    try:
-        _write_preview_png(preview_png, mask=mask)
-    except (ImportError, OSError, ValueError) as exc:
-        logs.append(f"skipped PNG preview at {preview_png}: {exc}")
+    if mask.size > max_preview_pixels:
+        logs.append(
+            f"skipped PNG preview at {preview_png}: {mask.size} pixels exceeds "
+            f"max_preview_pixels={max_preview_pixels}"
+        )
     else:
-        artifacts.append({"kind": "png", "path": str(preview_png)})
+        try:
+            _write_preview_png(preview_png, mask=mask)
+        except (ImportError, OSError, ValueError) as exc:
+            logs.append(f"skipped PNG preview at {preview_png}: {exc}")
+        else:
+            artifacts.append({"kind": "png", "path": str(preview_png)})
 
     model_package = {
         "package_type": "arcgis_style_pretrained_imagery_model",
@@ -372,14 +466,26 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
         "input_mode": "upload_raster_demo",
         "source_raster": str(raster_path),
         "validation": validation,
-        "tile_grid": {"tile_size": tile_size, "stride": stride, "tiles": tiles},
+        "tile_grid": {
+            "tile_size": tile_size,
+            "stride": stride,
+            "tile_count": len(tiles),
+            "overlap_policy": "last_tile_wins" if stride < tile_size else "none",
+        },
+        "resource_policy": {
+            "pixel_count": pixel_count,
+            "max_pixels": max_pixels,
+            "tile_count": len(tiles),
+            "max_tiles": max_tiles,
+            "max_preview_pixels": max_preview_pixels,
+        },
         "geojson_policy": geojson_policy,
         "artifacts": artifacts,
         "limitations": [
             "Deterministic demo classification only.",
             "No real Prithvi checkpoint was loaded.",
             "Class IDs are generated from lightweight spectral and spatial rules.",
-            "GeoJSON polygons are streamed and capped by max_geojson_features.",
+            "GeoJSON polygons are streamed, capped by max_geojson_features, and written in EPSG:4326.",
         ],
     }
     _write_manifest(manifest_json, manifest=manifest)
