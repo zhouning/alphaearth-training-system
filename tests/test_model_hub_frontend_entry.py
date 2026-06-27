@@ -36,3 +36,9 @@ def test_frontend_exposes_metadata_driven_crop_raster_demo_controls():
     assert "modelHubRasterPath" in html
     assert "runModelHubRasterDemo" in html
     assert "supportsModelHubRasterDemo(model)" in html
+    assert "runtimeModes.includes('upload_raster_demo')" in html
+    assert 'v-if="supportsModelHubRasterDemo(model)"' in html
+    assert "isModelHubExecutable" in html
+    assert "isModelHubRunnable(model) || supportsModelHubRasterDemo(model)" in html
+    assert "modelHubJob.value.status === 'failed'" in html
+    assert "modelHubJob.value.error" in html

@@ -452,15 +452,15 @@
                             <div class="sm:col-span-2"><span class="text-gray-500">Classes:</span> <span class="data-font text-gray-800 break-words">{{ (model.class_schema || []).join(', ') }}</span></div>
                         </div>
                         <div class="mt-auto flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
-                            <span class="text-xs text-gray-500">{{ isModelHubRunnable(model) ? '可运行演示' : '计划中' }}</span>
+                            <span class="text-xs text-gray-500">{{ isModelHubExecutable(model) ? '可运行演示' : '计划中' }}</span>
                             <button class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" :disabled="!isModelHubRunnable(model) || runningModelHubJob" @click="runModelHubDemo(model)">
                                 {{ runningModelHubJob ? '运行中...' : '运行演示任务' }}
                             </button>
                         </div>
                         <div v-if="supportsModelHubRasterDemo(model)" class="grid grid-cols-1 gap-2 pt-2 border-t border-gray-100">
-                            <input v-model="modelHubRasterPath" type="text" aria-label="Local 18-band GeoTIFF path" placeholder="Local 18-band GeoTIFF path, for example D:/tmp/crop_18band.tif" class="w-full min-w-0 px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-xs focus:ring-primary focus:border-primary outline-none" />
+                            <input v-model="modelHubRasterPath" type="text" aria-label="本地 18 波段 GeoTIFF 路径" placeholder="本地 18 波段 GeoTIFF 路径，例如 D:/tmp/crop_18band.tif" class="w-full min-w-0 px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-xs focus:ring-primary focus:border-primary outline-none" />
                             <button type="button" class="w-full px-3 py-2 bg-primary text-white rounded-md text-sm hover:bg-blue-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" :disabled="runningModelHubJob" @click="runModelHubRasterDemo(model)">
-                                {{ runningModelHubJob ? 'Running...' : 'Run Raster Demo' }}
+                                {{ runningModelHubJob ? '运行中...' : '运行栅格演示' }}
                             </button>
                         </div>
                     </div>
@@ -1352,6 +1352,10 @@
                 return runtimeModes.includes('upload_raster_demo');
             };
 
+            const isModelHubExecutable = (model) => {
+                return Boolean(isModelHubRunnable(model) || supportsModelHubRasterDemo(model));
+            };
+
             const runModelHubDemo = async (model) => {
                 if (!isModelHubRunnable(model)) {
                     setModelHubStatus('info', `${model.display_name} 仍在计划中。`);
@@ -1386,11 +1390,11 @@
 
             const runModelHubRasterDemo = async (model) => {
                 if (!supportsModelHubRasterDemo(model)) {
-                    setModelHubStatus('info', `${model.display_name} does not declare raster demo mode.`);
+                    setModelHubStatus('info', `${model.display_name} 未声明栅格演示模式。`);
                     return;
                 }
                 if (!modelHubRasterPath.value.trim()) {
-                    setModelHubStatus('error', 'Enter a local 18-band GeoTIFF path first.');
+                    setModelHubStatus('error', '请先输入本地 18 波段 GeoTIFF 路径。');
                     return;
                 }
                 runningModelHubJob.value = true;
@@ -1409,10 +1413,16 @@
                     });
                     if (!res.ok) throw new Error(await res.text());
                     modelHubJob.value = await res.json();
-                    setModelHubStatus('info', `Raster job ${modelHubJob.value.job_id} status: ${modelHubJob.value.status}`);
+                    if (modelHubJob.value.status === 'failed') {
+                        const detail = modelHubJob.value.error ? `：${modelHubJob.value.error}` : '';
+                        setModelHubStatus('error', `栅格任务 ${modelHubJob.value.job_id} 失败${detail}`);
+                        return;
+                    }
+                    setModelHubStatus('info', `栅格任务 ${modelHubJob.value.job_id} 状态：${modelHubJob.value.status}`);
                 } catch (e) {
                     console.error('Failed to run model hub raster job', e);
-                    setModelHubStatus('error', 'Raster Model Hub job failed. Check backend logs.');
+                    const detail = e?.message ? `：${e.message}` : '';
+                    setModelHubStatus('error', `栅格模型中心任务运行失败${detail}`);
                 } finally {
                     runningModelHubJob.value = false;
                 }
@@ -1816,7 +1826,7 @@
                 models, loadingModels, fetchModels, activateModel,
                 modelHubModels, modelHubJob, modelHubStatus, loadingModelHubModels,
                 runningModelHubJob, modelHubRasterPath, fetchModelHubModels, getModelHubDemoInputMode,
-                isModelHubRunnable, supportsModelHubRasterDemo, runModelHubDemo, runModelHubRasterDemo,
+                isModelHubRunnable, supportsModelHubRasterDemo, isModelHubExecutable, runModelHubDemo, runModelHubRasterDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
                 lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
                 publicLulcForm, publicLulcResult, localLulcForm, localLulcFile, localLulcLabel,
