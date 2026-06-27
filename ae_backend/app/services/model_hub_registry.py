@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,7 @@ class ModelHubEntry:
     license: str
     status: str
     example_inputs: list[str]
+    extra_fields: dict[str, Any]
 
     @classmethod
     def from_record(cls, record: dict[str, Any]) -> "ModelHubEntry":
@@ -107,6 +109,12 @@ class ModelHubEntry:
         if status not in VALID_STATUSES:
             raise RegistryValidationError(f"Invalid status for model_id {model_id!r}: {status}")
 
+        extra_fields = {
+            key: deepcopy(value)
+            for key, value in record.items()
+            if key not in REQUIRED_FIELDS
+        }
+
         return cls(
             model_id=model_id,
             display_name=display_name,
@@ -123,26 +131,29 @@ class ModelHubEntry:
             license=license,
             status=status,
             example_inputs=example_inputs,
+            extra_fields=extra_fields,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "model_id": self.model_id,
             "display_name": self.display_name,
             "task_type": self.task_type,
             "backbone": self.backbone,
             "adapter": self.adapter,
             "checkpoint_path": self.checkpoint_path,
-            "input_spec": dict(self.input_spec),
-            "output_spec": dict(self.output_spec),
+            "input_spec": deepcopy(self.input_spec),
+            "output_spec": deepcopy(self.output_spec),
             "class_schema": list(self.class_schema),
-            "metrics": dict(self.metrics),
+            "metrics": deepcopy(self.metrics),
             "trained_region": self.trained_region,
             "supported_sensors": list(self.supported_sensors),
             "license": self.license,
             "status": self.status,
             "example_inputs": list(self.example_inputs),
         }
+        payload.update(deepcopy(self.extra_fields))
+        return payload
 
 
 class ModelHubRegistry:

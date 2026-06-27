@@ -101,6 +101,80 @@
     "example_inputs": ["examples/water_flood_patch.png"]
   },
   {
+    "model_id": "prithvi_crop_classification_arcgis_style",
+    "display_name": "Prithvi Crop Classification Package",
+    "task_type": "crop_classification",
+    "backbone": "Prithvi-100M",
+    "adapter": "crop classification head contract",
+    "checkpoint_path": null,
+    "input_spec": {
+      "modalities": ["multiband_composite"],
+      "bands": "multiband_crop_composite",
+      "patch_size": "variable",
+      "default_demo_input_mode": "cached_demo",
+      "normalization": "model_package_defined"
+    },
+    "output_spec": {
+      "type": "categorical_crop_raster",
+      "classes": 13,
+      "formats": ["png", "geojson", "csv"]
+    },
+    "class_schema": [
+      "background",
+      "maize",
+      "rice",
+      "wheat",
+      "soybean",
+      "cotton",
+      "rapeseed",
+      "vegetables",
+      "orchard",
+      "greenhouse",
+      "fallow",
+      "water",
+      "built_or_bare"
+    ],
+    "metrics": {
+      "readiness": "demo_contract_only",
+      "validated_accuracy": null
+    },
+    "trained_region": "demo contract; no production crop checkpoint configured",
+    "supported_sensors": ["multiband crop composite", "future Sentinel-2/HLS composite"],
+    "license": "research_demo",
+    "status": "demo_only",
+    "example_inputs": ["examples/prithvi_crop_cached_demo.json"],
+    "package_profile": {
+      "package_type": "arcgis_style_pretrained_imagery_model",
+      "family": "prithvi_crop_classification",
+      "runtime_modes": ["cached_demo"],
+      "input_profile": {
+        "raster_profile": "multiband_crop_composite",
+        "requires_georeferencing": true,
+        "requires_crop_season_composite": true,
+        "notes": "Demo contract only; real Prithvi crop-head inference is a later phase."
+      },
+      "output_profile": {
+        "primary_output": "categorical crop raster",
+        "artifacts": ["preview_png", "crop_polygons_geojson", "area_summary_csv"],
+        "class_count": 13
+      },
+      "applicability": {
+        "readiness": "demo_contract_only",
+        "region": "not production validated",
+        "limitations": [
+          "No crop checkpoint is wired in this phase.",
+          "No ArcGIS .dlpk compatibility is claimed.",
+          "Cached demo results are deterministic product-contract artifacts."
+        ]
+      },
+      "model_card": {
+        "summary": "ArcGIS-style Prithvi crop classification package contract for Model Hub demos.",
+        "usage": "Run cached_demo to inspect result schema, crop class summaries, and GIS artifact manifests.",
+        "next_step": "Attach a validated Prithvi crop head and multiband raster preprocessing pipeline."
+      }
+    }
+  },
+  {
     "model_id": "semantic_change_prithvi",
     "display_name": "Semantic Change Detection (Prithvi Demo)",
     "task_type": "change_detection",
