@@ -154,7 +154,7 @@ def test_model_hub_returns_prithvi_crop_model_details():
     assert body["task_type"] == "crop_classification"
     assert body["status"] == "demo_only"
     assert body["package_profile"]["package_type"] == "arcgis_style_pretrained_imagery_model"
-    assert body["package_profile"]["input_profile"]["raster_profile"] == "multiband_crop_composite"
+    assert body["package_profile"]["input_profile"]["raster_profile"] == "18_band_hls_multitemporal_composite"
     assert body["package_profile"]["output_profile"]["primary_output"] == "categorical crop raster"
 
 
