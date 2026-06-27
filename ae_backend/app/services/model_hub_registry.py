@@ -166,7 +166,7 @@ class ModelHubRegistry:
             self._by_id[model.model_id] = model
 
     def get_model(self, model_id: str) -> ModelHubEntry:
-        return self._by_id[model_id]
+        return deepcopy(self._by_id[model_id])
 
     def to_public_dict(self) -> dict[str, list[dict[str, Any]]]:
         return {"models": [model.to_dict() for model in self.models]}

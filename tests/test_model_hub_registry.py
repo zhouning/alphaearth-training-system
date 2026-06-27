@@ -160,7 +160,7 @@ def test_load_model_registry_rejects_invalid_scalar_field_types(tmp_path: Path, 
         load_model_registry(registry_path)
 
 
-def test_committed_model_hub_registry_loads_phase_1_models():
+def test_committed_model_hub_registry_loads_expected_models():
     registry = load_model_registry(REGISTRY_DATA_PATH)
 
     statuses = {model.model_id: model.status for model in registry.models}
@@ -190,6 +190,27 @@ def test_load_model_registry_preserves_optional_package_profile(tmp_path: Path):
     assert payload["package_profile"]["package_type"] == "arcgis_style_pretrained_imagery_model"
     assert payload["package_profile"]["runtime_modes"] == ["cached_demo"]
     assert payload["package_profile"]["input_profile"]["raster_profile"] == "multiband_crop_composite"
+
+
+def test_get_model_returned_optional_metadata_does_not_mutate_registry(tmp_path: Path):
+    registry_path = tmp_path / "model_hub_models.json"
+    record = _model_record("prithvi_crop_classification_arcgis_style", task_type="crop_classification", status="demo_only")
+    record["package_profile"] = {
+        "package_type": "arcgis_style_pretrained_imagery_model",
+        "runtime_modes": ["cached_demo"],
+        "input_profile": {"raster_profile": "multiband_crop_composite"},
+    }
+    _write_registry(registry_path, [record])
+    registry = load_model_registry(registry_path)
+
+    entry = registry.get_model("prithvi_crop_classification_arcgis_style")
+    entry.extra_fields["package_profile"]["runtime_modes"].append("mutated")
+
+    fresh_payload = registry.get_model("prithvi_crop_classification_arcgis_style").to_dict()
+    public_payload = registry.to_public_dict()["models"][0]
+
+    assert fresh_payload["package_profile"]["runtime_modes"] == ["cached_demo"]
+    assert public_payload["package_profile"]["runtime_modes"] == ["cached_demo"]
 
 
 def test_committed_model_hub_registry_loads_prithvi_crop_package():
