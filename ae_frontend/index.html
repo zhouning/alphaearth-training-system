@@ -1331,6 +1331,7 @@
                 const runtimeModes = model.package_profile?.runtime_modes || [];
                 if (runtimeModes.includes('cached_demo')) return 'cached_demo';
                 if (model.input_spec?.default_demo_input_mode) return model.input_spec.default_demo_input_mode;
+                if (model.status === 'demo_only' && model.task_type === 'change_detection') return 'cached_demo';
                 if (model.model_id === 'lulc_6class_prithvi_houlsby') return 'demo_patch';
                 return null;
             };
