@@ -34,6 +34,21 @@ def test_summarize_cached_crop_demo_returns_crop_result_and_artifacts(tmp_path: 
         result["result"]["model_package"]["package_type"]
         == "arcgis_style_pretrained_imagery_model"
     )
+    assert result["result"]["model_package"]["class_schema"] == [
+        "natural_vegetation",
+        "forest",
+        "corn",
+        "soybeans",
+        "wetlands",
+        "developed_barren",
+        "open_water",
+        "winter_wheat",
+        "alfalfa",
+        "fallow_idle_cropland",
+        "cotton",
+        "sorghum",
+        "other",
+    ]
     assert {artifact["kind"] for artifact in result["artifacts"]} == {
         "png",
         "geojson",
@@ -115,6 +130,31 @@ def test_summarize_cached_crop_demo_falls_back_for_invalid_summary_values(
     )
     (crop_dir / "crop_summary.csv").write_text(
         f"class,pixels,fraction\n{csv_row}",
+        encoding="utf-8",
+    )
+
+    result = summarize_cached_crop_demo(options={"crop_dir": str(crop_dir)})
+
+    assert result["result"]["summary"]["dominant_class"] == "corn"
+    assert result["result"]["summary"]["class_pixel_counts"]["corn"] == 6400
+    assert result["result"]["summary"]["class_area_fraction"]["corn"] == 0.434783
+    assert any("invalid crop_summary.csv" in log for log in result["logs"])
+
+
+def test_summarize_cached_crop_demo_falls_back_for_unknown_summary_class(
+    tmp_path: Path,
+):
+    from app.services.model_hub_crop import summarize_cached_crop_demo
+
+    crop_dir = tmp_path / "unknown_class_crop_demo"
+    crop_dir.mkdir()
+    (crop_dir / "crop_preview.png").write_bytes(b"png")
+    (crop_dir / "crop_polygons.geojson").write_text(
+        '{"type":"FeatureCollection","features":[]}',
+        encoding="utf-8",
+    )
+    (crop_dir / "crop_summary.csv").write_text(
+        "class,pixels,fraction\nmaize,6400,0.64\n",
         encoding="utf-8",
     )
 

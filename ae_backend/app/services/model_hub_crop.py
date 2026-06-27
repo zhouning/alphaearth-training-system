@@ -78,6 +78,8 @@ def _read_crop_summary_csv(summary_csv: Path) -> tuple[dict[str, int], dict[str,
             fraction = (row.get("fraction") or "").strip()
             if not class_name or not pixels or not fraction:
                 raise ValueError("blank class, pixels, or fraction")
+            if class_name not in CROP_CLASSES:
+                raise ValueError(f"unknown crop class: {class_name}")
             pixel_count = int(pixels)
             area_fraction = float(fraction)
             if pixel_count < 0:

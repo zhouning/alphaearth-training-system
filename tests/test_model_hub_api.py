@@ -170,7 +170,7 @@ def test_model_hub_runs_prithvi_crop_cached_demo_job(monkeypatch, tmp_path: Path
         encoding="utf-8",
     )
     (crop_dir / "crop_summary.csv").write_text(
-        "class,pixels,fraction\nmaize,6400,0.64\n",
+        "class,pixels,fraction\ncorn,6400,0.64\n",
         encoding="utf-8",
     )
 
@@ -190,5 +190,5 @@ def test_model_hub_runs_prithvi_crop_cached_demo_job(monkeypatch, tmp_path: Path
     body = response.json()
     assert body["status"] == "succeeded"
     assert body["result"]["task"] == "crop_classification"
-    assert body["result"]["summary"]["dominant_class"] == "maize"
+    assert body["result"]["summary"]["dominant_class"] == "corn"
     assert {artifact["kind"] for artifact in body["artifacts"]} == {"png", "geojson", "csv"}
