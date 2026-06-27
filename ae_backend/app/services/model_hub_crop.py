@@ -42,6 +42,7 @@ ARTIFACT_FILES = [
     ("geojson", "crop_polygons.geojson"),
     ("csv", "crop_summary.csv"),
 ]
+SUMMARY_COLUMNS = {"class", "pixels", "fraction"}
 
 
 def default_crop_demo_dir() -> Path:
@@ -62,17 +63,44 @@ def _artifact_manifest(crop_dir: Path) -> tuple[list[dict], bool]:
     return artifacts, all_exist
 
 
+def _read_crop_summary_csv(summary_csv: Path) -> tuple[dict[str, int], dict[str, float]]:
+    with summary_csv.open(encoding="utf-8", newline="") as summary_file:
+        reader = csv.DictReader(summary_file)
+        if not reader.fieldnames or not SUMMARY_COLUMNS.issubset(reader.fieldnames):
+            raise ValueError("missing required columns")
+
+        counts: dict[str, int] = {}
+        fractions: dict[str, float] = {}
+        for row in reader:
+            class_name = (row.get("class") or "").strip()
+            pixels = (row.get("pixels") or "").strip()
+            fraction = (row.get("fraction") or "").strip()
+            if not class_name or not pixels or not fraction:
+                raise ValueError("blank class, pixels, or fraction")
+            counts[class_name] = int(pixels)
+            fractions[class_name] = float(fraction)
+
+    if not counts:
+        raise ValueError("no class rows")
+    return counts, fractions
+
+
 def summarize_cached_crop_demo(*, options: dict) -> dict:
     crop_dir = Path(options.get("crop_dir") or default_crop_demo_dir())
     counts = dict(DEMO_PIXEL_COUNTS)
     fractions = _area_fractions(counts)
+    logs: list[str] = []
+
     summary_csv = crop_dir / "crop_summary.csv"
     if summary_csv.exists():
-        with summary_csv.open(encoding="utf-8", newline="") as summary_file:
-            rows = list(csv.DictReader(summary_file))
-        if rows:
-            counts = {row["class"]: int(row["pixels"]) for row in rows}
-            fractions = {row["class"]: float(row["fraction"]) for row in rows}
+        try:
+            counts, fractions = _read_crop_summary_csv(summary_csv)
+        except (OSError, ValueError, csv.Error) as exc:
+            logs.append(
+                f"invalid crop_summary.csv at {summary_csv}; "
+                f"using deterministic demo summary ({exc})"
+            )
+
     dominant_class = max(counts, key=counts.get)
     artifacts, artifacts_exist = _artifact_manifest(crop_dir)
     artifact_log = (
@@ -80,6 +108,7 @@ def summarize_cached_crop_demo(*, options: dict) -> dict:
         if artifacts_exist
         else "returned planned artifact paths"
     )
+    logs.append(f"{artifact_log} from {crop_dir}")
 
     return {
         "result": {
@@ -99,5 +128,5 @@ def summarize_cached_crop_demo(*, options: dict) -> dict:
             },
         },
         "artifacts": artifacts,
-        "logs": [f"{artifact_log} from {crop_dir}"],
+        "logs": logs,
     }
