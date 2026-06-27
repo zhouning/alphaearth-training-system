@@ -169,6 +169,10 @@ def test_run_prithvi_crop_raster_demo_logs_validation_and_contract_runtime(tmp_p
         ("stride", "not-an-int", "stride.*positive integer"),
         ("stride", 0, "stride.*at least 1"),
         ("stride", -2, "stride.*at least 1"),
+        ("max_pixels", 2_000_001, "max_pixels.*at most"),
+        ("max_tiles", 4097, "max_tiles.*at most"),
+        ("max_preview_pixels", 1_000_001, "max_preview_pixels.*at most"),
+        ("max_geojson_features", 5001, "max_geojson_features.*at most"),
     ],
 )
 def test_run_prithvi_crop_raster_demo_rejects_invalid_tile_options(

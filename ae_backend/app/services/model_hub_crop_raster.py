@@ -168,6 +168,18 @@ def _parse_positive_int_option(options: dict, name: str, default: int) -> int:
     return parsed
 
 
+def _parse_capped_positive_int_option(
+    options: dict,
+    name: str,
+    default: int,
+    maximum: int,
+) -> int:
+    parsed = _parse_positive_int_option(options, name, default)
+    if parsed > maximum:
+        raise ModelHubRuntimeError(f"{name} must be at most {maximum}")
+    return parsed
+
+
 def _safe_ratio(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
     return numerator / np.where(np.abs(denominator) < 1e-6, 1e-6, denominator)
 
@@ -337,7 +349,9 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
     raster_path = Path(raster_path_value)
     validation = validate_prithvi_crop_raster(raster_path)
     pixel_count = int(validation["width"] * validation["height"])
-    max_pixels = _parse_positive_int_option(options, "max_pixels", _DEFAULT_MAX_PIXELS)
+    max_pixels = _parse_capped_positive_int_option(
+        options, "max_pixels", _DEFAULT_MAX_PIXELS, _DEFAULT_MAX_PIXELS
+    )
     if pixel_count > max_pixels:
         raise ModelHubRuntimeError(
             f"Prithvi crop raster has {pixel_count} pixels, exceeds max_pixels={max_pixels}"
@@ -346,21 +360,21 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
     output_dir = _resolve_output_dir(options, raster_path)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    tile_size = _parse_positive_int_option(options, "tile_size", 224)
-    stride = _parse_positive_int_option(options, "stride", tile_size)
-    if tile_size > _MAX_TILE_SIZE:
-        raise ModelHubRuntimeError(f"tile_size must be at most {_MAX_TILE_SIZE}")
-    if stride > _MAX_STRIDE:
-        raise ModelHubRuntimeError(f"stride must be at most {_MAX_STRIDE}")
-    max_tiles = _parse_positive_int_option(options, "max_tiles", _DEFAULT_MAX_TILES)
-    max_preview_pixels = _parse_positive_int_option(
+    tile_size = _parse_capped_positive_int_option(options, "tile_size", 224, _MAX_TILE_SIZE)
+    stride = _parse_capped_positive_int_option(options, "stride", tile_size, _MAX_STRIDE)
+    max_tiles = _parse_capped_positive_int_option(
+        options, "max_tiles", _DEFAULT_MAX_TILES, _DEFAULT_MAX_TILES
+    )
+    max_preview_pixels = _parse_capped_positive_int_option(
         options,
         "max_preview_pixels",
         _DEFAULT_MAX_PREVIEW_PIXELS,
+        _DEFAULT_MAX_PREVIEW_PIXELS,
     )
-    max_geojson_features = _parse_positive_int_option(
+    max_geojson_features = _parse_capped_positive_int_option(
         options,
         "max_geojson_features",
+        _DEFAULT_MAX_GEOJSON_FEATURES,
         _DEFAULT_MAX_GEOJSON_FEATURES,
     )
     logs = [
