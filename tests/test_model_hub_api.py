@@ -1,3 +1,4 @@
+import shutil
 import sys
 from pathlib import Path
 
@@ -269,6 +270,35 @@ def test_model_hub_fails_prithvi_crop_upload_raster_demo_for_wrong_band_count(tm
     assert body["status"] == "failed"
     assert "requires 18 bands" in body["error"]
 
+
+def test_model_hub_fails_prithvi_crop_upload_raster_demo_for_unsafe_raster_path(tmp_path: Path):
+    from app.main import app
+
+    unsafe_dir = repo_root / "ae_backend" / "not_allowed_api_inputs"
+    unsafe_dir.mkdir(exist_ok=True)
+    try:
+        raster_path = _write_api_test_geotiff(unsafe_dir / "crop_18band.tif", bands=18)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/ae/model-hub/jobs",
+            json={
+                "model_id": "prithvi_crop_classification_arcgis_style",
+                "input_mode": "upload_raster_demo",
+                "options": {
+                    "raster_path": str(raster_path),
+                    "output_dir": str(tmp_path / "outputs"),
+                },
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "failed"
+        assert "raster_path" in body["error"]
+        assert "allowed" in body["error"]
+    finally:
+        shutil.rmtree(unsafe_dir, ignore_errors=True)
 
 
 def test_model_hub_fails_prithvi_crop_upload_raster_demo_for_unsafe_output_dir(tmp_path: Path):

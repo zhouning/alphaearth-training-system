@@ -1,5 +1,6 @@
 import csv
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -297,3 +298,23 @@ def test_run_prithvi_crop_raster_demo_writes_geojson_wgs84_for_projected_raster(
     assert -90.0 <= first_y <= 90.0
     assert geojson["features"][0]["properties"]["geojson_crs"] == "EPSG:4326"
     assert geojson["features"][0]["properties"]["source_crs"] == "EPSG:3857"
+
+
+def test_run_prithvi_crop_raster_demo_rejects_raster_path_outside_allowed_roots(tmp_path: Path):
+    from app.services.model_hub_runtime import ModelHubRuntimeError
+    from app.services.model_hub_crop_raster import run_prithvi_crop_raster_demo
+
+    unsafe_dir = repo_root / "ae_backend" / "not_allowed_crop_inputs"
+    unsafe_dir.mkdir(exist_ok=True)
+    try:
+        raster_path = _write_test_geotiff(unsafe_dir / "crop_18band.tif")
+
+        with pytest.raises(ModelHubRuntimeError, match="raster_path.*allowed"):
+            run_prithvi_crop_raster_demo(
+                options={
+                    "raster_path": str(raster_path),
+                    "output_dir": str(tmp_path / "outputs"),
+                }
+            )
+    finally:
+        shutil.rmtree(unsafe_dir, ignore_errors=True)

@@ -105,6 +105,10 @@ def _default_output_root() -> Path:
     return Path(PROJECT_ROOT) / "results" / "model_hub" / "prithvi_crop_runs"
 
 
+def _default_input_root() -> Path:
+    return Path(PROJECT_ROOT) / "results" / "model_hub" / "prithvi_crop_inputs"
+
+
 def _default_output_dir(raster_path: Path) -> Path:
     fingerprint = hashlib.sha256(str(raster_path.resolve()).encode("utf-8")).hexdigest()[:10]
     return _default_output_root() / f"{raster_path.stem}-{fingerprint}"
@@ -134,6 +138,20 @@ def _resolve_output_dir(options: dict, raster_path: Path) -> Path:
             f"output_dir must resolve under allowed local demo roots: {allowed_text}"
         )
     return output_dir
+
+
+def _resolve_input_raster_path(raster_path_value: str | Path) -> Path:
+    raster_path = Path(raster_path_value).expanduser().resolve()
+    allowed_roots = [
+        _default_input_root().resolve(),
+        Path(tempfile.gettempdir()).resolve(),
+    ]
+    if not any(raster_path == root or _is_relative_to(raster_path, root) for root in allowed_roots):
+        allowed_text = ", ".join(str(root) for root in allowed_roots)
+        raise ModelHubRuntimeError(
+            f"raster_path must resolve under allowed local demo roots: {allowed_text}"
+        )
+    return raster_path
 
 
 def _estimate_tile_count(width: int, height: int, tile_size: int, stride: int) -> int:
@@ -346,7 +364,7 @@ def run_prithvi_crop_raster_demo(*, options: dict) -> dict:
     if not raster_path_value:
         raise ModelHubRuntimeError("raster_path is required for upload_raster_demo")
 
-    raster_path = Path(raster_path_value)
+    raster_path = _resolve_input_raster_path(raster_path_value)
     validation = validate_prithvi_crop_raster(raster_path)
     pixel_count = int(validation["width"] * validation["height"])
     max_pixels = _parse_capped_positive_int_option(
