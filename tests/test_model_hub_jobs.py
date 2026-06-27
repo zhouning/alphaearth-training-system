@@ -78,3 +78,28 @@ def test_job_store_returns_independent_job_snapshots():
 
     assert succeeded["artifacts"][0]["path"] == "results/model_hub/change.geojson"
     assert succeeded["result"]["summary"]["changed_pairs"] == 10
+
+
+def test_job_store_marks_success_with_multiple_runtime_logs():
+    from app.services.model_hub_jobs import ModelHubJobStore
+
+    store = ModelHubJobStore()
+    job = store.create_job("prithvi_crop_classification_arcgis_style", "upload_raster_demo", {})
+    store.mark_running(job["job_id"], log="job accepted")
+    store.mark_succeeded(
+        job["job_id"],
+        result={"summary": {"dominant_class": "corn"}},
+        artifacts=[],
+        logs=[
+            "validated 18-band Prithvi crop raster",
+            "ran deterministic tiled crop classification contract demo",
+        ],
+    )
+
+    loaded = store.get_job(job["job_id"])
+    assert loaded["status"] == "succeeded"
+    assert loaded["logs"] == [
+        "job accepted",
+        "validated 18-band Prithvi crop raster",
+        "ran deterministic tiled crop classification contract demo",
+    ]

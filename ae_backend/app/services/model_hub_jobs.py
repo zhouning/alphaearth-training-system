@@ -50,6 +50,7 @@ class ModelHubJobStore:
         result: dict,
         artifacts: list[dict],
         log: str | None = None,
+        logs: list[str] | None = None,
     ) -> None:
         job = self._jobs[job_id]
         job["status"] = "succeeded"
@@ -58,6 +59,8 @@ class ModelHubJobStore:
         job["updated_at"] = _utc_now()
         if log:
             job["logs"].append(log)
+        if logs:
+            job["logs"].extend(str(item) for item in logs)
 
     def mark_failed(self, job_id: str, error: str) -> None:
         job = self._jobs[job_id]
