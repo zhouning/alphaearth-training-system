@@ -26,3 +26,13 @@ def test_frontend_uses_model_hub_runtime_modes_for_demo_jobs():
     assert "model.status === 'demo_only'" in html
     assert "model.model_id === 'lulc_6class_prithvi_houlsby'" in html
     assert "prithvi_crop_classification_arcgis_style" not in html
+
+
+def test_frontend_exposes_metadata_driven_crop_raster_demo_controls():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "upload_raster_demo" in html
+    assert "supportsModelHubRasterDemo" in html
+    assert "modelHubRasterPath" in html
+    assert "runModelHubRasterDemo" in html
+    assert "supportsModelHubRasterDemo(model)" in html

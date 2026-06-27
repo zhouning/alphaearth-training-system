@@ -457,6 +457,12 @@
                                 {{ runningModelHubJob ? '运行中...' : '运行演示任务' }}
                             </button>
                         </div>
+                        <div v-if="supportsModelHubRasterDemo(model)" class="grid grid-cols-1 gap-2 pt-2 border-t border-gray-100">
+                            <input v-model="modelHubRasterPath" type="text" aria-label="Local 18-band GeoTIFF path" placeholder="Local 18-band GeoTIFF path, for example D:/tmp/crop_18band.tif" class="w-full min-w-0 px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-xs focus:ring-primary focus:border-primary outline-none" />
+                            <button type="button" class="w-full px-3 py-2 bg-primary text-white rounded-md text-sm hover:bg-blue-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" :disabled="runningModelHubJob" @click="runModelHubRasterDemo(model)">
+                                {{ runningModelHubJob ? 'Running...' : 'Run Raster Demo' }}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -822,6 +828,7 @@
             const modelHubStatus = ref(null);
             const loadingModelHubModels = ref(false);
             const runningModelHubJob = ref(false);
+            const modelHubRasterPath = ref('');
 
             // LULC tool refs
             const lulcCapabilities = ref(null);
@@ -1340,6 +1347,11 @@
                 return Boolean(getModelHubDemoInputMode(model));
             };
 
+            const supportsModelHubRasterDemo = (model) => {
+                const runtimeModes = model?.package_profile?.runtime_modes || [];
+                return runtimeModes.includes('upload_raster_demo');
+            };
+
             const runModelHubDemo = async (model) => {
                 if (!isModelHubRunnable(model)) {
                     setModelHubStatus('info', `${model.display_name} 仍在计划中。`);
@@ -1367,6 +1379,40 @@
                 } catch (e) {
                     console.error('Failed to run model hub job', e);
                     setModelHubStatus('error', '模型中心任务运行失败，请查看后端日志。');
+                } finally {
+                    runningModelHubJob.value = false;
+                }
+            };
+
+            const runModelHubRasterDemo = async (model) => {
+                if (!supportsModelHubRasterDemo(model)) {
+                    setModelHubStatus('info', `${model.display_name} does not declare raster demo mode.`);
+                    return;
+                }
+                if (!modelHubRasterPath.value.trim()) {
+                    setModelHubStatus('error', 'Enter a local 18-band GeoTIFF path first.');
+                    return;
+                }
+                runningModelHubJob.value = true;
+                try {
+                    const res = await fetch('/api/ae/model-hub/jobs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model_id: model.model_id,
+                            input_mode: 'upload_raster_demo',
+                            options: {
+                                raster_path: modelHubRasterPath.value.trim(),
+                                output_formats: ['geotiff', 'png', 'geojson', 'csv', 'manifest'],
+                            },
+                        }),
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    modelHubJob.value = await res.json();
+                    setModelHubStatus('info', `Raster job ${modelHubJob.value.job_id} status: ${modelHubJob.value.status}`);
+                } catch (e) {
+                    console.error('Failed to run model hub raster job', e);
+                    setModelHubStatus('error', 'Raster Model Hub job failed. Check backend logs.');
                 } finally {
                     runningModelHubJob.value = false;
                 }
@@ -1769,7 +1815,8 @@
                 availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
                 modelHubModels, modelHubJob, modelHubStatus, loadingModelHubModels,
-                runningModelHubJob, fetchModelHubModels, getModelHubDemoInputMode, isModelHubRunnable, runModelHubDemo,
+                runningModelHubJob, modelHubRasterPath, fetchModelHubModels, getModelHubDemoInputMode,
+                isModelHubRunnable, supportsModelHubRasterDemo, runModelHubDemo, runModelHubRasterDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
                 lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
                 publicLulcForm, publicLulcResult, localLulcForm, localLulcFile, localLulcLabel,
