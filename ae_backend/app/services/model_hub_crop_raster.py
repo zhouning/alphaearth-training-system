@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from affine import Affine
 import rasterio
 from rasterio.errors import RasterioIOError
 
@@ -68,7 +69,7 @@ def validate_prithvi_crop_raster(raster_path: str | Path) -> dict:
                 raise ModelHubRuntimeError("Prithvi crop raster width and height must be positive")
             if src.crs is None:
                 raise ModelHubRuntimeError("Prithvi crop raster requires georeferencing CRS")
-            if src.transform is None:
+            if src.transform is None or src.transform == Affine.identity():
                 raise ModelHubRuntimeError("Prithvi crop raster requires georeferencing transform")
             return {
                 "path": str(path),

@@ -31,6 +31,22 @@ def _write_test_geotiff(path: Path, *, bands: int = 18, width: int = 8, height: 
     return path
 
 
+def _write_ungeoreferenced_geotiff(path: Path) -> Path:
+    data = np.zeros((18, 6, 8), dtype=np.float32)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=6,
+        width=8,
+        count=18,
+        dtype="float32",
+        crs="EPSG:4326",
+    ) as dst:
+        dst.write(data)
+    return path
+
+
 def test_validate_prithvi_crop_raster_accepts_18_band_geotiff(tmp_path: Path):
     from app.services.model_hub_crop_raster import validate_prithvi_crop_raster
 
@@ -61,4 +77,14 @@ def test_validate_prithvi_crop_raster_rejects_wrong_band_count(tmp_path: Path):
     raster_path = _write_test_geotiff(tmp_path / "crop_6band.tif", bands=6)
 
     with pytest.raises(ModelHubRuntimeError, match="requires 18 bands"):
+        validate_prithvi_crop_raster(raster_path)
+
+
+def test_validate_prithvi_crop_raster_rejects_missing_transform(tmp_path: Path):
+    from app.services.model_hub_runtime import ModelHubRuntimeError
+    from app.services.model_hub_crop_raster import validate_prithvi_crop_raster
+
+    raster_path = _write_ungeoreferenced_geotiff(tmp_path / "crop_no_transform.tif")
+
+    with pytest.raises(ModelHubRuntimeError, match="requires georeferencing transform"):
         validate_prithvi_crop_raster(raster_path)
