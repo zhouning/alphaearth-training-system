@@ -48,17 +48,30 @@ def test_frontend_exposes_metadata_driven_crop_raster_demo_controls():
     assert "D:/tmp/crop_18band.tif" not in html
 
 
-def test_frontend_exposes_paper12_summary_panel():
+def test_frontend_exposes_system_capability_workbench():
     html = FRONTEND.read_text(encoding="utf-8")
 
-    assert "paper12Summary" in html
-    assert "fetchPaper12Summary" in html
-    assert "/api/ae/model-hub/paper12-summary" in html
-    assert "Paper12 能力总览" in html
+    assert "systemCapabilities" in html
+    assert "fetchSystemCapabilities" in html
+    assert "/api/ae/system/capabilities" in html
+    assert "系统能力工作台" in html
+    assert "AlphaEarth System" in html
     assert "readiness_counts" in html
-    assert "benchmarks" in html
-    assert "arcgis_replacement_status" in html
+    assert "evidence_sources" in html
+    assert "arcgis_replacement" in html
+    assert "Paper12 能力总览" not in html
 
+
+def test_frontend_exposes_system_capability_card_hooks():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "systemCapabilityFor" in html
+    assert "capabilityWorkflowLabel" in html
+    assert "formatEvidenceValue" in html
+    assert "systemCapabilityFor(model).workflow_level" in html
+    assert "systemCapabilityFor(model).checkpoint" in html
+    assert "systemCapabilityFor(model).limitations" in html
+    assert "systemCapabilityFor(model).next_steps" in html
 
 def test_frontend_exposes_model_hub_job_summary_sections():
     html = FRONTEND.read_text(encoding="utf-8")
