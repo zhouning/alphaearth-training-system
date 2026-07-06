@@ -403,3 +403,62 @@ def test_model_hub_paper12_summary_reports_missing_optional_results(
     missing = [item for item in body["benchmarks"] if item.get("status") == "missing"]
     assert missing
     assert any("missing" in item["note"].lower() for item in missing)
+
+def test_system_capabilities_endpoint_reports_operational_readiness():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/capabilities")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["system"] == "AlphaEarth System"
+    assert set(body) >= {
+        "generated_at",
+        "readiness_counts",
+        "summary",
+        "capabilities",
+        "evidence_sources",
+    }
+    assert body["readiness_counts"]["ready"] >= 1
+    assert body["readiness_counts"]["demo_only"] >= 1
+    assert body["readiness_counts"]["planned"] >= 1
+    assert body["summary"]["runnable_models"] >= 1
+    assert body["summary"]["demo_workflows"] >= 1
+    assert body["summary"]["arcgis_replacement_ready"] is False
+
+    capabilities = {item["id"]: item for item in body["capabilities"]}
+    lulc = capabilities["lulc_6class_prithvi_houlsby"]
+    assert lulc["readiness"] == "ready"
+    assert lulc["workflow_level"] == "runnable_and_evaluable"
+    assert lulc["checkpoint"]["configured"] is True
+    assert "demo_patch" in lulc["runtime_modes"]
+    assert any(item["label"] == "mIoU" for item in lulc["evidence"])
+
+    crop = capabilities["prithvi_crop_classification_arcgis_style"]
+    assert crop["readiness"] == "demo_only"
+    assert crop["workflow_level"] == "contract_demo"
+    assert crop["checkpoint"]["configured"] is False
+    assert crop["arcgis_replacement"]["status"] == "not_ready"
+    assert "No validated crop checkpoint" in crop["arcgis_replacement"]["reason"]
+    assert "upload_raster_demo" in crop["runtime_modes"]
+
+
+def test_system_capabilities_tolerates_missing_optional_evidence(monkeypatch, tmp_path: Path):
+    from app.main import app
+    import app.services.system_capabilities as system_capabilities
+
+    monkeypatch.setattr(system_capabilities, "PAPER12_RESULTS_DIR", tmp_path)
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/capabilities")
+
+    assert response.status_code == 200
+    body = response.json()
+    missing_sources = [
+        item
+        for item in body["evidence_sources"]
+        if item["kind"] == "paper12_benchmark" and item["available"] is False
+    ]
+    assert missing_sources
+    assert all("missing" in item["note"].lower() for item in missing_sources)
