@@ -417,7 +417,7 @@
                 <div class="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-900">模型中心</h2>
-                        <p class="text-sm text-gray-500 mt-1">Paper12 / Prithvi 模型包目录、演示任务和可交付产物入口</p>
+                        <p class="text-sm text-gray-500 mt-1">AlphaEarth System 模型包目录、运行任务和能力证据入口</p>
                     </div>
                     <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="loadingModelHubModels" @click="fetchModelHubModels">
                         <svg class="w-4 h-4 inline-block mr-1" :class="loadingModelHubModels ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -432,38 +432,46 @@
                 <section class="glass-card p-5 space-y-4">
                     <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Paper12 能力总览</h3>
-                            <p class="text-sm text-gray-500 mt-1">汇总本地 Paper12/Prithvi 证据、模型就绪状态和 ArcGIS 替代边界。</p>
+                            <h3 class="text-lg font-semibold text-gray-900">系统能力工作台</h3>
+                            <p class="text-sm text-gray-500 mt-1">AlphaEarth System 当前可运行、可评估、演示和计划中的遥感能力总览。</p>
                         </div>
-                        <button type="button" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50" :disabled="loadingPaper12Summary" @click="fetchPaper12Summary">
-                            {{ loadingPaper12Summary ? '刷新中...' : '刷新摘要' }}
+                        <button type="button" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50" :disabled="loadingSystemCapabilities" @click="fetchSystemCapabilities">
+                            {{ loadingSystemCapabilities ? '刷新中...' : '刷新系统能力' }}
                         </button>
                     </div>
-                    <div v-if="paper12Summary" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div v-if="systemCapabilities" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
-                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">模型状态</div>
+                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">AlphaEarth System</div>
+                            <div class="mt-2 text-sm text-gray-700">
+                                可运行 {{ systemCapabilities.summary.runnable_models }} 个，演示 {{ systemCapabilities.summary.demo_workflows }} 个，计划 {{ systemCapabilities.summary.planned_workflows }} 个
+                            </div>
                             <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                                <span v-for="(count, status) in paper12Summary.readiness_counts" :key="status" class="px-2 py-1 rounded border" :class="statusClass(status)">{{ status }}: {{ count }}</span>
+                                <span v-for="(count, status) in systemCapabilities.readiness_counts" :key="status" class="px-2 py-1 rounded border" :class="statusClass(status)">{{ status }}: {{ count }}</span>
                             </div>
                         </div>
-                        <div class="border border-gray-200 rounded-md p-3 bg-gray-50 lg:col-span-2">
-                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Paper12 Benchmarks</div>
-                            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                <div v-for="benchmark in paper12Summary.benchmarks" :key="benchmark.id" class="bg-white border border-gray-200 rounded p-2">
-                                    <div class="text-sm font-medium text-gray-800">{{ benchmark.label }}</div>
-                                    <div class="text-xs text-gray-500 mt-1">
-                                        <span v-if="benchmark.status === 'available'">{{ benchmark.best_method }} · {{ benchmark.metric }} {{ formatMetric(benchmark.best_value) }}</span>
-                                        <span v-else>{{ benchmark.note }}</span>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
+                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">替代边界</div>
+                            <p class="mt-2 text-sm text-gray-700">
+                                ArcGIS/Prithvi 替代就绪：{{ systemCapabilities.summary.arcgis_replacement_ready ? '是' : '否' }}
+                            </p>
+                            <p class="mt-1 text-xs text-gray-500">本地 crop 能力仍按契约演示处理，未声明可替代 ArcGIS 预训练模型。</p>
+                        </div>
+                        <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
+                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">证据来源</div>
+                            <ul class="mt-2 space-y-1 text-xs text-gray-600">
+                                <li v-for="source in systemCapabilities.evidence_sources" :key="source.path" class="break-all">
+                                    <span :class="source.available ? 'text-green-700' : 'text-amber-700'">{{ source.available ? 'available' : 'missing' }}</span>
+                                    · {{ source.label }} · {{ source.path }}
+                                </li>
+                            </ul>
                         </div>
                     </div>
-                    <div v-if="paper12Summary && paper12Summary.notes && paper12Summary.notes.length" class="text-xs text-gray-500 space-y-1">
-                        <div v-for="note in paper12Summary.notes" :key="note">{{ note }}</div>
+                    <div v-if="systemCapabilities && systemCapabilities.notes && systemCapabilities.notes.length" class="text-xs text-gray-500 space-y-1">
+                        <div v-for="note in systemCapabilities.notes" :key="note">{{ note }}</div>
                     </div>
-                    <div v-else-if="loadingPaper12Summary" class="text-sm text-gray-500">正在加载 Paper12 能力摘要...</div>
-                    <div v-else class="text-sm text-gray-500">Paper12 能力摘要尚未加载。</div>
+                    <div v-else-if="loadingSystemCapabilities" class="text-sm text-gray-500">正在加载系统能力工作台...</div>
+                    <div v-else-if="systemCapabilitiesError" class="text-sm text-red-600">系统能力加载失败：{{ systemCapabilitiesError }}</div>
+                    <div v-else class="text-sm text-gray-500">系统能力工作台尚未加载。</div>
                 </section>
 
                 <div v-if="loadingModelHubModels" class="p-12 text-center text-gray-500">
@@ -484,8 +492,11 @@
                             </div>
                             <div class="flex flex-wrap justify-end gap-2 text-xs shrink-0">
                                 <span class="px-2 py-1 rounded border" :class="statusClass(model.status)">{{ model.status }}</span>
-                                <span v-if="paper12CapabilityFor(model)" class="px-2 py-1 rounded border bg-gray-50 text-gray-700 border-gray-200">
-                                    {{ paper12CapabilityFor(model).arcgis_replacement_status }}
+                                <span v-if="systemCapabilityFor(model)" class="px-2 py-1 rounded border bg-gray-50 text-gray-700 border-gray-200">
+                                    {{ capabilityWorkflowLabel(systemCapabilityFor(model).workflow_level) }}
+                                </span>
+                                <span v-if="systemCapabilityFor(model)?.arcgis_replacement" class="px-2 py-1 rounded border bg-gray-50 text-gray-700 border-gray-200">
+                                    {{ systemCapabilityFor(model).arcgis_replacement.status }}
                                 </span>
                             </div>
                         </div>
@@ -494,9 +505,31 @@
                             <div><span class="text-gray-500">Adapter:</span> <span class="data-font text-gray-800">{{ model.adapter }}</span></div>
                             <div class="sm:col-span-2"><span class="text-gray-500">Classes:</span> <span class="data-font text-gray-800 break-words">{{ (model.class_schema || []).join(', ') }}</span></div>
                         </div>
-                        <div v-if="paper12CapabilityFor(model)" class="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded p-2">
-                            <div>{{ paper12CapabilityFor(model).reason }}</div>
-                            <div class="mt-1 text-gray-600">下一步：{{ paper12CapabilityFor(model).next_step }}</div>
+                        <div v-if="systemCapabilityFor(model)" class="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded p-2 space-y-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div><span class="text-gray-500">工作流:</span> <span class="text-gray-800">{{ capabilityWorkflowLabel(systemCapabilityFor(model).workflow_level) }}</span></div>
+                                <div><span class="text-gray-500">Checkpoint:</span> <span class="text-gray-800">{{ systemCapabilityFor(model).checkpoint.configured ? systemCapabilityFor(model).checkpoint.path : '未配置' }}</span></div>
+                            </div>
+                            <div v-if="systemCapabilityFor(model).evidence && systemCapabilityFor(model).evidence.length">
+                                <div class="text-gray-600 font-medium mb-1">证据</div>
+                                <div class="flex flex-wrap gap-2">
+                                    <span v-for="evidence in systemCapabilityFor(model).evidence" :key="evidence.kind + evidence.label" class="px-2 py-1 rounded border bg-white border-gray-200">
+                                        {{ evidence.label }}: {{ formatEvidenceValue(evidence.value) }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-if="systemCapabilityFor(model).limitations && systemCapabilityFor(model).limitations.length">
+                                <div class="text-gray-600 font-medium mb-1">限制</div>
+                                <ul class="list-disc pl-4 space-y-1">
+                                    <li v-for="limitation in systemCapabilityFor(model).limitations" :key="limitation">{{ limitation }}</li>
+                                </ul>
+                            </div>
+                            <div v-if="systemCapabilityFor(model).next_steps && systemCapabilityFor(model).next_steps.length">
+                                <div class="text-gray-600 font-medium mb-1">下一步</div>
+                                <ul class="list-disc pl-4 space-y-1">
+                                    <li v-for="step in systemCapabilityFor(model).next_steps" :key="step">{{ step }}</li>
+                                </ul>
+                            </div>
                         </div>
                         <div class="mt-auto flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
                             <span class="text-xs text-gray-500">{{ isModelHubExecutable(model) ? '可运行演示' : '计划中' }}</span>
@@ -905,6 +938,9 @@
             const loadingModelHubModels = ref(false);
             const runningModelHubJob = ref(false);
             const modelHubRasterPath = ref('');
+            const systemCapabilities = ref(null);
+            const loadingSystemCapabilities = ref(false);
+            const systemCapabilitiesError = ref(null);
             const paper12Summary = ref(null);
             const loadingPaper12Summary = ref(false);
 
@@ -1410,9 +1446,49 @@
                 return 'bg-gray-50 text-gray-700 border-gray-200';
             };
 
+            const systemCapabilityFor = (model) => {
+                const capabilities = systemCapabilities.value?.capabilities || [];
+                return capabilities.find(item => item.id === model?.model_id) || null;
+            };
+
             const paper12CapabilityFor = (model) => {
                 const capabilities = paper12Summary.value?.capabilities || [];
                 return capabilities.find(item => item.model_id === model?.model_id) || null;
+            };
+
+            const capabilityWorkflowLabel = (level) => {
+                const labels = {
+                    runnable_and_evaluable: '可运行 / 可评估',
+                    registered_ready: '已注册可用',
+                    contract_demo: '契约演示',
+                    demo: '演示工作流',
+                    planned: '计划中',
+                    not_configured: '未配置',
+                };
+                return labels[level] || level || '未知';
+            };
+
+            const formatEvidenceValue = (value) => {
+                if (value === null || value === undefined) return 'n/a';
+                if (typeof value === 'number') return formatMetric(value);
+                return String(value);
+            };
+
+            const fetchSystemCapabilities = async () => {
+                if (loadingSystemCapabilities.value) return;
+                loadingSystemCapabilities.value = true;
+                systemCapabilitiesError.value = null;
+                try {
+                    const res = await fetch('/api/ae/system/capabilities');
+                    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+                    systemCapabilities.value = await res.json();
+                } catch (e) {
+                    console.error('Failed to load AlphaEarth System capabilities', e);
+                    systemCapabilitiesError.value = e?.message || 'unknown error';
+                    setModelHubStatus('error', '加载系统能力工作台失败，请确认后端 /api/ae/system/capabilities 可访问。');
+                } finally {
+                    loadingSystemCapabilities.value = false;
+                }
             };
 
             const fetchPaper12Summary = async () => {
@@ -1460,7 +1536,7 @@
                     const body = await res.json();
                     modelHubModels.value = body.models || [];
                     setModelHubStatus('info', `已加载 ${modelHubModels.value.length} 个模型包。`);
-                    if (!paper12Summary.value) await fetchPaper12Summary();
+                    if (!systemCapabilities.value) await fetchSystemCapabilities();
                 } catch (e) {
                     console.error('Failed to load model hub models', e);
                     setModelHubStatus('error', '加载模型中心失败，请确认后端 /api/ae/model-hub/models 可访问。');
@@ -1934,7 +2010,7 @@
                     fetchModels();
                 } else if (newTab === 'modelHub') {
                     if (modelHubModels.value.length === 0) fetchModelHubModels();
-                    if (!paper12Summary.value) fetchPaper12Summary();
+                    if (!systemCapabilities.value) fetchSystemCapabilities();
                 } else if (newTab === 'lulc') {
                     if (!lulcCapabilities.value) fetchLulcModes();
                 } else if (newTab === 'demo') {
@@ -1967,9 +2043,10 @@
                 availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
                 modelHubModels, modelHubJob, modelHubStatus, loadingModelHubModels,
+                systemCapabilities, loadingSystemCapabilities, systemCapabilitiesError, fetchSystemCapabilities,
                 paper12Summary, loadingPaper12Summary, fetchPaper12Summary,
                 runningModelHubJob, modelHubRasterPath, fetchModelHubModels, getModelHubDemoInputMode,
-                formatMetric, statusClass, paper12CapabilityFor, summarizeModelHubJob,
+                formatMetric, statusClass, systemCapabilityFor, paper12CapabilityFor, capabilityWorkflowLabel, formatEvidenceValue, summarizeModelHubJob,
                 isModelHubRunnable, supportsModelHubRasterDemo, isModelHubExecutable, runModelHubDemo, runModelHubRasterDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
                 lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
