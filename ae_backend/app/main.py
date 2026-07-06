@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
-from app.api import pipeline, training, satellites, areas, models, results, inference, model_hub
+from app.api import pipeline, training, satellites, areas, models, results, inference, model_hub, system
 from app.core.config import settings
 
 app = FastAPI(
@@ -62,6 +62,11 @@ app.include_router(
     prefix=f"{settings.API_V1_STR}/model-hub",
     tags=["model-hub"]
 )
+app.include_router(
+    system.router,
+    prefix=f"{settings.API_V1_STR}/system",
+    tags=["system"]
+)
 
 # Mount results artifacts (GeoJSON, PNGs from change-detection runs)
 results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../results"))
@@ -80,4 +85,3 @@ else:
     @app.get("/")
     def root():
         return {"message": "AlphaEarth Training Management API is running", "version": settings.VERSION, "note": "Frontend not found locally."}
-
