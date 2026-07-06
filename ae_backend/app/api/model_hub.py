@@ -10,6 +10,7 @@ from app.core.config import PROJECT_ROOT
 from app.services.model_hub_jobs import ModelHubJobStore
 from app.services.model_hub_registry import ModelHubRegistry, load_model_registry
 from app.services.model_hub_runtime import ModelHubRuntimeError, run_model_hub_job
+from app.services.paper12_summary import build_paper12_summary
 
 
 router = APIRouter()
@@ -46,6 +47,11 @@ def _runtime_modes_for_model(model: dict) -> set[str]:
 @router.get("/models")
 def list_models():
     return get_model_registry().to_public_dict()
+
+
+@router.get("/paper12-summary")
+def get_paper12_summary():
+    return build_paper12_summary(get_model_registry())
 
 
 @router.get("/models/{model_id}")
