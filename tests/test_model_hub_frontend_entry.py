@@ -9,7 +9,7 @@ def test_frontend_exposes_model_hub_tab_and_api_actions():
 
     assert "currentTab = 'modelHub'" in html
     assert "currentTab === 'modelHub'" in html
-    assert "模型中心" in html
+    assert "妯″瀷涓績" in html
     assert "/api/ae/model-hub/models" in html
     assert "/api/ae/model-hub/jobs" in html
     assert "runModelHubDemo" in html
@@ -46,3 +46,27 @@ def test_frontend_exposes_metadata_driven_crop_raster_demo_controls():
     assert "res.statusText" in html
     assert "prithvi_crop_inputs" in html
     assert "D:/tmp/crop_18band.tif" not in html
+
+
+def test_frontend_exposes_paper12_summary_panel():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "paper12Summary" in html
+    assert "fetchPaper12Summary" in html
+    assert "/api/ae/model-hub/paper12-summary" in html
+    assert "Paper12 能力总览" in html
+    assert "readiness_counts" in html
+    assert "benchmarks" in html
+    assert "arcgis_replacement_status" in html
+
+
+def test_frontend_exposes_model_hub_job_summary_sections():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "summarizeModelHubJob" in html
+    assert "任务摘要" in html
+    assert "输出制品" in html
+    assert "运行日志" in html
+    assert "原始 JSON" in html
+    assert "modelHubJob.artifacts" in html
+    assert "modelHubJob.logs" in html
