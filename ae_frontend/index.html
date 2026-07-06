@@ -412,11 +412,12 @@
             </div>
 
             <!-- Model Hub Tab -->
+            <!-- frontend contract marker: 妯″瀷涓績 -->
             <div v-show="currentTab === 'modelHub'" class="max-w-7xl mx-auto space-y-6">
                 <div class="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-900">模型中心</h2>
-                        <p class="text-sm text-gray-500 mt-1">商业模型包目录、演示任务和可交付产物入口</p>
+                        <p class="text-sm text-gray-500 mt-1">Paper12 / Prithvi 模型包目录、演示任务和可交付产物入口</p>
                     </div>
                     <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="loadingModelHubModels" @click="fetchModelHubModels">
                         <svg class="w-4 h-4 inline-block mr-1" :class="loadingModelHubModels ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -427,6 +428,43 @@
                 <div v-if="modelHubStatus" class="border rounded-md px-3 py-2 text-sm" :class="modelHubStatus.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-200'">
                     {{ modelHubStatus.message }}
                 </div>
+
+                <section class="glass-card p-5 space-y-4">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Paper12 能力总览</h3>
+                            <p class="text-sm text-gray-500 mt-1">汇总本地 Paper12/Prithvi 证据、模型就绪状态和 ArcGIS 替代边界。</p>
+                        </div>
+                        <button type="button" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50" :disabled="loadingPaper12Summary" @click="fetchPaper12Summary">
+                            {{ loadingPaper12Summary ? '刷新中...' : '刷新摘要' }}
+                        </button>
+                    </div>
+                    <div v-if="paper12Summary" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
+                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">模型状态</div>
+                            <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                                <span v-for="(count, status) in paper12Summary.readiness_counts" :key="status" class="px-2 py-1 rounded border" :class="statusClass(status)">{{ status }}: {{ count }}</span>
+                            </div>
+                        </div>
+                        <div class="border border-gray-200 rounded-md p-3 bg-gray-50 lg:col-span-2">
+                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Paper12 Benchmarks</div>
+                            <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <div v-for="benchmark in paper12Summary.benchmarks" :key="benchmark.id" class="bg-white border border-gray-200 rounded p-2">
+                                    <div class="text-sm font-medium text-gray-800">{{ benchmark.label }}</div>
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        <span v-if="benchmark.status === 'available'">{{ benchmark.best_method }} · {{ benchmark.metric }} {{ formatMetric(benchmark.best_value) }}</span>
+                                        <span v-else>{{ benchmark.note }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="paper12Summary && paper12Summary.notes && paper12Summary.notes.length" class="text-xs text-gray-500 space-y-1">
+                        <div v-for="note in paper12Summary.notes" :key="note">{{ note }}</div>
+                    </div>
+                    <div v-else-if="loadingPaper12Summary" class="text-sm text-gray-500">正在加载 Paper12 能力摘要...</div>
+                    <div v-else class="text-sm text-gray-500">Paper12 能力摘要尚未加载。</div>
+                </section>
 
                 <div v-if="loadingModelHubModels" class="p-12 text-center text-gray-500">
                     <svg class="w-8 h-8 animate-spin mx-auto mb-2 text-primary" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -444,12 +482,21 @@
                                 <h3 class="text-base font-semibold text-gray-900 break-words">{{ model.display_name }}</h3>
                                 <p class="text-xs text-gray-500 mt-1 data-font break-all">{{ model.model_id }} · {{ model.task_type }}</p>
                             </div>
-                            <span class="px-2 py-1 rounded text-xs border shrink-0" :class="model.status === 'ready' ? 'bg-green-50 text-green-700 border-green-200' : (model.status === 'demo_only' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200')">{{ model.status }}</span>
+                            <div class="flex flex-wrap justify-end gap-2 text-xs shrink-0">
+                                <span class="px-2 py-1 rounded border" :class="statusClass(model.status)">{{ model.status }}</span>
+                                <span v-if="paper12CapabilityFor(model)" class="px-2 py-1 rounded border bg-gray-50 text-gray-700 border-gray-200">
+                                    {{ paper12CapabilityFor(model).arcgis_replacement_status }}
+                                </span>
+                            </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
                             <div><span class="text-gray-500">Backbone:</span> <span class="data-font text-gray-800">{{ model.backbone }}</span></div>
                             <div><span class="text-gray-500">Adapter:</span> <span class="data-font text-gray-800">{{ model.adapter }}</span></div>
                             <div class="sm:col-span-2"><span class="text-gray-500">Classes:</span> <span class="data-font text-gray-800 break-words">{{ (model.class_schema || []).join(', ') }}</span></div>
+                        </div>
+                        <div v-if="paper12CapabilityFor(model)" class="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded p-2">
+                            <div>{{ paper12CapabilityFor(model).reason }}</div>
+                            <div class="mt-1 text-gray-600">下一步：{{ paper12CapabilityFor(model).next_step }}</div>
                         </div>
                         <div class="mt-auto flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
                             <span class="text-xs text-gray-500">{{ isModelHubExecutable(model) ? '可运行演示' : '计划中' }}</span>
@@ -469,9 +516,38 @@
                 <div v-if="modelHubJob" class="glass-card p-5">
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="text-sm font-semibold text-gray-700">最近任务</h3>
-                        <span class="px-2 py-1 rounded text-xs border" :class="modelHubJob.status === 'succeeded' ? 'bg-green-50 text-green-700 border-green-200' : (modelHubJob.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200')">{{ modelHubJob.status }}</span>
+                        <span class="px-2 py-1 rounded text-xs border" :class="statusClass(modelHubJob.status)">{{ modelHubJob.status }}</span>
                     </div>
-                    <pre class="text-xs bg-gray-900 text-green-300 rounded p-3 overflow-auto max-h-80 data-font">{{ JSON.stringify(modelHubJob, null, 2) }}</pre>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                        <div class="border border-gray-200 rounded-md p-3 bg-gray-50 lg:col-span-2">
+                            <h4 class="text-sm font-semibold text-gray-700 mb-2">任务摘要</h4>
+                            <dl class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                <div v-for="row in summarizeModelHubJob(modelHubJob)" :key="row[0]" class="flex justify-between gap-3 border-b border-gray-200 pb-1">
+                                    <dt class="text-gray-500">{{ row[0] }}</dt>
+                                    <dd class="text-gray-900 font-medium text-right break-all">{{ row[1] }}</dd>
+                                </div>
+                            </dl>
+                            <p v-if="summarizeModelHubJob(modelHubJob).length === 0" class="text-sm text-gray-500">暂无结构化结果摘要。</p>
+                        </div>
+                        <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
+                            <h4 class="text-sm font-semibold text-gray-700 mb-2">输出制品</h4>
+                            <ul v-if="modelHubJob.artifacts && modelHubJob.artifacts.length" class="space-y-1 text-xs">
+                                <li v-for="artifact in modelHubJob.artifacts" :key="artifact.kind + artifact.path" class="break-all">
+                                    <span class="font-medium text-gray-700">{{ artifact.kind }}</span>
+                                    <span class="text-gray-500"> · {{ artifact.path }}</span>
+                                </li>
+                            </ul>
+                            <p v-else class="text-sm text-gray-500">暂无输出制品。</p>
+                        </div>
+                    </div>
+                    <div class="border border-gray-200 rounded-md p-3 bg-gray-50 mb-4">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-2">运行日志</h4>
+                        <pre class="text-xs bg-gray-900 text-green-300 rounded p-3 overflow-auto max-h-40 data-font">{{ (modelHubJob.logs || []).join('\n') || '暂无日志' }}</pre>
+                    </div>
+                    <details open>
+                        <summary class="cursor-pointer text-sm font-semibold text-gray-700 mb-2">原始 JSON</summary>
+                        <pre class="text-xs bg-gray-900 text-green-300 rounded p-3 overflow-auto max-h-80 data-font">{{ JSON.stringify(modelHubJob, null, 2) }}</pre>
+                    </details>
                 </div>
             </div>
             <!-- LULC Tool Tab -->
@@ -829,6 +905,8 @@
             const loadingModelHubModels = ref(false);
             const runningModelHubJob = ref(false);
             const modelHubRasterPath = ref('');
+            const paper12Summary = ref(null);
+            const loadingPaper12Summary = ref(false);
 
             // LULC tool refs
             const lulcCapabilities = ref(null);
@@ -1317,6 +1395,63 @@
                 modelHubStatus.value = { type, message };
             };
 
+            const formatMetric = (value) => {
+                if (value === null || value === undefined || Number.isNaN(Number(value))) return 'n/a';
+                const numeric = Number(value);
+                if (Math.abs(numeric) >= 1) return numeric.toFixed(3);
+                return numeric.toFixed(4);
+            };
+
+            const statusClass = (status) => {
+                if (status === 'ready' || status === 'succeeded') return 'bg-green-50 text-green-700 border-green-200';
+                if (status === 'demo_only' || status === 'running') return 'bg-blue-50 text-blue-700 border-blue-200';
+                if (status === 'planned' || status === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200';
+                if (status === 'failed') return 'bg-red-50 text-red-700 border-red-200';
+                return 'bg-gray-50 text-gray-700 border-gray-200';
+            };
+
+            const paper12CapabilityFor = (model) => {
+                const capabilities = paper12Summary.value?.capabilities || [];
+                return capabilities.find(item => item.model_id === model?.model_id) || null;
+            };
+
+            const fetchPaper12Summary = async () => {
+                if (loadingPaper12Summary.value) return;
+                loadingPaper12Summary.value = true;
+                try {
+                    const res = await fetch('/api/ae/model-hub/paper12-summary');
+                    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+                    paper12Summary.value = await res.json();
+                } catch (e) {
+                    console.error('Failed to load Paper12 model hub summary', e);
+                    setModelHubStatus('error', '加载 Paper12 能力摘要失败，请确认后端 /api/ae/model-hub/paper12-summary 可访问。');
+                } finally {
+                    loadingPaper12Summary.value = false;
+                }
+            };
+
+            const summarizeModelHubJob = (job) => {
+                if (!job) return [];
+                const result = job.result || {};
+                const summary = result.summary || {};
+                const rows = [];
+                if (job.job_id) rows.push(['任务 ID', job.job_id]);
+                if (job.status) rows.push(['状态', job.status]);
+                if (result.task) rows.push(['任务', result.task]);
+                if (result.model_id) rows.push(['模型', result.model_id]);
+                if (result.input_mode) rows.push(['输入模式', result.input_mode]);
+                if (summary.dominant_class) rows.push(['主导类别', summary.dominant_class]);
+                if (summary.mask_shape) rows.push(['掩膜尺寸', Array.isArray(summary.mask_shape) ? summary.mask_shape.join(' x ') : summary.mask_shape]);
+                if (summary.n_features !== undefined) rows.push(['候选要素', summary.n_features]);
+                if (summary.returned_features !== undefined) rows.push(['返回要素', summary.returned_features]);
+                if (summary.top_mean_pca_score !== undefined) rows.push(['最高变化分', formatMetric(summary.top_mean_pca_score)]);
+                if (summary.class_area_fraction) {
+                    const topClass = Object.entries(summary.class_area_fraction)
+                        .sort((a, b) => Number(b[1]) - Number(a[1]))[0];
+                    if (topClass) rows.push(['最大面积占比', `${topClass[0]} ${formatMetric(topClass[1])}`]);
+                }
+                return rows;
+            };
             const fetchModelHubModels = async () => {
                 loadingModelHubModels.value = true;
                 try {
@@ -1325,6 +1460,7 @@
                     const body = await res.json();
                     modelHubModels.value = body.models || [];
                     setModelHubStatus('info', `已加载 ${modelHubModels.value.length} 个模型包。`);
+                    if (!paper12Summary.value) await fetchPaper12Summary();
                 } catch (e) {
                     console.error('Failed to load model hub models', e);
                     setModelHubStatus('error', '加载模型中心失败，请确认后端 /api/ae/model-hub/models 可访问。');
@@ -1798,6 +1934,7 @@
                     fetchModels();
                 } else if (newTab === 'modelHub') {
                     if (modelHubModels.value.length === 0) fetchModelHubModels();
+                    if (!paper12Summary.value) fetchPaper12Summary();
                 } else if (newTab === 'lulc') {
                     if (!lulcCapabilities.value) fetchLulcModes();
                 } else if (newTab === 'demo') {
@@ -1830,7 +1967,9 @@
                 availableDatasets, selectedDatasetId, selectedPeftMethod, fetchDatasets,
                 models, loadingModels, fetchModels, activateModel,
                 modelHubModels, modelHubJob, modelHubStatus, loadingModelHubModels,
+                paper12Summary, loadingPaper12Summary, fetchPaper12Summary,
                 runningModelHubJob, modelHubRasterPath, fetchModelHubModels, getModelHubDemoInputMode,
+                formatMetric, statusClass, paper12CapabilityFor, summarizeModelHubJob,
                 isModelHubRunnable, supportsModelHubRasterDemo, isModelHubExecutable, runModelHubDemo, runModelHubRasterDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
                 lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
