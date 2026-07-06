@@ -354,3 +354,52 @@ def test_model_hub_api_preserves_all_runtime_logs(monkeypatch):
     body = response.json()
     assert body["status"] == "succeeded"
     assert body["logs"][-2:] == ["first runtime log", "second runtime log"]
+
+
+def test_model_hub_returns_paper12_summary():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.get("/api/ae/model-hub/paper12-summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper"] == "paper12"
+    assert body["readiness_counts"]["ready"] >= 1
+    assert body["readiness_counts"]["demo_only"] >= 1
+    assert body["readiness_counts"]["planned"] >= 1
+
+    benchmarks = {item["id"]: item for item in body["benchmarks"]}
+    assert benchmarks["eurosat_channel_bridge"]["best_method"] == "learned_bridge_houlsby"
+    assert benchmarks["eurosat_channel_bridge"]["metric"] == "overall_accuracy"
+    assert benchmarks["eurosat_channel_bridge"]["best_value"] > 0.9
+    assert benchmarks["landcoverai_segmentation"]["best_method"] == "houlsby"
+    assert benchmarks["landcoverai_segmentation"]["metric"] == "mIoU"
+    assert benchmarks["landcoverai_segmentation"]["best_value"] > 0.64
+
+    crop = {
+        item["model_id"]: item
+        for item in body["capabilities"]
+    }["prithvi_crop_classification_arcgis_style"]
+    assert crop["readiness"] == "demo_only"
+    assert crop["arcgis_replacement_status"] == "not_yet"
+    assert "No validated crop checkpoint" in crop["reason"]
+
+
+def test_model_hub_paper12_summary_reports_missing_optional_results(
+    monkeypatch,
+    tmp_path: Path,
+):
+    from app.main import app
+    import app.services.paper12_summary as paper12_summary
+
+    monkeypatch.setattr(paper12_summary, "PAPER12_RESULTS_DIR", tmp_path)
+
+    client = TestClient(app)
+    response = client.get("/api/ae/model-hub/paper12-summary")
+
+    assert response.status_code == 200
+    body = response.json()
+    missing = [item for item in body["benchmarks"] if item.get("status") == "missing"]
+    assert missing
+    assert any("missing" in item["note"].lower() for item in missing)
