@@ -83,3 +83,30 @@ def test_frontend_exposes_model_hub_job_summary_sections():
     assert "原始 JSON" in html
     assert "modelHubJob.artifacts" in html
     assert "modelHubJob.logs" in html
+
+
+def test_frontend_exposes_system_verification_workbench_hooks():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "/api/ae/system/verification" in html
+    assert "systemVerification" in html
+    assert "loadingSystemVerification" in html
+    assert "systemVerificationError" in html
+    assert "fetchSystemVerification" in html
+    assert "verificationForCapability" in html
+    assert "verificationStatusClass" in html
+    assert "overall_status" in html
+    assert "next_actions" in html
+    assert "checks" in html
+    assert "systemVerificationRawJson" in html
+
+
+def test_frontend_keeps_model_hub_job_controls_with_system_verification():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "runModelHubDemo" in html
+    assert "runModelHubRasterDemo" in html
+    assert "modelHubJob.artifacts" in html
+    assert "modelHubJob.logs" in html
+    assert "fetchSystemCapabilities" in html
+    assert "fetchSystemVerification" in html
