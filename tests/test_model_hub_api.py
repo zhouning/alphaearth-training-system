@@ -551,3 +551,162 @@ def test_system_verification_reports_missing_optional_evidence_as_warnings(
     assert any(check["status"] == "warning" for check in evidence_checks)
     assert all(check["status"] != "fail" for check in evidence_checks)
     assert any("Missing optional evidence file" in check["detail"] for check in evidence_checks)
+
+
+def test_system_evidence_endpoint_reports_drilldown_payload():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/evidence")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["system"] == "AlphaEarth System"
+    assert set(body) >= {"generated_at", "summary", "checks", "artifacts", "notes"}
+    assert set(body["summary"]) == {"available", "missing", "previewable", "blocked"}
+    assert body["checks"]
+    assert body["artifacts"]
+    assert body["notes"]
+
+    evidence_items = [
+        artifact
+        for check in body["checks"]
+        for artifact in check["evidence"]
+    ]
+    assert evidence_items
+    assert any(item["status"] == "available" for item in evidence_items)
+    assert any(item["ref"] == "model_hub_registry" and item["kind"] == "registry" for item in evidence_items)
+    assert all(not Path(item.get("safe_path", "relative")).is_absolute() for item in evidence_items)
+
+
+def test_system_evidence_reports_missing_optional_artifacts(
+    monkeypatch,
+    tmp_path: Path,
+):
+    from app.main import app
+    import app.services.system_capabilities as system_capabilities
+
+    monkeypatch.setattr(system_capabilities, "PAPER12_RESULTS_DIR", tmp_path)
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/evidence")
+
+    assert response.status_code == 200
+    body = response.json()
+    missing = [
+        artifact
+        for artifact in body["artifacts"]
+        if artifact["status"] == "missing"
+    ]
+    assert missing
+    assert body["summary"]["missing"] >= len(missing)
+    assert all(item["safe_path"].startswith("paper12_results/") for item in missing)
+    assert all("optional" in item["message"].lower() or "referenced" in item["message"].lower() for item in missing)
+
+
+def test_system_evidence_blocks_unsafe_refs_without_leaking_absolute_paths(
+    monkeypatch,
+):
+    import json
+
+    from app.main import app
+    import app.services.system_evidence as system_evidence
+
+    absolute_ref = str(repo_root / "pyproject.toml")
+
+    def fake_build_system_verification(registry):
+        return {
+            "system": "AlphaEarth System",
+            "generated_at": "2026-07-07T00:00:00+00:00",
+            "checks": [
+                {
+                    "id": "system:unsafe_ref",
+                    "capability_id": "system",
+                    "status": "warning",
+                    "title": "Unsafe evidence ref",
+                    "evidence_refs": ["../outside.txt", absolute_ref],
+                    "remediation": "Remove unsafe evidence refs.",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        system_evidence.system_verification,
+        "build_system_verification",
+        fake_build_system_verification,
+    )
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/evidence")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["blocked"] == 2
+    blocked = [artifact for artifact in body["artifacts"] if artifact["status"] == "blocked"]
+    assert len(blocked) == 2
+    assert all("safe_path" not in item for item in blocked)
+    payload = json.dumps(body)
+    assert str(repo_root) not in payload
+    assert absolute_ref not in payload
+
+
+def test_system_evidence_previews_json_and_csv_from_allowed_roots(
+    monkeypatch,
+    tmp_path: Path,
+):
+    from app.main import app
+    import app.services.system_evidence as system_evidence
+
+    evidence_dir = tmp_path / "paper12_results"
+    evidence_dir.mkdir()
+    (evidence_dir / "preview.json").write_text(
+        '{"metrics":{"overall_accuracy":0.91},"items":[1,2,3]}',
+        encoding="utf-8",
+    )
+    (evidence_dir / "table.csv").write_text(
+        "class,pixels,fraction\ncorn,64,0.64\nsoybean,36,0.36\n",
+        encoding="utf-8",
+    )
+
+    def fake_build_system_verification(registry):
+        return {
+            "system": "AlphaEarth System",
+            "generated_at": "2026-07-07T00:00:00+00:00",
+            "checks": [
+                {
+                    "id": "system:preview_refs",
+                    "capability_id": "system",
+                    "status": "pass",
+                    "title": "Preview refs",
+                    "evidence_refs": [
+                        "paper12_results/preview.json",
+                        "paper12_results/table.csv",
+                    ],
+                    "remediation": None,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(system_evidence, "PROJECT_ROOT_PATH", tmp_path.resolve())
+    monkeypatch.setattr(
+        system_evidence.system_verification,
+        "build_system_verification",
+        fake_build_system_verification,
+    )
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/evidence")
+
+    assert response.status_code == 200
+    body = response.json()
+    by_ref = {artifact["ref"]: artifact for artifact in body["artifacts"]}
+    json_artifact = by_ref["paper12_results/preview.json"]
+    csv_artifact = by_ref["paper12_results/table.csv"]
+
+    assert json_artifact["previewable"] is True
+    assert json_artifact["preview"]["type"] == "json"
+    assert json_artifact["preview"]["content"]["metrics"]["overall_accuracy"] == 0.91
+    assert csv_artifact["previewable"] is True
+    assert csv_artifact["preview"]["type"] == "csv"
+    assert csv_artifact["preview"]["header"] == ["class", "pixels", "fraction"]
+    assert csv_artifact["preview"]["rows"][0] == ["corn", "64", "0.64"]
