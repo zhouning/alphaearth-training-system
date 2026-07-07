@@ -45,12 +45,12 @@ Houlsby & \textbf{0.491 $\pm$ 0.008} & \textbf{0.456 $\pm$ 0.003} \\
 \end{tabular}
 \end{table}
 
-\subsection{Finding 1: Why LoRA Fails}
+\subsection{Finding 1: Why LoRA Underperforms in This Prithvi-100M Setting}
 The naive LoRA result initially suggested complete failure: on EuroSAT, LoRA differs from linear probing by only $+0.001$ OA, and on BigEarthNet-S2 by only $+0.0001$ mAP. Our split-QKV ablation reveals that this failure has two distinct causes.
 
 First, the standard implementation misses the actual query, key, and value projections because Prithvi's attention stores them as a fused \texttt{in\_proj\_weight} parameter rather than as separate child modules. As a result, the original LoRA insertion only wraps \texttt{out\_proj}. Second, even when the fused QKV issue is corrected, LoRA remains suboptimal. Split-QKV LoRA improves s2\_full from 0.658 to 0.707 on EuroSAT, confirming the implementation trap is real, but it still underperforms both BitFit and Houlsby. On rgb, split-QKV LoRA actually degrades below the linear probing baseline.
 
-Together, these observations show that LoRA fails on Prithvi-100M not only because of an implementation pitfall, but also because low-rank adaptation appears mismatched to this architecture and pre-training regime. We further validated this point with a rank-sensitivity ablation on EuroSAT s2\_full (Figure~\ref{fig:lora-rank}): increasing the split-QKV LoRA rank from $r=4$ to $r=32$ changes OA only from $0.709 \pm 0.002$ to $0.706 \pm 0.002$, with no monotonic improvement and no configuration approaching Houlsby.
+Together, these observations show two bounded effects in the tested Prithvi-100M setting: standard module-wise LoRA is vulnerable to a fused-QKV insertion trap, and corrected split-QKV LoRA still remains below the bottleneck-adapter baseline under the reported budgets. We further tested this point with a rank-sensitivity ablation on EuroSAT s2\_full (Figure~\ref{fig:lora-rank}): increasing the split-QKV LoRA rank from $r=4$ to $r=32$ changes OA only from $0.709 \pm 0.002$ to $0.706 \pm 0.002$, with no monotonic improvement and no configuration approaching Houlsby.
 
 \begin{figure}[t]
 \centering

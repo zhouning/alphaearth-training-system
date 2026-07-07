@@ -1,8 +1,23 @@
+import sys
+import types
+from unittest.mock import MagicMock
+
 import pytest
 import torch
-from unittest.mock import patch, MagicMock
+
 from geoadapter.data.transforms import BandSelector, Normalize
 from geoadapter.data.datasets import ModalityConfig
+
+
+def install_fake_loveda(monkeypatch, dataset):
+    ctor = MagicMock(return_value=dataset)
+    torchgeo = types.ModuleType("torchgeo")
+    torchgeo_datasets = types.ModuleType("torchgeo.datasets")
+    torchgeo_datasets.LoveDA = ctor
+    torchgeo.datasets = torchgeo_datasets
+    monkeypatch.setitem(sys.modules, "torchgeo", torchgeo)
+    monkeypatch.setitem(sys.modules, "torchgeo.datasets", torchgeo_datasets)
+    return ctor
 
 
 class TestBandSelector:
@@ -38,39 +53,37 @@ class TestModalityConfig:
 
 
 class TestLoveDA:
-    def test_load_loveda_returns_segmentation_dataset(self):
+    def test_load_loveda_returns_segmentation_dataset(self, monkeypatch):
         from geoadapter.data.datasets import load_loveda, _SegmentationDataset
 
-        # Mock torchgeo.datasets.LoveDA to avoid network download
         mock_lo = MagicMock()
         mock_lo.__len__.return_value = 100
         mock_lo.__getitem__.return_value = {
-            "image": __import__("torch").randn(3, 1024, 1024),
-            "mask": __import__("torch").zeros(1024, 1024, dtype=__import__("torch").long),
+            "image": torch.randn(3, 1024, 1024),
+            "mask": torch.zeros(1024, 1024, dtype=torch.long),
         }
+        ctor = install_fake_loveda(monkeypatch, mock_lo)
 
-        with patch("torchgeo.datasets.LoveDA", return_value=mock_lo) as ctor:
-            ds = load_loveda(root="/tmp/loveda", domain="urban", split="train")
+        ds = load_loveda(root="/tmp/loveda", domain="urban", split="train")
 
         assert isinstance(ds, _SegmentationDataset)
-        # Verify torchgeo was called with the expected scene set
         call_kwargs = ctor.call_args.kwargs
         assert call_kwargs["split"] == "train"
         assert call_kwargs["scene"] == ["urban"]
         assert call_kwargs["download"] is True
 
-    def test_load_loveda_rural_uses_rural_scene(self):
+    def test_load_loveda_rural_uses_rural_scene(self, monkeypatch):
         from geoadapter.data.datasets import load_loveda
 
         mock_lo = MagicMock()
         mock_lo.__len__.return_value = 50
         mock_lo.__getitem__.return_value = {
-            "image": __import__("torch").randn(3, 1024, 1024),
-            "mask": __import__("torch").zeros(1024, 1024, dtype=__import__("torch").long),
+            "image": torch.randn(3, 1024, 1024),
+            "mask": torch.zeros(1024, 1024, dtype=torch.long),
         }
+        ctor = install_fake_loveda(monkeypatch, mock_lo)
 
-        with patch("torchgeo.datasets.LoveDA", return_value=mock_lo) as ctor:
-            load_loveda(root="/tmp/loveda", domain="rural", split="val")
+        load_loveda(root="/tmp/loveda", domain="rural", split="val")
 
         call_kwargs = ctor.call_args.kwargs
         assert call_kwargs["split"] == "val"
@@ -81,25 +94,23 @@ class TestLoveDA:
         with pytest.raises(ValueError, match="domain"):
             load_loveda(root="/tmp/loveda", domain="suburban", split="train")
 
-    def test_load_loveda_max_samples_subsamples(self):
+    def test_load_loveda_max_samples_subsamples(self, monkeypatch):
         from geoadapter.data.datasets import load_loveda
 
         mock_lo = MagicMock()
         mock_lo.__len__.return_value = 1000
         mock_lo.__getitem__.return_value = {
-            "image": __import__("torch").randn(3, 1024, 1024),
-            "mask": __import__("torch").zeros(1024, 1024, dtype=__import__("torch").long),
+            "image": torch.randn(3, 1024, 1024),
+            "mask": torch.zeros(1024, 1024, dtype=torch.long),
         }
+        install_fake_loveda(monkeypatch, mock_lo)
 
-        with patch("torchgeo.datasets.LoveDA", return_value=mock_lo):
-            ds = load_loveda(root="/tmp/loveda", domain="urban", split="train", max_samples=200)
+        ds = load_loveda(root="/tmp/loveda", domain="urban", split="train", max_samples=200)
 
         assert len(ds) == 200
 
-    def test_load_loveda_remaps_mask_values(self):
-        """LoveDA torchgeo masks are {0=ignore, 1..7=classes} but the trainer
-        expects [0..6] with ignore_index=255. The loader must remap."""
-        import torch
+    def test_load_loveda_remaps_mask_values(self, monkeypatch):
+        """LoveDA masks are {0=ignore, 1..7=classes}; trainer expects 255 and [0..6]."""
         from geoadapter.data.datasets import load_loveda
 
         mask_raw = torch.tensor([
@@ -112,10 +123,10 @@ class TestLoveDA:
             "image": torch.randn(3, 2, 4),
             "mask": mask_raw.clone(),
         }
+        install_fake_loveda(monkeypatch, mock_lo)
 
-        with patch("torchgeo.datasets.LoveDA", return_value=mock_lo):
-            ds = load_loveda(root="/tmp/loveda", domain="urban", split="train")
-            _, mask_out = ds[0]
+        ds = load_loveda(root="/tmp/loveda", domain="urban", split="train")
+        _, mask_out = ds[0]
 
         expected = torch.tensor([
             [255, 0, 1, 2],

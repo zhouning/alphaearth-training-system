@@ -1,0 +1,14 @@
+class,pixels,fraction
+natural_vegetation,10,0.083333
+forest,7,0.058333
+corn,12,0.100000
+soybeans,9,0.075000
+wetlands,6,0.050000
+developed_barren,10,0.083333
+open_water,11,0.091667
+winter_wheat,9,0.075000
+alfalfa,10,0.083333
+fallow_idle_cropland,8,0.066667
+cotton,8,0.066667
+sorghum,10,0.083333
+other,10,0.083333

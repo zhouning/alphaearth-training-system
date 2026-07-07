@@ -47,6 +47,37 @@ SUBMISSION_LOVEDA_SECTION = (
     / "sections"
     / "linhe_validation.tex"
 )
+PAPER12_WORD_EXPORT = REPO_ROOT / "paper12" / "paper12_english_for_word.tex"
+PAPER12_COVER_LETTER = REPO_ROOT / "paper12" / "cover_letter.tex"
+PAPER12_RSE_COVER_LETTER = REPO_ROOT / "paper12" / "cover_letter_rse.tex"
+SUBMISSION_COVER_LETTER_MD = (
+    REPO_ROOT
+    / "submission"
+    / "paper12_isprs_jprs_20260606"
+    / "03_cover_letter"
+    / "cover_letter_isprs_jprs.md"
+)
+SUBMISSION_COVER_LETTER_TEX = (
+    REPO_ROOT
+    / "submission"
+    / "paper12_isprs_jprs_20260606"
+    / "03_cover_letter"
+    / "cover_letter_isprs_jprs.tex"
+)
+SUBMISSION_ABSTRACT_PLAIN_TEXT = (
+    REPO_ROOT
+    / "submission"
+    / "paper12_isprs_jprs_20260606"
+    / "05_highlights_abstract_keywords"
+    / "abstract_plain_text.md"
+)
+SUBMISSION_HIGHLIGHTS = (
+    REPO_ROOT
+    / "submission"
+    / "paper12_isprs_jprs_20260606"
+    / "05_highlights_abstract_keywords"
+    / "highlights.md"
+)
 
 
 def test_eurosat_channel_bridge_summary_matches_raw_results():
@@ -130,6 +161,7 @@ def test_capacity_sweep_is_completed_and_marked_manuscript_ready():
     assert "do not cite the capacity curve as completed evidence" not in action
     assert "peft_capacity_sweep.json" in action
     assert "peft_capacity_sweep_summary.json" in action
+    assert "review\\_audit\\_summary.json" in method
 
 
 def test_peft_capacity_sweep_summary_matches_raw_results():
@@ -210,6 +242,7 @@ def test_public_dataset_results_are_mirrored_in_supplementary_package():
         "loveda_full_finetune_r2u.json",
         "loveda_full_finetune_u2r.json",
         "loveda_full_finetune_summary.json",
+        "review_audit_summary.json",
     ]:
         assert (SUPPLEMENTARY_RESULTS / name).read_text(encoding="utf-8") == (
             PAPER12_RESULTS / name
@@ -229,3 +262,104 @@ def test_eurosat_channel_bridge_rerun_records_final_counts():
     assert len(rows) == 12
     assert summary["learned_bridge_houlsby"]["seeds"] == [42, 123, 456]
     assert summary["zero_pad_linear_probe"]["seeds"] == [42, 123, 456]
+
+def test_manuscript_bounds_reviewer_sensitive_claims_after_audit_extension():
+    manuscript_paths = [
+        REPO_ROOT / "paper12" / "sections" / "introduction.tex",
+        REPO_ROOT / "paper12" / "sections" / "method.tex",
+        REPO_ROOT / "paper12" / "sections" / "results.tex",
+        REPO_ROOT / "paper12" / "sections" / "segmentation.tex",
+        REPO_ROOT / "paper12" / "sections" / "linhe_validation.tex",
+        REPO_ROOT / "paper12" / "sections" / "discussion.tex",
+        REPO_ROOT / "paper12" / "sections" / "appendix.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "introduction.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "method.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "results.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "segmentation.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "linhe_validation.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "discussion.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "appendix.tex",
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in manuscript_paths)
+
+    forbidden_phrases = [
+        "paired label-quality control study",
+        "LoRA fails on Prithvi-100M",
+        "LoRA collapses to linear probing on production data, exactly as on public benchmarks",
+        "structural limitation of PyTorch-implemented LoRA on Prithvi-100M",
+        "strongest evidence to date",
+        "close that gap",
+        "directly close the ``segmentation remains open'' caveat",
+    ]
+    for phrase in forbidden_phrases:
+        assert phrase not in combined
+
+    required_phrases = [
+        "synthetic weak-label control",
+        "not an independent manual validation set",
+        "single-backbone Prithvi-100M setting",
+        "lightweight linear segmentation decoder may limit absolute mIoU",
+        "review\\_audit\\_summary.json",
+        "model-scope, label-source, and decoder-capacity checks",
+    ]
+    for phrase in required_phrases:
+        assert phrase in combined
+
+
+def test_submission_side_materials_bound_reviewer_sensitive_claims():
+    side_material_paths = [
+        PAPER12_WORD_EXPORT,
+        PAPER12_COVER_LETTER,
+        PAPER12_RSE_COVER_LETTER,
+        SUBMISSION_COVER_LETTER_MD,
+        SUBMISSION_COVER_LETTER_TEX,
+        SUBMISSION_ABSTRACT_PLAIN_TEXT,
+        SUBMISSION_HIGHLIGHTS,
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in side_material_paths)
+
+    forbidden_phrases = [
+        "LoRA fails on Prithvi-100M",
+        "label-quality control",
+        "adapter-capacity limit",
+        "strongest evidence",
+        "segmentation remains open",
+        "only two benchmark datasets",
+        "first systematic benchmark",
+        "totaling 100 experiments",
+        "across all four datasets",
+    ]
+    for phrase in forbidden_phrases:
+        assert phrase not in combined
+
+    required_phrases = [
+        "synthetic weak-label control",
+        "not an independent manual validation",
+        "single-backbone Prithvi-100M",
+        "adapter-capacity hypothesis",
+        "LoveDA",
+    ]
+    for phrase in required_phrases:
+        assert phrase in combined
+
+def test_paper12_cover_letter_templates_avoid_optional_linebreak_placeholders():
+    cover_letter_paths = [
+        PAPER12_COVER_LETTER,
+        PAPER12_RSE_COVER_LETTER,
+        SUBMISSION_COVER_LETTER_TEX,
+    ]
+
+    for path in cover_letter_paths:
+        text = path.read_text(encoding="utf-8")
+        assert "\\ [" not in text
+
+def test_paper12_cover_letters_avoid_unbreakable_code_tokens():
+    cover_letter_paths = [
+        PAPER12_COVER_LETTER,
+        PAPER12_RSE_COVER_LETTER,
+        SUBMISSION_COVER_LETTER_TEX,
+    ]
+
+    for path in cover_letter_paths:
+        text = path.read_text(encoding="utf-8")
+        assert r"\texttt{nn.MultiheadAttention}" not in text

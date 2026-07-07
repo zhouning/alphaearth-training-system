@@ -24,3 +24,9 @@ class TestSegmentationHead:
         x = torch.randn(4, 768)
         out = head(x)
         assert out.shape == (4, 7, 16, 16)
+
+    def test_patch_token_output_shape(self):
+        head = SegmentationHead(in_dim=768, num_classes=7, patch_size=16)
+        x = torch.randn(4, 4, 768)
+        out = head(x, spatial_dims=(2, 2))
+        assert out.shape == (4, 7, 32, 32)

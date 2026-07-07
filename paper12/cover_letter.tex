@@ -4,7 +4,7 @@
 \usepackage[hidelinks]{hyperref}
 
 \signature{[Author Name]}
-\address{[Affiliation] \\ [Address]}
+\address{Institution \\ Address}
 
 \begin{document}
 
@@ -15,25 +15,27 @@
 
 \opening{Dear Program Chairs,}
 
-We are pleased to submit our manuscript, ``How Well Do PEFT Methods Adapt Geospatial Foundation Models to Heterogeneous Inputs? A Systematic Evaluation on Prithvi-100M,'' for consideration at the CVPR 2026 EarthVision Workshop.
+This file is retained as a workshop-format cover-letter template for Paper 12. The active journal submission package is maintained under \texttt{submission/paper12\_isprs\_jprs\_20260606}; the wording below is synchronized with the current bounded manuscript rather than the earlier public-benchmark-only draft.
+
+We are pleased to submit our manuscript, ``Architecture-Aware Diagnosis of Parameter-Efficient Adaptation in Prithvi-100M: Fused-QKV Failure, Capacity Boundaries, and Cross-Domain Remote-Sensing Validation,'' for consideration at the CVPR 2026 EarthVision Workshop.
 
 \textbf{Summary.}
-The paper presents the first systematic benchmark of parameter-efficient fine-tuning (PEFT) methods on a geospatial foundation model under heterogeneous input settings. We evaluate seven adaptation strategies across five modality configurations on EuroSAT and validate the main findings on BigEarthNet-S2, totaling 100 experiments. Three principal findings emerge:
+The paper studies how parameter-efficient fine-tuning (PEFT) methods behave on Prithvi-100M when sensor inputs, channel bridges, deployment labels, and transfer domains differ from pre-training. We evaluate seven adaptation strategies across EuroSAT, BigEarthNet-S2, LandCover.ai, a production-style Linhe County LULC workflow supervised by Esri-derived labels, and LoveDA urban/rural cross-domain transfer. The current manuscript also includes a completed EuroSAT capacity sweep, a channel-bridge ablation, and a Linhe synthetic weak-label control that is not an independent manual validation set. Three bounded findings emerge:
 
 \begin{enumerate}
-    \item LoRA, the most popular PEFT method in NLP and vision, fails on Prithvi-100M due to a compounding implementation trap (fused QKV projections) and an intrinsic low-rank mismatch. We provide a diagnostic split-QKV ablation that isolates these two causes.
-    \item Houlsby adapters consistently dominate all other PEFT methods, reaching 94.5\% of the full fine-tuning ceiling with only 1.4\% of the trainable parameters.
-    \item Modality selection has a larger practical impact than PEFT method selection: richer spectral inputs outperform reduced-band alternatives across all methods and datasets.
+    \item Standard module-wise LoRA is vulnerable to a fused-QKV insertion trap on Prithvi-100M, while corrected split-QKV LoRA still remains below Houlsby adapters in the tested Prithvi-100M setting.
+    \item Houlsby adapters provide the most reliable PEFT baseline in our experiments, but the result is scoped to one backbone and should not be read as a universal GeoFM ranking.
+    \item Domain shift, label source, channel bridging, and adapter capacity materially affect the operating point, with LoveDA supporting an adapter-capacity hypothesis rather than a general rule for all geospatial foundation models.
 \end{enumerate}
 
 \textbf{Relevance to EarthVision.}
-The paper directly addresses a practical gap in the geospatial AI community: practitioners routinely apply PEFT methods to remote sensing backbones without knowing whether the rankings established in NLP and vision transfer. Our negative result on LoRA, in particular, has immediate implications for anyone adapting Prithvi-100M or similar fused-QKV architectures. The benchmark framework and per-seed results are released for reproducibility.
+The paper addresses a practical gap in geospatial AI: practitioners often transfer PEFT intuitions from NLP and conventional vision without checking whether remote-sensing backbones expose the same trainable tensors or tolerate the same adaptation modules. Our benchmark and audit files make that inspection reproducible for Prithvi-100M, including the fused-attention insertion check, channel-bridge sensitivity, trainable-parameter accounting, and per-class cross-domain diagnostics.
 
 \textbf{Novelty and contribution.}
-While individual PEFT methods have been applied to remote sensing models, no prior work provides a controlled, multi-method, multi-modality benchmark with diagnostic ablations. The fused-QKV trap we identify is, to our knowledge, undocumented in the geospatial literature and affects any LoRA implementation targeting \texttt{nn.MultiheadAttention}-based backbones.
+The contribution is diagnostic rather than universal. We separate implementation failure from post-fix low-rank underperformance, show that input-stage adaptation is regime-dependent, and demonstrate that deployment-style labels and geographic scene splits can change the apparent PEFT delta. The result is a stress-test protocol for Prithvi-like GeoFM adaptation rather than a claim that any method replaces a full GIS production stack.
 
 \textbf{Confirmation.}
-This manuscript has not been published or submitted elsewhere. All authors have approved the submission.
+This manuscript has not been published or submitted elsewhere in the form described here. All authors have approved the submission.
 
 \closing{Sincerely,}
 

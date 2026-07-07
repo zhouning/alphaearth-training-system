@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
@@ -208,6 +208,45 @@ def _replacement_boundary_check(capability: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _production_evidence_check(capability: dict[str, Any]) -> dict[str, Any]:
+    evidence = capability.get("production_evidence") or {}
+    state = str(evidence.get("production_state") or "metadata_missing")
+    capability_id = capability["id"]
+    if state in {"production_candidate", "verification_required"}:
+        return _check(
+            capability_id=capability_id,
+            check_id="production_evidence",
+            category="production_evidence",
+            status="pass",
+            severity="info",
+            title="Production evidence is locally usable",
+            detail=f"Production evidence state is {state}.",
+            evidence_refs=["system_capabilities"],
+        )
+    if state in {"download_required", "test_data_required", "training_required"}:
+        return _check(
+            capability_id=capability_id,
+            check_id="production_evidence",
+            category="production_evidence",
+            status="warning",
+            severity="warning",
+            title="Production evidence is not complete",
+            detail=f"Production evidence state is {state}.",
+            evidence_refs=["system_capabilities"],
+            remediation="Attach the required weights, test data, or training output before promoting this model.",
+        )
+    return _check(
+        capability_id=capability_id,
+        check_id="production_evidence",
+        category="production_evidence",
+        status="fail",
+        severity="error",
+        title="Production evidence metadata is missing",
+        detail=f"Production evidence state is {state}.",
+        evidence_refs=["system_capabilities"],
+        remediation="Add this model to ae_backend/app/data/model_hub_assets.json.",
+    )
+
 def _evidence_source_checks(evidence_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     checks = []
     for index, source in enumerate(evidence_sources, start=1):
@@ -282,6 +321,7 @@ def build_system_verification(registry: ModelHubRegistry) -> dict[str, Any]:
             _runtime_mode_check(capability),
             _checkpoint_check(capability),
             _replacement_boundary_check(capability),
+            _production_evidence_check(capability),
         ]
         all_checks.extend(capability_checks)
         capability_summaries.append(_capability_verification(capability, capability_checks))

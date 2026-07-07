@@ -102,11 +102,19 @@ class TestLoRA:
 
 
 class TestBitFit:
-    def test_only_biases_trainable(self):
+    def test_only_biases_and_layernorm_weights_trainable(self):
         block = nn.TransformerEncoderLayer(d_model=768, nhead=12, batch_first=True)
         configure_bitfit(block)
+        modules = dict(block.named_modules())
         for name, p in block.named_parameters():
+            parent_name = name.rsplit(".", 1)[0]
+            is_layernorm_weight = (
+                name.endswith(".weight")
+                and isinstance(modules[parent_name], nn.LayerNorm)
+            )
             if "bias" in name:
+                assert p.requires_grad, f"{name} should be trainable"
+            elif is_layernorm_weight:
                 assert p.requires_grad, f"{name} should be trainable"
             else:
                 assert not p.requires_grad, f"{name} should be frozen"

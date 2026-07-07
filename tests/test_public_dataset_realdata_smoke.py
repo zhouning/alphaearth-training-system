@@ -19,11 +19,16 @@ def require_dataset_cache(root: Path, dataset_name: str) -> None:
         )
 
 
+def require_torchgeo() -> None:
+    pytest.importorskip("torchgeo", reason="torchgeo is required for realdata smoke tests")
+
+
 @pytest.mark.realdata
 def test_eurosat_loader_reads_real_cached_train_and_test_splits():
     from geoadapter.data.datasets import load_eurosat
 
     require_dataset_cache(EUROSAT_ROOT, "EuroSAT")
+    require_torchgeo()
 
     train_ds = load_eurosat(root=str(EUROSAT_ROOT), modality="s2_full", split="train")
     test_ds = load_eurosat(root=str(EUROSAT_ROOT), modality="s2_full", split="test")
@@ -52,6 +57,7 @@ def test_loveda_loader_reads_real_cached_crossdomain_splits(domain: str, split: 
     from geoadapter.data.datasets import load_loveda
 
     require_dataset_cache(LOVEDA_ROOT, "LoveDA")
+    require_torchgeo()
 
     ds = load_loveda(root=str(LOVEDA_ROOT), domain=domain, split=split, max_samples=2)
 

@@ -1,0 +1,117 @@
+{
+  "model_id": "prithvi_crop_classification_arcgis_style",
+  "input_mode": "upload_raster_demo",
+  "source_raster": "D:\\adk\\AlphaEarth-System\\results\\model_hub\\prithvi_crop_inputs\\crop_18band_demo.tif",
+  "validation": {
+    "path": "D:\\adk\\AlphaEarth-System\\results\\model_hub\\prithvi_crop_inputs\\crop_18band_demo.tif",
+    "band_count": 18,
+    "width": 12,
+    "height": 10,
+    "crs": "EPSG:4326",
+    "transform": [
+      107.25,
+      0.01,
+      0.0,
+      40.85,
+      0.0,
+      -0.01
+    ],
+    "bounds": [
+      107.25,
+      40.75,
+      107.37,
+      40.85
+    ],
+    "dtype": "float32",
+    "nodata": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "band_order": [
+      "t1_blue",
+      "t1_green",
+      "t1_red",
+      "t1_narrow_nir",
+      "t1_swir1",
+      "t1_swir2",
+      "t2_blue",
+      "t2_green",
+      "t2_red",
+      "t2_narrow_nir",
+      "t2_swir1",
+      "t2_swir2",
+      "t3_blue",
+      "t3_green",
+      "t3_red",
+      "t3_narrow_nir",
+      "t3_swir1",
+      "t3_swir2"
+    ]
+  },
+  "tile_grid": {
+    "tile_size": 6,
+    "stride": 6,
+    "tile_count": 4,
+    "overlap_policy": "none"
+  },
+  "resource_policy": {
+    "pixel_count": 120,
+    "max_pixels": 2000000,
+    "tile_count": 4,
+    "max_tiles": 4096,
+    "max_preview_pixels": 1000000
+  },
+  "geojson_policy": {
+    "strategy": "streaming_feature_limit",
+    "crs": "EPSG:4326",
+    "source_crs": "EPSG:4326",
+    "reprojected_to_wgs84": false,
+    "max_features": 5000,
+    "features_written": 120,
+    "features_truncated": false
+  },
+  "artifacts": [
+    {
+      "kind": "geotiff",
+      "path": "D:\\adk\\AlphaEarth-System\\results\\model_hub\\prithvi_crop_runs\\crop_18band_demo-a653e61cfd\\classified_crop.tif"
+    },
+    {
+      "kind": "csv",
+      "path": "D:\\adk\\AlphaEarth-System\\results\\model_hub\\prithvi_crop_runs\\crop_18band_demo-a653e61cfd\\crop_summary.csv"
+    },
+    {
+      "kind": "geojson",
+      "path": "D:\\adk\\AlphaEarth-System\\results\\model_hub\\prithvi_crop_runs\\crop_18band_demo-a653e61cfd\\crop_polygons.geojson"
+    },
+    {
+      "kind": "manifest",
+      "path": "D:\\adk\\AlphaEarth-System\\results\\model_hub\\prithvi_crop_runs\\crop_18band_demo-a653e61cfd\\manifest.json"
+    },
+    {
+      "kind": "png",
+      "path": "D:\\adk\\AlphaEarth-System\\results\\model_hub\\prithvi_crop_runs\\crop_18band_demo-a653e61cfd\\crop_preview.png"
+    }
+  ],
+  "limitations": [
+    "Deterministic demo classification only.",
+    "No real Prithvi checkpoint was loaded.",
+    "Class IDs are generated from lightweight spectral and spatial rules.",
+    "GeoJSON polygons are streamed, capped by max_geojson_features, and written in EPSG:4326."
+  ]
+}

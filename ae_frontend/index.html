@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -123,11 +123,11 @@
                             <option v-for="ds in availableDatasets" :key="ds.id" :value="ds.id">{{ ds.name }}</option>
                         </select>
                         <select v-model="selectedPeftMethod" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium focus:ring-primary focus:border-primary outline-none">
-                            <option value="linear_probe">Linear Probe (7.7K params)</option>
-                            <option value="bitfit">BitFit (111K params)</option>
-                            <option value="lora">LoRA r=8 (155K params)</option>
-                            <option value="houlsby">Houlsby Adapter (1.2M params)</option>
-                            <option value="geoadapter">GeoAdapter (experimental)</option>
+                            <option value="linear_probe">线性探针（7.7K 参数）</option>
+                            <option value="bitfit">BitFit（111K 参数）</option>
+                            <option value="lora">LoRA r=8（155K 参数）</option>
+                            <option value="houlsby">Houlsby 适配器（1.2M 参数）</option>
+                            <option value="geoadapter">GeoAdapter（实验）</option>
                         </select>
                         <span class="px-3 py-2 text-xs text-gray-500 bg-gray-100 rounded border border-gray-200">演示模式: 已加载 5 方法 × 3 seed 的真实训练结果</span>
                     </div>
@@ -173,7 +173,7 @@
                         <div id="recChart" class="w-full h-64"></div>
                     </div>
                     <div class="glass-card p-4">
-                        <h3 class="text-sm font-semibold text-gray-700 mb-4">参数效率前沿 (Trainable params vs mIoU)</h3>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-4">参数效率前沿（可训练参数量与 mIoU）</h3>
                         <div id="uniChart" class="w-full h-64"></div>
                     </div>
                     <div class="glass-card p-4">
@@ -265,7 +265,7 @@
                     </div>
                     <div class="mt-4 pt-4 border-t border-blue-100 flex items-center justify-between">
                         <div class="flex items-center space-x-4">
-                            <button class="px-4 py-2 bg-primary text-white rounded-md font-medium shadow-sm hover:bg-blue-600 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="!selectedArea || selectedSatellites.length === 0 || isPipelineRunning" @click="startPipeline" title="演示中通常跳过此步骤，直接使用已切好的 35,920 patch 数据集">
+                            <button class="px-4 py-2 bg-primary text-white rounded-md font-medium shadow-sm hover:bg-blue-600 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="!selectedArea || selectedSatellites.length === 0 || isPipelineRunning" @click="startPipeline" title="演示中通常跳过此步骤，直接使用已切好的 35,920 张切片数据集">
                                 <svg class="w-4 h-4 animate-spin inline-block mr-2" fill="none" viewBox="0 0 24 24" v-if="isPipelineRunning"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                 {{ isPipelineRunning ? '处理中...' : '生成训练切片任务' }}
                             </button>
@@ -386,7 +386,7 @@
                             </div>
                             <div v-if="model._demo" class="flex justify-between">
                                 <span class="text-sm text-gray-500">可训练参数 / seeds:</span>
-                                <span class="text-sm font-mono text-gray-800">{{ (model.trainable_params / 1e6).toFixed(2) }}M · n={{ model.n_seeds }}</span>
+                                <span class="text-sm font-mono text-gray-800">{{ (model.trainable_params / 1e6).toFixed(2) }}M · 随机种子数={{ model.n_seeds }}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-sm text-gray-500">关联数据源:</span>
@@ -412,12 +412,12 @@
             </div>
 
             <!-- Model Hub Tab -->
-            <!-- frontend contract marker: 妯″瀷涓績 -->
+            <!-- frontend contract marker: model-hub -->
             <div v-show="currentTab === 'modelHub'" class="max-w-7xl mx-auto space-y-6">
                 <div class="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-900">模型中心</h2>
-                        <p class="text-sm text-gray-500 mt-1">AlphaEarth System 模型包目录、运行任务和能力证据入口</p>
+                        <p class="text-sm text-gray-500 mt-1">AlphaEarth 系统模型包目录、运行任务和能力证据入口</p>
                     </div>
                     <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer disabled:opacity-50" :disabled="loadingModelHubModels" @click="fetchModelHubModels">
                         <svg class="w-4 h-4 inline-block mr-1" :class="loadingModelHubModels ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -433,7 +433,7 @@
                     <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div>
                             <h3 class="text-lg font-semibold text-gray-900">系统能力工作台</h3>
-                            <p class="text-sm text-gray-500 mt-1">AlphaEarth System 当前可运行、可评估、演示和计划中的遥感能力总览。</p>
+                            <p class="text-sm text-gray-500 mt-1">AlphaEarth 系统当前可运行、可评估、演示和计划中的遥感能力总览。</p>
                         </div>
                         <button type="button" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50" :disabled="loadingSystemCapabilities" @click="fetchSystemCapabilities">
                             {{ loadingSystemCapabilities ? '刷新中...' : '刷新系统能力' }}
@@ -441,26 +441,26 @@
                     </div>
                     <div v-if="systemCapabilities" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
-                            <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">AlphaEarth System</div>
+                            <div class="text-xs text-gray-500 font-semibold tracking-wider">AlphaEarth 系统</div>
                             <div class="mt-2 text-sm text-gray-700">
                                 可运行 {{ systemCapabilities.summary.runnable_models }} 个，演示 {{ systemCapabilities.summary.demo_workflows }} 个，计划 {{ systemCapabilities.summary.planned_workflows }} 个
                             </div>
                             <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                                <span v-for="(count, status) in systemCapabilities.readiness_counts" :key="status" class="px-2 py-1 rounded border" :class="statusClass(status)">{{ status }}: {{ count }}</span>
+                                <span v-for="(count, status) in systemCapabilities.readiness_counts" :key="status" class="px-2 py-1 rounded border" :class="statusClass(status)">{{ statusLabel(status) }}：{{ count }}</span>
                             </div>
                         </div>
                         <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
                             <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">替代边界</div>
                             <p class="mt-2 text-sm text-gray-700">
-                                ArcGIS/Prithvi 替代就绪：{{ systemCapabilities.summary.arcgis_replacement_ready ? '是' : '否' }}
+                                ArcGIS / Prithvi 替代就绪：{{ systemCapabilities.summary.arcgis_replacement_ready ? '是' : '否' }}
                             </p>
-                            <p class="mt-1 text-xs text-gray-500">本地 crop 能力仍按契约演示处理，未声明可替代 ArcGIS 预训练模型。</p>
+                            <p class="mt-1 text-xs text-gray-500">本地作物分类能力仍按契约演示处理，未声明可替代 ArcGIS 预训练模型。</p>
                         </div>
                         <div class="border border-gray-200 rounded-md p-3 bg-gray-50">
                             <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">证据来源</div>
                             <ul class="mt-2 space-y-1 text-xs text-gray-600">
                                 <li v-for="source in systemCapabilities.evidence_sources" :key="source.path" class="break-all">
-                                    <span :class="source.available ? 'text-green-700' : 'text-amber-700'">{{ source.available ? 'available' : 'missing' }}</span>
+                                    <span :class="source.available ? 'text-green-700' : 'text-amber-700'">{{ source.available ? '可用' : '缺失' }}</span>
                                     · {{ source.label }} · {{ source.path }}
                                 </li>
                             </ul>
@@ -469,73 +469,73 @@
                     <div class="border border-gray-200 rounded-md p-4 bg-white space-y-3">
                         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
-                                <div class="text-sm font-semibold text-gray-800">System verification</div>
-                                <p class="text-xs text-gray-500 mt-1">Deterministic checks for registry, runtime, checkpoint, evidence, and replacement boundary.</p>
+                                <div class="text-sm font-semibold text-gray-800">系统能力自检</div>
+                                <p class="text-xs text-gray-500 mt-1">对注册表、运行模式、权重配置、证据和替代边界进行确定性检查。</p>
                             </div>
                             <button type="button" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loadingSystemVerification" @click="fetchSystemVerification">
-                                {{ loadingSystemVerification ? 'Checking...' : 'Refresh verification' }}
+                                {{ loadingSystemVerification ? '自检中...' : '刷新自检' }}
                             </button>
                         </div>
                         <div v-if="systemVerification" class="space-y-3">
                             <div class="flex flex-wrap items-center gap-2 text-xs">
-                                <span class="px-2 py-1 rounded border" :class="verificationStatusClass(systemVerification.overall_status)">overall_status: {{ systemVerification.overall_status }}</span>
-                                <span v-for="(count, status) in systemVerification.summary" :key="status" class="px-2 py-1 rounded border" :class="verificationStatusClass(status)">{{ status }}: {{ count }}</span>
+                                <span class="px-2 py-1 rounded border" :class="verificationStatusClass(systemVerification.overall_status)">总体状态：{{ verificationStatusLabel(systemVerification.overall_status) }}</span>
+                                <span v-for="(count, status) in systemVerification.summary" :key="status" class="px-2 py-1 rounded border" :class="verificationStatusClass(status)">{{ verificationStatusLabel(status) }}：{{ count }}</span>
                             </div>
                             <details class="text-xs">
-                                <summary class="cursor-pointer text-gray-600">Raw verification JSON</summary>
+                                <summary class="cursor-pointer text-gray-600">原始自检 JSON</summary>
                                 <pre class="mt-2 max-h-64 overflow-auto bg-gray-900 text-gray-100 p-3 rounded text-[11px] leading-relaxed">{{ systemVerificationRawJson }}</pre>
                             </details>
                         </div>
                         <div v-else-if="loadingSystemVerification" class="text-sm text-gray-500">正在执行系统能力自检...</div>
-                        <div v-else-if="systemVerificationError" class="text-sm text-red-600">System verification failed: {{ systemVerificationError }}</div>
+                        <div v-else-if="systemVerificationError" class="text-sm text-red-600">系统能力自检失败：{{ systemVerificationError }}</div>
                         <div v-else class="text-sm text-gray-500">系统能力自检尚未加载。</div>
                     </div>
                     <div class="border border-gray-200 rounded-md p-4 bg-white space-y-3">
                         <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
-                                <div class="text-sm font-semibold text-gray-800">Evidence drill-down</div>
-                                <p class="text-xs text-gray-500 mt-1">Inspect verification evidence refs, safe local artifacts, and bounded previews.</p>
+                                <div class="text-sm font-semibold text-gray-800">证据下钻</div>
+                                <p class="text-xs text-gray-500 mt-1">查看自检证据引用、安全的本地制品和受限预览。</p>
                             </div>
                             <button type="button" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loadingSystemEvidence" @click="fetchSystemEvidence">
-                                {{ loadingSystemEvidence ? 'Loading evidence...' : 'Refresh evidence' }}
+                                {{ loadingSystemEvidence ? '证据加载中...' : '刷新证据' }}
                             </button>
                         </div>
                         <div v-if="systemEvidence" class="space-y-3">
                             <div class="flex flex-wrap items-center gap-2 text-xs">
-                                <span v-for="(count, status) in systemEvidence.summary" :key="status" class="px-2 py-1 rounded border" :class="evidenceStatusClass(status)">{{ status }}: {{ count }}</span>
+                                <span v-for="(count, status) in systemEvidence.summary" :key="status" class="px-2 py-1 rounded border" :class="evidenceStatusClass(status)">{{ evidenceStatusLabel(status) }}：{{ count }}</span>
                             </div>
                             <div v-if="systemEvidence.notes && systemEvidence.notes.length" class="text-xs text-gray-500 space-y-1">
-                                <div v-for="note in systemEvidence.notes" :key="note">{{ note }}</div>
+                                <div v-for="note in systemEvidence.notes" :key="note">{{ localizeSystemMessage(note) }}</div>
                             </div>
                             <details v-if="systemEvidence.artifacts && systemEvidence.artifacts.length" class="text-xs">
-                                <summary class="cursor-pointer text-gray-600">Artifact previews</summary>
+                                <summary class="cursor-pointer text-gray-600">证据制品预览</summary>
                                 <div class="mt-2 space-y-2">
                                     <div v-for="artifact in systemEvidence.artifacts" :key="artifact.ref" class="border border-gray-200 rounded p-2 bg-gray-50 space-y-1">
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <span class="px-2 py-1 rounded border" :class="evidenceStatusClass(artifact.status)">{{ artifact.status }}</span>
-                                            <span class="text-gray-700">{{ artifact.kind }}</span>
+                                            <span class="px-2 py-1 rounded border" :class="evidenceStatusClass(artifact.status)">{{ evidenceStatusLabel(artifact.status) }}</span>
+                                            <span class="text-gray-700">{{ artifactKindLabel(artifact.kind) }}</span>
                                             <span class="text-gray-500 break-all">{{ artifact.safe_path || artifact.source_id || artifact.ref }}</span>
                                             <span class="text-gray-400">{{ formatArtifactSize(artifact.size_bytes) }}</span>
                                         </div>
-                                        <div class="text-gray-500">{{ artifact.message }}</div>
+                                        <div class="text-gray-500">{{ localizeSystemMessage(artifact.message) }}</div>
                                         <details v-if="artifact.preview" class="text-xs">
-                                            <summary class="cursor-pointer text-gray-600">preview</summary>
+                                            <summary class="cursor-pointer text-gray-600">预览</summary>
                                             <pre class="mt-2 max-h-48 overflow-auto bg-gray-900 text-gray-100 p-2 rounded text-[11px] leading-relaxed">{{ formatArtifactPreview(artifact) }}</pre>
                                         </details>
                                     </div>
                                 </div>
                             </details>
                             <details class="text-xs">
-                                <summary class="cursor-pointer text-gray-600">Raw evidence JSON</summary>
+                                <summary class="cursor-pointer text-gray-600">原始证据 JSON</summary>
                                 <pre class="mt-2 max-h-64 overflow-auto bg-gray-900 text-gray-100 p-3 rounded text-[11px] leading-relaxed">{{ systemEvidenceRawJson }}</pre>
                             </details>
                         </div>
-                        <div v-else-if="loadingSystemEvidence" class="text-sm text-gray-500">正在加载系统证据 drill-down...</div>
-                        <div v-else-if="systemEvidenceError" class="text-sm text-red-600">System evidence failed: {{ systemEvidenceError }}</div>
-                        <div v-else class="text-sm text-gray-500">系统证据 drill-down 尚未加载。</div>
+                        <div v-else-if="loadingSystemEvidence" class="text-sm text-gray-500">正在加载系统证据下钻...</div>
+                        <div v-else-if="systemEvidenceError" class="text-sm text-red-600">系统证据加载失败：{{ systemEvidenceError }}</div>
+                        <div v-else class="text-sm text-gray-500">系统证据下钻尚未加载。</div>
                     </div>
                     <div v-if="systemCapabilities && systemCapabilities.notes && systemCapabilities.notes.length" class="text-xs text-gray-500 space-y-1">
-                        <div v-for="note in systemCapabilities.notes" :key="note">{{ note }}</div>
+                        <div v-for="note in systemCapabilities.notes" :key="note">{{ localizeSystemMessage(note) }}</div>
                     </div>
                     <div v-else-if="loadingSystemCapabilities" class="text-sm text-gray-500">正在加载系统能力工作台...</div>
                     <div v-else-if="systemCapabilitiesError" class="text-sm text-red-600">系统能力加载失败：{{ systemCapabilitiesError }}</div>
@@ -556,30 +556,46 @@
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <h3 class="text-base font-semibold text-gray-900 break-words">{{ model.display_name }}</h3>
-                                <p class="text-xs text-gray-500 mt-1 data-font break-all">{{ model.model_id }} · {{ model.task_type }}</p>
+                                <p class="text-xs text-gray-500 mt-1 data-font break-all">{{ model.model_id }} · {{ taskTypeLabel(model.task_type) }}</p>
                             </div>
                             <div class="flex flex-wrap justify-end gap-2 text-xs shrink-0">
-                                <span class="px-2 py-1 rounded border" :class="statusClass(model.status)">{{ model.status }}</span>
+                                <span class="px-2 py-1 rounded border" :class="statusClass(model.status)">{{ statusLabel(model.status) }}</span>
                                 <span v-if="systemCapabilityFor(model)" class="px-2 py-1 rounded border bg-gray-50 text-gray-700 border-gray-200">
                                     {{ capabilityWorkflowLabel(systemCapabilityFor(model).workflow_level) }}
                                 </span>
                                 <span v-if="systemCapabilityFor(model)?.arcgis_replacement" class="px-2 py-1 rounded border bg-gray-50 text-gray-700 border-gray-200">
-                                    {{ systemCapabilityFor(model).arcgis_replacement.status }}
+                                    {{ replacementStatusLabel(systemCapabilityFor(model).arcgis_replacement.status) }}
                                 </span>
                                 <span v-if="verificationForCapability(model)" class="px-2 py-1 rounded border" :class="verificationStatusClass(verificationForCapability(model).overall_status)">
-                                    verification: {{ verificationForCapability(model).overall_status }}
+                                    自检：{{ verificationStatusLabel(verificationForCapability(model).overall_status) }}
                                 </span>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
-                            <div><span class="text-gray-500">Backbone:</span> <span class="data-font text-gray-800">{{ model.backbone }}</span></div>
-                            <div><span class="text-gray-500">Adapter:</span> <span class="data-font text-gray-800">{{ model.adapter }}</span></div>
-                            <div class="sm:col-span-2"><span class="text-gray-500">Classes:</span> <span class="data-font text-gray-800 break-words">{{ (model.class_schema || []).join(', ') }}</span></div>
+                            <div><span class="text-gray-500">主干网络：</span> <span class="data-font text-gray-800">{{ model.backbone }}</span></div>
+                            <div><span class="text-gray-500">适配器：</span> <span class="data-font text-gray-800">{{ model.adapter }}</span></div>
+                            <div class="sm:col-span-2"><span class="text-gray-500">类别：</span> <span class="data-font text-gray-800 break-words">{{ (model.class_schema || []).join(', ') }}</span></div>
+                        </div>
+                        <div v-if="productionEvidenceFor(model)" class="text-xs text-gray-600 bg-white border border-gray-200 rounded p-2 space-y-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="px-2 py-1 rounded border" :class="productionStateClass(productionEvidenceFor(model).production_state)">生产状态：{{ productionStateLabel(productionEvidenceFor(model).production_state) }}</span>
+                                <span class="px-2 py-1 rounded border bg-gray-50 text-gray-700 border-gray-200">运行类型：{{ runtimeKindLabel(productionEvidenceFor(model).runtime_kind) }}</span>
+                                <span class="px-2 py-1 rounded border" :class="productionEvidenceFor(model).may_run_real_inference ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'">
+                                    真实推理：{{ productionEvidenceFor(model).may_run_real_inference ? '可运行' : '不可运行' }}
+                                </span>
+                            </div>
+                            <div v-if="isDemoOrCachedModel(model, productionEvidenceFor(model))" class="text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                不要将演示结果解释为生产推理
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-500">
+                                <div v-if="productionEvidenceFor(model).weights?.source">权重来源：{{ productionEvidenceFor(model).weights.source }}</div>
+                                <div v-if="productionEvidenceFor(model).test_data?.dataset_id">测试数据：{{ productionEvidenceFor(model).test_data.dataset_id }}</div>
+                            </div>
                         </div>
                         <div v-if="systemCapabilityFor(model)" class="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded p-2 space-y-2">
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div><span class="text-gray-500">工作流:</span> <span class="text-gray-800">{{ capabilityWorkflowLabel(systemCapabilityFor(model).workflow_level) }}</span></div>
-                                <div><span class="text-gray-500">Checkpoint:</span> <span class="text-gray-800">{{ systemCapabilityFor(model).checkpoint.configured ? systemCapabilityFor(model).checkpoint.path : '未配置' }}</span></div>
+                                <div><span class="text-gray-500">工作流</span> <span class="text-gray-800">{{ capabilityWorkflowLabel(systemCapabilityFor(model).workflow_level) }}</span></div>
+                                <div><span class="text-gray-500">权重：</span> <span class="text-gray-800">{{ systemCapabilityFor(model).checkpoint.configured ? systemCapabilityFor(model).checkpoint.path : '未配置' }}</span></div>
                             </div>
                             <div v-if="systemCapabilityFor(model).evidence && systemCapabilityFor(model).evidence.length">
                                 <div class="text-gray-600 font-medium mb-1">证据</div>
@@ -592,13 +608,13 @@
                             <div v-if="systemCapabilityFor(model).limitations && systemCapabilityFor(model).limitations.length">
                                 <div class="text-gray-600 font-medium mb-1">限制</div>
                                 <ul class="list-disc pl-4 space-y-1">
-                                    <li v-for="limitation in systemCapabilityFor(model).limitations" :key="limitation">{{ limitation }}</li>
+                                    <li v-for="limitation in systemCapabilityFor(model).limitations" :key="limitation">{{ localizeSystemMessage(limitation) }}</li>
                                 </ul>
                             </div>
                             <div v-if="systemCapabilityFor(model).next_steps && systemCapabilityFor(model).next_steps.length">
                                 <div class="text-gray-600 font-medium mb-1">下一步</div>
                                 <ul class="list-disc pl-4 space-y-1">
-                                    <li v-for="step in systemCapabilityFor(model).next_steps" :key="step">{{ step }}</li>
+                                    <li v-for="step in systemCapabilityFor(model).next_steps" :key="step">{{ localizeSystemMessage(step) }}</li>
                                 </ul>
                             </div>
                         </div>
@@ -608,39 +624,39 @@
                                     <div class="flex flex-wrap items-center gap-2">
                                         <span class="px-2 py-1 rounded border bg-white border-gray-200 break-all">{{ checkId }}</span>
                                         <span v-if="evidenceForCheck(checkId)" class="px-2 py-1 rounded border" :class="verificationStatusClass(evidenceForCheck(checkId).check_status)">
-                                            {{ evidenceForCheck(checkId).check_status }}
+                                            {{ verificationStatusLabel(evidenceForCheck(checkId).check_status) }}
                                         </span>
                                     </div>
-                                    <div v-if="evidenceForCheck(checkId)?.check_title" class="text-gray-600">{{ evidenceForCheck(checkId).check_title }}</div>
+                                    <div v-if="evidenceForCheck(checkId)?.check_title" class="text-gray-600">{{ localizeSystemMessage(evidenceForCheck(checkId).check_title) }}</div>
                                     <div v-if="evidenceForCheck(checkId)" class="space-y-2">
                                         <div v-for="artifact in evidenceForCheck(checkId).evidence" :key="artifact.ref" class="bg-white border border-gray-200 rounded p-2 space-y-1">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <span class="px-2 py-1 rounded border" :class="evidenceStatusClass(artifact.status)">{{ artifact.status }}</span>
-                                                <span class="text-gray-700">{{ artifact.kind }}</span>
+                                                <span class="px-2 py-1 rounded border" :class="evidenceStatusClass(artifact.status)">{{ evidenceStatusLabel(artifact.status) }}</span>
+                                                <span class="text-gray-700">{{ artifactKindLabel(artifact.kind) }}</span>
                                                 <span class="text-gray-500 break-all">{{ artifact.safe_path || artifact.source_id || artifact.ref }}</span>
                                                 <span class="text-gray-400">{{ formatArtifactSize(artifact.size_bytes) }}</span>
                                             </div>
-                                            <div class="text-gray-500">{{ artifact.message }}</div>
-                                            <div v-if="artifact.modified_at" class="text-gray-400">modified_at: {{ artifact.modified_at }}</div>
+                                            <div class="text-gray-500">{{ localizeSystemMessage(artifact.message) }}</div>
+                                            <div v-if="artifact.modified_at" class="text-gray-400">修改时间：{{ artifact.modified_at }}</div>
                                             <details v-if="artifact.preview" class="text-xs">
-                                                <summary class="cursor-pointer text-gray-600">preview</summary>
+                                                <summary class="cursor-pointer text-gray-600">预览</summary>
                                                 <pre class="mt-2 max-h-48 overflow-auto bg-gray-900 text-gray-100 p-2 rounded text-[11px] leading-relaxed">{{ formatArtifactPreview(artifact) }}</pre>
                                             </details>
                                         </div>
                                     </div>
-                                    <div v-else class="text-xs text-gray-400">No drill-down evidence loaded for this check.</div>
+                                    <div v-else class="text-xs text-gray-400">此检查项暂无下钻证据。</div>
                                 </div>
                             </div>
                             <div v-if="verificationForCapability(model).blocking_issues && verificationForCapability(model).blocking_issues.length">
-                                <div class="font-medium text-red-700">Blocking issues</div>
+                                <div class="font-medium text-red-700">阻塞问题</div>
                                 <ul class="list-disc pl-4 space-y-1">
-                                    <li v-for="issue in verificationForCapability(model).blocking_issues" :key="issue">{{ issue }}</li>
+                                    <li v-for="issue in verificationForCapability(model).blocking_issues" :key="issue">{{ localizeSystemMessage(issue) }}</li>
                                 </ul>
                             </div>
                             <div v-if="verificationForCapability(model).next_actions && verificationForCapability(model).next_actions.length">
-                                <div class="font-medium text-gray-700">next_actions</div>
+                                <div class="font-medium text-gray-700">下一步操作</div>
                                 <ul class="list-disc pl-4 space-y-1">
-                                    <li v-for="action in verificationForCapability(model).next_actions" :key="action">{{ action }}</li>
+                                    <li v-for="action in verificationForCapability(model).next_actions" :key="action">{{ localizeSystemMessage(action) }}</li>
                                 </ul>
                             </div>
                         </div>
@@ -662,7 +678,7 @@
                 <div v-if="modelHubJob" class="glass-card p-5">
                     <div class="flex items-center justify-between mb-3">
                         <h3 class="text-sm font-semibold text-gray-700">最近任务</h3>
-                        <span class="px-2 py-1 rounded text-xs border" :class="statusClass(modelHubJob.status)">{{ modelHubJob.status }}</span>
+                        <span class="px-2 py-1 rounded text-xs border" :class="statusClass(modelHubJob.status)">{{ statusLabel(modelHubJob.status) }}</span>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                         <div class="border border-gray-200 rounded-md p-3 bg-gray-50 lg:col-span-2">
@@ -679,7 +695,7 @@
                             <h4 class="text-sm font-semibold text-gray-700 mb-2">输出制品</h4>
                             <ul v-if="modelHubJob.artifacts && modelHubJob.artifacts.length" class="space-y-1 text-xs">
                                 <li v-for="artifact in modelHubJob.artifacts" :key="artifact.kind + artifact.path" class="break-all">
-                                    <span class="font-medium text-gray-700">{{ artifact.kind }}</span>
+                                    <span class="font-medium text-gray-700">{{ artifactKindLabel(artifact.kind) }}</span>
                                     <span class="text-gray-500"> · {{ artifact.path }}</span>
                                 </li>
                             </ul>
@@ -701,7 +717,7 @@
                 <div class="flex justify-between items-center">
                     <div>
                         <h2 class="text-2xl font-bold text-gray-900">LULC 工具</h2>
-                        <p class="text-sm text-gray-500 mt-1">公共产品模式用于区域级现成地物图，本地模型模式用于上传影像 patch 推理与验收。</p>
+                        <p class="text-sm text-gray-500 mt-1">公共产品模式用于区域级现成地物图，本地模型模式用于上传影像切片推理与验收。</p>
                     </div>
                     <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors duration-200 cursor-pointer" @click="fetchLulcModes">
                         <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -727,13 +743,13 @@
 
                         <div class="grid grid-cols-2 gap-3">
                             <label class="text-sm text-gray-700">
-                                <span class="block mb-1 font-medium">Provider</span>
+                                <span class="block mb-1 font-medium">产品来源</span>
                                 <select v-model="publicLulcForm.provider_id" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-primary focus:border-primary outline-none">
                                     <option v-for="product in lulcPublicProducts" :key="product.id" :value="product.id">{{ product.id }} · {{ product.status }}</option>
                                 </select>
                             </label>
                             <label class="text-sm text-gray-700">
-                                <span class="block mb-1 font-medium">Year</span>
+                                <span class="block mb-1 font-medium">年份</span>
                                 <select v-model.number="publicLulcForm.year" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-sm focus:ring-primary focus:border-primary outline-none">
                                     <option v-for="year in publicAvailableYears" :key="year" :value="year">{{ year }}</option>
                                 </select>
@@ -777,7 +793,7 @@
                         <div class="flex items-start justify-between">
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-900">本地模型模式</h3>
-                                <p class="text-sm text-gray-500 mt-1">上传 RGB patch 推理；上传 label 后可直接计算 mIoU 和 per-class IoU。</p>
+                                <p class="text-sm text-gray-500 mt-1">上传 RGB 影像切片推理；上传标签掩膜后可直接计算 mIoU 和分类 IoU。</p>
                             </div>
                             <span class="px-2 py-1 text-xs rounded border bg-blue-50 text-primary border-blue-200">{{ lulcLocalModels.length }} 个模型</span>
                         </div>
@@ -797,7 +813,7 @@
                                 <input type="file" accept="image/*" class="block w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-2 file:border-0 file:rounded-md file:bg-blue-50 file:text-primary" @change="onLocalLulcFileChange">
                             </label>
                             <label class="block text-sm text-gray-700">
-                                <span class="block mb-1 font-medium">Label mask</span>
+                                <span class="block mb-1 font-medium">标签掩膜</span>
                                 <input type="file" accept="image/*" class="block w-full text-sm text-gray-600 file:mr-3 file:px-3 file:py-2 file:border-0 file:rounded-md file:bg-gray-100 file:text-gray-700" @change="onLocalLulcLabelChange">
                             </label>
                         </div>
@@ -807,7 +823,7 @@
                                 {{ loadingLocalLulc ? '推理中...' : '本地模型推理' }}
                             </button>
                             <button class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 transition-colors disabled:opacity-50" :disabled="loadingLocalLulc || !localLulcFile || !localLulcLabel" @click="runLocalLulcEvaluation">
-                                上传 label 并评估
+                                上传标签并评估
                             </button>
                         </div>
 
@@ -816,11 +832,11 @@
                             <div class="p-3 space-y-3 text-sm">
                                 <div class="grid grid-cols-2 gap-2">
                                     <div class="bg-gray-50 rounded p-2">
-                                        <div class="text-xs text-gray-500">mask shape</div>
+                                        <div class="text-xs text-gray-500">掩膜尺寸</div>
                                         <div class="data-font text-gray-900">{{ localLulcResult.mask_shape?.join(' × ') }}</div>
                                     </div>
                                     <div class="bg-gray-50 rounded p-2">
-                                        <div class="text-xs text-gray-500">mean confidence</div>
+                                        <div class="text-xs text-gray-500">平均置信度</div>
                                         <div class="data-font text-gray-900">{{ localLulcResult.confidence_summary?.mean_max_probability?.toFixed(3) ?? '--' }}</div>
                                     </div>
                                 </div>
@@ -836,7 +852,7 @@
                         <div v-if="localLulcEvaluation" class="border border-green-200 bg-green-50 rounded-md p-3 text-sm">
                             <div class="font-semibold text-green-800 mb-2">评估结果</div>
                             <div class="grid grid-cols-2 gap-2">
-                                <div>Pixel accuracy: <span class="data-font">{{ localLulcEvaluation.pixel_accuracy?.toFixed(3) }}</span></div>
+                                <div>像素准确率：<span class="data-font">{{ localLulcEvaluation.pixel_accuracy?.toFixed(3) }}</span></div>
                                 <div>mIoU: <span class="data-font">{{ localLulcEvaluation.mIoU?.toFixed(3) }}</span></div>
                             </div>
                         </div>
@@ -852,8 +868,8 @@
                             <div class="space-y-2">
                                 <div v-for="model in lulcLocalModels" :key="model.id" class="border border-gray-200 rounded-md p-3 text-sm">
                                     <div class="font-medium text-gray-900">{{ model.id }}</div>
-                                    <div class="text-gray-500 mt-1">{{ model.adapter }} · ready={{ model.ready }}</div>
-                                    <div class="text-gray-500">mIoU={{ model.validation?.mIoU ? model.validation.mIoU.toFixed(4) : '--' }} · params={{ model.validation?.trainable_params ?? '--' }}</div>
+                                    <div class="text-gray-500 mt-1">{{ model.adapter }} · 就绪={{ model.ready }}</div>
+                                    <div class="text-gray-500">mIoU={{ model.validation?.mIoU ? model.validation.mIoU.toFixed(4) : '--' }} · 参数={{ model.validation?.trainable_params ?? '--' }}</div>
                                 </div>
                             </div>
                         </div>
@@ -863,7 +879,7 @@
                                 <div v-for="product in lulcPublicProducts" :key="product.id" class="border border-gray-200 rounded-md p-3 text-sm">
                                     <div class="font-medium text-gray-900">{{ product.id }}</div>
                                     <div class="text-gray-500 mt-1">{{ product.product }}</div>
-                                    <div class="text-gray-500">status={{ product.status }} · years={{ product.available_years?.join(', ') || '--' }}</div>
+                                    <div class="text-gray-500">状态={{ product.status }} · 年份={{ product.available_years?.join(', ') || '--' }}</div>
                                 </div>
                             </div>
                         </div>
@@ -908,7 +924,7 @@
                         <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">1.c 季度变化检测</span>
                         <div class="mt-2 flex items-baseline space-x-2">
                             <span class="text-3xl font-bold text-gray-900 data-font">{{ demoSummary?.tasks.change_2025.n_pairs ?? '--' }}</span>
-                            <span class="text-sm text-gray-500">配准 patch 对</span>
+                            <span class="text-sm text-gray-500">配准切片对</span>
                         </div>
                         <div class="mt-1 text-xs text-gray-500">top PCA-RX <span class="text-gray-700">{{ demoSummary?.tasks.change_2025.top_pca.toFixed(3) ?? '--' }}</span> · {{ demoSummary?.tasks.change_2025.quarters.join(' → ') ?? '' }}</div>
                         <div class="mt-2 text-xs text-gray-400">{{ demoSummary?.tasks.change_2025.note ?? '' }}</div>
@@ -919,7 +935,7 @@
                 <div class="grid grid-cols-3 gap-6">
                     <div class="glass-card col-span-2 p-4">
                         <div class="flex justify-between items-center mb-3">
-                            <h3 class="text-sm font-semibold text-gray-700">变化热力图 · 全量 {{ demoSummary?.tasks.change_2025.n_pairs ?? '--' }} patch (PCA-RX score)</h3>
+                            <h3 class="text-sm font-semibold text-gray-700">变化热力图 · 全量 {{ demoSummary?.tasks.change_2025.n_pairs ?? '--' }} 个切片（PCA-RX 分数）</h3>
                             <div class="flex items-center space-x-1 text-xs">
                                 <button @click="setBasemap('gaode')" :class="basemapKey === 'gaode' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">高德影像</button>
                                 <button @click="setBasemap('esri')" :class="basemapKey === 'esri' ? 'bg-primary text-white' : 'bg-white text-gray-600 border border-gray-300'" class="px-2 py-1 rounded">Esri 卫星</button>
@@ -932,7 +948,7 @@
                         <h3 class="text-sm font-semibold text-gray-700 mb-3">像素级变化对比</h3>
                         <div v-if="!selectedPair" class="flex-1 flex flex-col">
                             <div class="flex-1 flex items-center justify-center text-center text-sm text-gray-400 px-4">
-                                点击地图上的高亮圆点<br>查看 2025Q1 ↔ 2025Q4 同位 patch 的<br>RGB 对比与 PCA-RX 异常热度
+                                点击地图上的高亮圆点<br>查看 2025Q1 ↔ 2025Q4 同位切片的<br>RGB 对比与 PCA-RX 异常热度
                             </div>
                             <div class="border-t border-gray-100 pt-3 mt-3">
                                 <div class="text-xs text-gray-500 mb-2">或从 Top-{{ demoPairs.length }} 高变化点快速选取</div>
@@ -949,7 +965,7 @@
                         <div v-else class="flex-1 overflow-y-auto space-y-3">
                             <div class="flex justify-between items-start">
                                 <div class="text-xs text-gray-600 data-font">
-                                    patch {{ selectedPair.patch_id }}<br>
+                                    切片 {{ selectedPair.patch_id }}<br>
                                     <span class="text-gray-400">({{ selectedPair.lon.toFixed(4) }}°E, {{ selectedPair.lat.toFixed(4) }}°N)</span>
                                 </div>
                                 <button @click="selectedPair = null" class="text-xs text-gray-400 hover:text-gray-600 px-1">✕</button>
@@ -966,7 +982,7 @@
                             </div>
                             <div>
                                 <div class="text-xs text-gray-500 mb-1 flex justify-between">
-                                    <span>Before (2025Q1) / After (2025Q4) / RGB Diff</span>
+                                    <span>前期（2025Q1） / 后期（2025Q4） / RGB 差异</span>
                                     <a :href="selectedPair.pair_url" target="_blank" class="text-primary hover:underline">放大↗</a>
                                 </div>
                                 <img :src="selectedPair.pair_url" class="w-full rounded border border-gray-200 cursor-zoom-in" alt="pair" @click="window.open(selectedPair.pair_url, '_blank')">
@@ -985,10 +1001,10 @@
                 <!-- PEFT Comparison + LULC Distribution -->
                 <div class="grid grid-cols-3 gap-6">
                     <div class="glass-card col-span-2 p-4">
-                        <h3 class="text-sm font-semibold text-gray-700 mb-3">PEFT 增益对比 (linear probe vs Houlsby adapter)</h3>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">PEFT 增益对比（线性探针与 Houlsby 适配器）</h3>
                         <div id="peftBarChart" class="w-full h-64"></div>
                         <p class="mt-3 text-xs text-gray-500 leading-relaxed">
-                            1.b Esri LULC 真业务标签下，Houlsby 适配器 mIoU 0.293 vs linear probe 0.177，<span class="text-green-600 font-semibold">相对增益 65%</span> — backbone 表征里有 linear probe 取不到的语义信号，PEFT 把它解出来了。1.a 合成标签因为本身与 RGB 强相关，PEFT 增益小，作为流水线 sanity check 使用。
+                            1.b Esri LULC 真业务标签下，Houlsby 适配器 mIoU 0.293，相比线性探针 0.177 <span class="text-green-600 font-semibold">相对增益 65%</span>。主干表征里包含线性探针取不到的语义信号，PEFT 将其解耦出来。1.a 合成标签本身与 RGB 强相关，PEFT 增益较小，作为流水线完整性检查使用。
                         </p>
                     </div>
                     <div class="glass-card p-4">
@@ -1017,7 +1033,7 @@
             const currentLoss = ref(0.0000);
             const gpuMem = ref(0);
             const logs = ref([
-                "[系统] 准备连接至后端训练 API..."
+                "[绯荤粺] 鍑嗗杩炴帴鑷冲悗绔缁?API..."
             ]);
 
             // Data Source refs
@@ -1147,10 +1163,10 @@
                     currentLoss.value = 1.0 - (history.methods[history.methods.length - 1].mean || 0);
                     gpuMem.value = 0;
                     if (logs.value.length === 0) {
-                        logs.value.push(`[demo] 加载 ${history.task} 真实训练结果`);
-                        logs.value.push(`[demo] ${history.scenes} 个 scene · ${history.patches} 个 128x128 patch · ${history.epochs_per_run} epoch/run`);
+                        logs.value.push(`[演示] 加载 ${history.task} 真实训练结果`);
+                        logs.value.push(`[演示] ${history.scenes} 个场景 · ${history.patches} 个 128x128 切片 · ${history.epochs_per_run} 轮/次`);
                         history.methods.forEach(m => {
-                            logs.value.push(`[result] ${m.label.padEnd(28)} mIoU = ${m.mean.toFixed(4)} ± ${m.std.toFixed(4)} · ${(m.params/1e6).toFixed(2)}M params`);
+                            logs.value.push(`[结果] ${m.label.padEnd(28)} mIoU = ${m.mean.toFixed(4)} ± ${m.std.toFixed(4)} · ${(m.params/1e6).toFixed(2)}M 参数`);
                         });
                     }
 
@@ -1181,9 +1197,9 @@
                     });
 
                     uniChart.setOption({
-                        tooltip: { trigger: 'item', formatter: p => `${p.data.label}<br/>params = ${(p.data.value[0]/1e6).toFixed(2)}M<br/>mIoU = ${p.data.value[1].toFixed(4)}` },
+                        tooltip: { trigger: 'item', formatter: p => `${p.data.label}<br/>参数 = ${(p.data.value[0]/1e6).toFixed(2)}M<br/>mIoU = ${p.data.value[1].toFixed(4)}` },
                         grid: { top: 20, right: 16, bottom: 36, left: 48 },
-                        xAxis: { type: 'log', name: 'Trainable params', nameLocation: 'middle', nameGap: 22, axisLabel: { formatter: v => v >= 1e6 ? (v/1e6)+'M' : (v >= 1e3 ? (v/1e3)+'K' : v) } },
+                        xAxis: { type: 'log', name: '可训练参数量', nameLocation: 'middle', nameGap: 22, axisLabel: { formatter: v => v >= 1e6 ? (v/1e6)+'M' : (v >= 1e3 ? (v/1e3)+'K' : v) } },
                         yAxis: { type: 'value', name: 'mIoU', scale: true, splitLine: { lineStyle: { color: '#F1F5F9' } } },
                         series: [{
                             type: 'scatter',
@@ -1196,7 +1212,7 @@
 
                     const colorMap = { linear_probe: '#94A3B8', bitfit: '#60A5FA', lora_r8: '#A78BFA', geoadapter: '#34D399', houlsby: '#F97316' };
                     latentChart.setOption({
-                        tooltip: { trigger: 'item', formatter: p => `${p.data.label}<br/>seed #${p.data.value[0]+1}: mIoU = ${p.data.value[1].toFixed(4)}` },
+                        tooltip: { trigger: 'item', formatter: p => `${p.data.label}<br/>随机种子 #${p.data.value[0]+1}: mIoU = ${p.data.value[1].toFixed(4)}` },
                         legend: { show: false },
                         grid: { top: 20, right: 12, bottom: 30, left: 40 },
                         xAxis: { type: 'category', data: history.methods.map(m => m.label), axisLabel: { fontSize: 9, interval: 0, rotate: 12 } },
@@ -1445,7 +1461,7 @@
                     alert("请选择区域和至少一个卫星源");
                     return;
                 }
-                if (!confirm("⚠️ 演示模式提示：\n\n生成训练切片需要拉取 GEE 影像并切片，预计 30 分钟以上。\n\n演示中通常使用已切好的临河 35,920 张 patch 数据集。\n\n确定要现在启动新切片任务吗？")) {
+                if (!confirm("⚠️ 演示模式提示：\n\n生成训练切片需要拉取 GEE 影像并切片，预计 30 分钟以上。\n\n演示中通常使用已切好的临河 35,920 张切片数据集。\n\n确定要现在启动新切片任务吗？")) {
                     return;
                 }
 
@@ -1557,6 +1573,129 @@
                 return numeric.toFixed(4);
             };
 
+            const labelFrom = (labels, value, fallback = '\u672a\u77e5') => {
+                if (value === null || value === undefined || value === '') return fallback;
+                return labels[value] || value;
+            };
+
+            const statusLabel = (status) => labelFrom({
+                ready: '\u5df2\u5c31\u7eea',
+                evaluable: '\u53ef\u8bc4\u4f30',
+                succeeded: '\u6210\u529f',
+                success: '\u6210\u529f',
+                demo_only: '\u4ec5\u6f14\u793a',
+                running: '\u8fd0\u884c\u4e2d',
+                planned: '\u8ba1\u5212\u4e2d',
+                pending: '\u7b49\u5f85\u4e2d',
+                failed: '\u5931\u8d25',
+                error: '\u9519\u8bef',
+                not_configured: '\u672a\u914d\u7f6e',
+            }, status);
+
+            const verificationStatusLabel = (status) => labelFrom({
+                pass: '\u901a\u8fc7',
+                warning: '\u8b66\u544a',
+                fail: '\u672a\u901a\u8fc7',
+                not_applicable: '\u4e0d\u9002\u7528',
+            }, status);
+
+            const evidenceStatusLabel = (status) => labelFrom({
+                available: '\u53ef\u7528',
+                missing: '\u7f3a\u5931',
+                blocked: '\u963b\u585e',
+                not_applicable: '\u4e0d\u9002\u7528',
+            }, status);
+
+            const replacementStatusLabel = (status) => labelFrom({
+                not_ready: '\u672a\u5c31\u7eea',
+                partial: '\u90e8\u5206\u53ef\u7528',
+                demo_only: '\u4ec5\u6f14\u793a',
+                ready: '\u5df2\u5c31\u7eea',
+                not_applicable: '\u4e0d\u9002\u7528',
+            }, status);
+
+            const artifactKindLabel = (kind) => labelFrom({
+                registry: '\u6ce8\u518c\u4fe1\u606f',
+                json: 'JSON \u6587\u4ef6',
+                csv: 'CSV \u6587\u4ef6',
+                text: '\u6587\u672c',
+                png: 'PNG \u56fe\u50cf',
+                geotiff: 'GeoTIFF \u6805\u683c',
+                geojson: 'GeoJSON \u6587\u4ef6',
+                manifest: '\u6e05\u5355',
+            }, kind, '\u5236\u54c1');
+
+            const taskTypeLabel = (taskType) => labelFrom({
+                semantic_segmentation: '\u8bed\u4e49\u5206\u5272',
+                lulc_segmentation: '\u5730\u8868\u8986\u76d6\u5206\u5272',
+                change_detection: '\u53d8\u5316\u68c0\u6d4b',
+                crop_classification: '\u4f5c\u7269\u5206\u7c7b',
+            }, taskType, '\u4efb\u52a1');
+
+            const inputModeLabel = (mode) => labelFrom({
+                cached_demo: '\u7f13\u5b58\u6f14\u793a',
+                demo_patch: '\u793a\u4f8b\u5207\u7247',
+                upload_raster_demo: '\u672c\u5730\u6805\u683c\u6f14\u793a',
+                raster_inference: '栅格推理',
+                real_raster_inference: '真实栅格推理',
+            }, mode, '\u8f93\u5165\u6a21\u5f0f');
+
+            const productionStateLabel = (state) => labelFrom({
+                production_candidate: '生产候选',
+                verification_required: '需要验证',
+                download_required: '需要下载',
+                test_data_required: '需要测试数据',
+                dependency_required: '需要依赖',
+                training_required: '需要训练',
+                metadata_missing: '缺少元数据',
+            }, state, '生产状态');
+
+            const runtimeKindLabel = (kind) => labelFrom({
+                neural_checkpoint: '真实推理',
+                public_product: '公共产品',
+                cached_artifact: '缓存结果',
+                training_pipeline: '训练管线',
+                contract_demo: '契约演示',
+            }, kind, '运行类型');
+            const localizeSystemMessage = (message) => {
+                if (!message) return '';
+                const exact = {
+                    'Registry status is valid': '\u6ce8\u518c\u72b6\u6001\u6709\u6548',
+                    'Registry status is unknown': '\u6ce8\u518c\u72b6\u6001\u672a\u77e5',
+                    'Runtime mode is declared': '\u8fd0\u884c\u6a21\u5f0f\u5df2\u58f0\u660e',
+                    'Runtime mode is not required for planned capability': '\u8ba1\u5212\u4e2d\u80fd\u529b\u6682\u4e0d\u9700\u8fd0\u884c\u6a21\u5f0f',
+                    'Executable capability has no runtime mode': '\u53ef\u6267\u884c\u80fd\u529b\u7f3a\u5c11\u8fd0\u884c\u6a21\u5f0f',
+                    'Checkpoint is configured': '\u6743\u91cd\u5df2\u914d\u7f6e',
+                    'Checkpoint is not required for planned capability': '\u8ba1\u5212\u4e2d\u80fd\u529b\u6682\u4e0d\u9700\u6743\u91cd',
+                    'Demo workflow does not require a checkpoint': '\u6f14\u793a\u5de5\u4f5c\u6d41\u4e0d\u9700\u6743\u91cd',
+                    'Ready capability is missing a checkpoint': '\u5df2\u5c31\u7eea\u80fd\u529b\u7f3a\u5c11\u6743\u91cd',
+                    'ArcGIS replacement guard is not applicable': 'ArcGIS \u66ff\u4ee3\u8fb9\u754c\u4e0d\u9002\u7528',
+                    'ArcGIS replacement guard is conservative': 'ArcGIS \u66ff\u4ee3\u8fb9\u754c\u4fdd\u6301\u4fdd\u5b88',
+                    'ArcGIS replacement guard is overclaiming': 'ArcGIS \u66ff\u4ee3\u8fb9\u754c\u5b58\u5728\u8fc7\u5ea6\u58f0\u660e',
+                    'Registry evidence source is recognized.': '\u5df2\u8bc6\u522b\u6ce8\u518c\u4fe1\u606f\u8bc1\u636e\u6e90\u3002',
+                    'Evidence artifact is available.': '\u8bc1\u636e\u5236\u54c1\u53ef\u7528\u3002',
+                    'Referenced optional evidence artifact is missing.': '\u5f15\u7528\u7684\u53ef\u9009\u8bc1\u636e\u5236\u54c1\u7f3a\u5931\u3002',
+                    'Evidence ref is outside allowed evidence roots.': '\u8bc1\u636e\u5f15\u7528\u8d85\u51fa\u5141\u8bb8\u7684\u8bc1\u636e\u76ee\u5f55\u3002',
+                    'Capability status is derived from the local registry, runtime declarations, and committed evidence files.': '\u80fd\u529b\u72b6\u6001\u6765\u81ea\u672c\u5730\u6ce8\u518c\u8868\u3001\u8fd0\u884c\u58f0\u660e\u548c\u5df2\u63d0\u4ea4\u7684\u8bc1\u636e\u6587\u4ef6\u3002',
+                    'Paper 12 artifacts are supporting evidence only; system readiness is the primary product surface.': 'Paper 12 \u5236\u54c1\u4ec5\u4f5c\u4e3a\u652f\u6491\u8bc1\u636e\uFF1B\u7cfb\u7edf\u5c31\u7eea\u5ea6\u624d\u662f\u4e3b\u8981\u4ea7\u54c1\u8868\u8fbe\u3002',
+                    'ArcGIS replacement readiness is conservative and does not imply .dlpk compatibility.': 'ArcGIS \u66ff\u4ee3\u5c31\u7eea\u5ea6\u4fdd\u6301\u4fdd\u5b88\uFF0C\u4e0d\u7b49\u540c\u4e8e .dlpk \u517c\u5bb9\u3002',
+                    'Verification is deterministic and does not load model weights.': '\u81ea\u68c0\u662f\u786e\u5b9a\u6027\u68c0\u67e5\uFF0C\u4e0d\u52a0\u8f7d\u6a21\u578b\u6743\u91cd\u3002',
+                    'A pass means the declared system contract is internally consistent, not that global production accuracy is proven.': '\u201c\u901a\u8fc7\u201d\u8868\u793a\u5df2\u58f0\u660e\u7684\u7cfb\u7edf\u5951\u7ea6\u5185\u90e8\u4e00\u81f4\uFF0C\u4e0d\u4ee3\u8868\u5df2\u8bc1\u660e\u5168\u5c40\u751f\u4ea7\u7cbe\u5ea6\u3002',
+                    'ArcGIS replacement readiness remains conservative until checkpoint-backed validation evidence is attached.': '\u5728\u9644\u52a0\u6743\u91cd\u652f\u6491\u7684\u9a8c\u8bc1\u8bc1\u636e\u4e4b\u524d\uFF0CArcGIS \u66ff\u4ee3\u5c31\u7eea\u5ea6\u4fdd\u6301\u4fdd\u5b88\u3002',
+                    'Evidence drill-down reads local metadata and small previews only.': '\u8bc1\u636e\u4e0b\u94bb\u4ec5\u8bfb\u53d6\u672c\u5730\u5143\u6570\u636e\u548c\u5c0f\u578b\u9884\u89c8\u3002',
+                    'It does not execute model inference, train models, or regenerate results.': '\u5b83\u4e0d\u6267\u884c\u6a21\u578b\u63a8\u7406\u3001\u8bad\u7ec3\u6a21\u578b\u6216\u91cd\u65b0\u751f\u6210\u7ed3\u679c\u3002',
+                    'Attach a validated Prithvi crop checkpoint before claiming replacement readiness.': '\u5728\u58f0\u660e\u66ff\u4ee3\u5c31\u7eea\u4e4b\u524d\uFF0C\u9700\u9644\u52a0\u7ecf\u9a8c\u8bc1\u7684 Prithvi \u4f5c\u7269\u5206\u7c7b\u6743\u91cd\u3002',
+                    'Attach a validated Prithvi crop head and HLS preprocessing pipeline.': '\u9644\u52a0\u7ecf\u9a8c\u8bc1\u7684 Prithvi \u4f5c\u7269\u5206\u7c7b\u5934\u548c HLS \u9884\u5904\u7406\u6d41\u7a0b\u3002',
+                    'Run independent crop validation before claiming replacement readiness.': '\u5728\u58f0\u660e\u66ff\u4ee3\u5c31\u7eea\u4e4b\u524d\uFF0C\u5148\u8fdb\u884c\u72ec\u7acb\u4f5c\u7269\u9a8c\u8bc1\u3002',
+                    'Configure checkpoint, preprocessing, runtime, and validation metrics.': '\u914d\u7f6e\u6743\u91cd\u3001\u9884\u5904\u7406\u3001\u8fd0\u884c\u6d41\u7a0b\u548c\u9a8c\u8bc1\u6307\u6807\u3002',
+                    'No validated crop checkpoint or ArcGIS-compatible HLS preprocessing contract is configured.': '\u5c1a\u672a\u914d\u7f6e\u7ecf\u9a8c\u8bc1\u7684\u4f5c\u7269\u5206\u7c7b\u6743\u91cd\u6216\u4e0e ArcGIS \u517c\u5bb9\u7684 HLS \u9884\u5904\u7406\u5951\u7ea6\u3002',
+                    'Runnable inside AlphaEarth System, but not packaged as an ArcGIS .dlpk replacement.': '\u53ef\u5728 AlphaEarth \u7cfb\u7edf\u5185\u8fd0\u884c\uFF0C\u4f46\u5c1a\u672a\u5c01\u88c5\u4e3a ArcGIS .dlpk \u66ff\u4ee3\u5305\u3002',
+                    'Capability is available as a demo workflow, not a validated ArcGIS replacement.': '\u8be5\u80fd\u529b\u4ec5\u4f5c\u4e3a\u6f14\u793a\u5de5\u4f5c\u6d41\u53ef\u7528\uFF0C\u4e0d\u662f\u5df2\u9a8c\u8bc1\u7684 ArcGIS \u66ff\u4ee3\u80fd\u529b\u3002',
+                    'Capability is registered but lacks a validated runnable replacement workflow.': '\u80fd\u529b\u5df2\u6ce8\u518c\uFF0C\u4f46\u7f3a\u5c11\u5df2\u9a8c\u8bc1\u7684\u53ef\u8fd0\u884c\u66ff\u4ee3\u5de5\u4f5c\u6d41\u3002',
+                };
+                return exact[String(message)] || String(message);
+            };
+
             const statusClass = (status) => {
                 if (status === 'ready' || status === 'succeeded') return 'bg-green-50 text-green-700 border-green-200';
                 if (status === 'demo_only' || status === 'running') return 'bg-blue-50 text-blue-700 border-blue-200';
@@ -1570,6 +1709,22 @@
                 return capabilities.find(item => item.id === model?.model_id) || null;
             };
 
+            const productionEvidenceFor = (model) => {
+                return model?.production_evidence || systemCapabilityFor(model)?.production_evidence || null;
+            };
+
+            const productionStateClass = (state) => {
+                if (state === 'production_candidate') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                if (state === 'verification_required') return 'bg-blue-50 text-blue-700 border-blue-200';
+                if (['download_required', 'test_data_required', 'dependency_required', 'training_required'].includes(state)) return 'bg-amber-50 text-amber-700 border-amber-200';
+                if (state === 'metadata_missing') return 'bg-red-50 text-red-700 border-red-200';
+                return 'bg-gray-50 text-gray-700 border-gray-200';
+            };
+
+            const isDemoOrCachedModel = (model, evidence) => {
+                const runtimeKind = evidence?.runtime_kind;
+                return model?.status === 'demo_only' || ['cached_artifact', 'contract_demo'].includes(runtimeKind);
+            };
             const verificationStatusClass = (status) => {
                 if (status === 'pass') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
                 if (status === 'warning') return 'bg-amber-50 text-amber-700 border-amber-200';
@@ -1602,14 +1757,14 @@
             };
 
             const formatArtifactSize = (bytes) => {
-                if (bytes === undefined || bytes === null) return 'metadata only';
+                if (bytes === undefined || bytes === null) return '仅元数据';
                 if (bytes < 1024) return `${bytes} B`;
                 if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
                 return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
             };
 
             const formatArtifactPreview = (artifact) => {
-                if (!artifact?.preview) return artifact?.message || 'No inline preview';
+                if (!artifact?.preview) return artifact?.message || '暂无内容预览';
                 if (artifact.preview.type === 'json') return JSON.stringify(artifact.preview.content, null, 2);
                 if (artifact.preview.type === 'csv') {
                     const rows = [artifact.preview.header, ...(artifact.preview.rows || [])]
@@ -1659,7 +1814,7 @@
                     systemCapabilities.value = await res.json();
                 } catch (e) {
                     console.error('Failed to load AlphaEarth System capabilities', e);
-                    systemCapabilitiesError.value = e?.message || 'unknown error';
+                    systemCapabilitiesError.value = e?.message || '未知错误';
                     setModelHubStatus('error', '加载系统能力工作台失败，请确认后端 /api/ae/system/capabilities 可访问。');
                 } finally {
                     loadingSystemCapabilities.value = false;
@@ -1676,7 +1831,7 @@
                     systemVerification.value = await res.json();
                 } catch (e) {
                     console.error('Failed to load AlphaEarth System verification', e);
-                    systemVerificationError.value = e?.message || 'unknown error';
+                    systemVerificationError.value = e?.message || '未知错误';
                     setModelHubStatus('error', '加载系统能力自检失败，请确认后端 /api/ae/system/verification 可访问。');
                 } finally {
                     loadingSystemVerification.value = false;
@@ -1693,8 +1848,8 @@
                     systemEvidence.value = await res.json();
                 } catch (e) {
                     console.error('Failed to load AlphaEarth System evidence', e);
-                    systemEvidenceError.value = e?.message || 'unknown error';
-                    setModelHubStatus('error', '加载系统证据 drill-down 失败，请确认后端 /api/ae/system/evidence 可访问。');
+                    systemEvidenceError.value = e?.message || '未知错误';
+                    setModelHubStatus('error', '加载系统证据下钻失败，请确认后端 /api/ae/system/evidence 可访问。');
                 } finally {
                     loadingSystemEvidence.value = false;
                 }
@@ -1721,10 +1876,10 @@
                 const summary = result.summary || {};
                 const rows = [];
                 if (job.job_id) rows.push(['任务 ID', job.job_id]);
-                if (job.status) rows.push(['状态', job.status]);
-                if (result.task) rows.push(['任务', result.task]);
+                if (job.status) rows.push(['状态', statusLabel(job.status)]);
+                if (result.task) rows.push(['任务', taskTypeLabel(result.task)]);
                 if (result.model_id) rows.push(['模型', result.model_id]);
-                if (result.input_mode) rows.push(['输入模式', result.input_mode]);
+                if (result.input_mode) rows.push(['输入模式', inputModeLabel(result.input_mode)]);
                 if (summary.dominant_class) rows.push(['主导类别', summary.dominant_class]);
                 if (summary.mask_shape) rows.push(['掩膜尺寸', Array.isArray(summary.mask_shape) ? summary.mask_shape.join(' x ') : summary.mask_shape]);
                 if (summary.n_features !== undefined) rows.push(['候选要素', summary.n_features]);
@@ -1802,7 +1957,7 @@
                     });
                     if (!res.ok) throw new Error(await res.text());
                     modelHubJob.value = await res.json();
-                    setModelHubStatus('info', `任务 ${modelHubJob.value.job_id} 状态：${modelHubJob.value.status}`);
+                    setModelHubStatus('info', `任务 ${modelHubJob.value.job_id} 状态：${statusLabel(modelHubJob.value.status)}`);
                 } catch (e) {
                     console.error('Failed to run model hub job', e);
                     setModelHubStatus('error', '模型中心任务运行失败，请查看后端日志。');
@@ -1846,7 +2001,7 @@
                         setModelHubStatus('error', `栅格任务 ${modelHubJob.value.job_id} 失败${detail}`);
                         return;
                     }
-                    setModelHubStatus('info', `栅格任务 ${modelHubJob.value.job_id} 状态：${modelHubJob.value.status}`);
+                    setModelHubStatus('info', `栅格任务 ${modelHubJob.value.job_id} 状态：${statusLabel(modelHubJob.value.status)}`);
                 } catch (e) {
                     console.error('Failed to run model hub raster job', e);
                     const detail = e?.message ? `：${e.message}` : '';
@@ -1977,7 +2132,7 @@
 
             const runLocalLulcEvaluation = async () => {
                 if (!localLulcFile.value || !localLulcLabel.value) {
-                    setLulcStatus('error', '请同时选择 RGB 影像和 label mask。');
+                    setLulcStatus('error', '请同时选择 RGB 影像和标签掩膜。');
                     return;
                 }
                 loadingLocalLulc.value = true;
@@ -2162,7 +2317,7 @@
                             const score = feature.properties.mean_pca_score.toFixed(3);
                             if (pair) {
                                 layer.on('click', () => { selectedPair.value = pair; });
-                                layer.bindTooltip(`patch ${patchId} · PCA ${score}<br><span style="color:#22C55E">点击查看像素级对比</span>`);
+                                layer.bindTooltip(`切片 ${patchId} · PCA ${score}<br><span style="color:#22C55E">点击查看像素级对比</span>`);
                             } else {
                                 layer.bindTooltip(`PCA ${score}`);
                             }
@@ -2183,13 +2338,13 @@
                 const t = demoSummary.value.tasks;
                 peftBarChart.setOption({
                     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                    legend: { data: ['linear probe', 'houlsby adapter'], top: 0 },
+                    legend: { data: ['线性探针', 'Houlsby 适配器'], top: 0 },
                     grid: { top: 30, right: 20, bottom: 20, left: 100 },
                     xAxis: { type: 'value', max: 1, splitLine: { lineStyle: { color: '#F1F5F9' } } },
                     yAxis: { type: 'category', data: ['1.a 建筑物 (合成)', '1.b LULC (Esri)'], axisLine: { lineStyle: { color: '#CBD5E1' } } },
                     series: [
-                        { name: 'linear probe', type: 'bar', data: [t.buildings_synth.linear, t.lulc_6class.linear], itemStyle: { color: '#94A3B8' }, label: { show: true, position: 'right', formatter: (p) => p.value.toFixed(3) } },
-                        { name: 'houlsby adapter', type: 'bar', data: [t.buildings_synth.houlsby, t.lulc_6class.houlsby], itemStyle: { color: '#3B82F6' }, label: { show: true, position: 'right', formatter: (p) => p.value.toFixed(3) } },
+                        { name: '线性探针', type: 'bar', data: [t.buildings_synth.linear, t.lulc_6class.linear], itemStyle: { color: '#94A3B8' }, label: { show: true, position: 'right', formatter: (p) => p.value.toFixed(3) } },
+                        { name: 'Houlsby 适配器', type: 'bar', data: [t.buildings_synth.houlsby, t.lulc_6class.houlsby], itemStyle: { color: '#3B82F6' }, label: { show: true, position: 'right', formatter: (p) => p.value.toFixed(3) } },
                     ],
                 });
                 const dist = demoSummary.value.lulc_class_distribution;
@@ -2261,8 +2416,8 @@
                 systemEvidence, loadingSystemEvidence, systemEvidenceError, fetchSystemEvidence,
                 paper12Summary, loadingPaper12Summary, fetchPaper12Summary,
                 runningModelHubJob, modelHubRasterPath, fetchModelHubModels, getModelHubDemoInputMode,
-                formatMetric, statusClass, systemCapabilityFor, verificationForCapability, verificationStatusClass, systemVerificationRawJson,
-                evidenceForCheck, evidenceStatusClass, formatArtifactSize, formatArtifactPreview, systemEvidenceRawJson,
+                formatMetric, statusClass, statusLabel, taskTypeLabel, inputModeLabel, productionStateLabel, runtimeKindLabel, systemCapabilityFor, productionEvidenceFor, productionStateClass, isDemoOrCachedModel, verificationForCapability, verificationStatusClass, verificationStatusLabel, systemVerificationRawJson,
+                evidenceForCheck, evidenceStatusClass, evidenceStatusLabel, artifactKindLabel, replacementStatusLabel, localizeSystemMessage, formatArtifactSize, formatArtifactPreview, systemEvidenceRawJson,
                 paper12CapabilityFor, capabilityWorkflowLabel, formatEvidenceValue, summarizeModelHubJob,
                 isModelHubRunnable, supportsModelHubRasterDemo, isModelHubExecutable, runModelHubDemo, runModelHubRasterDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,

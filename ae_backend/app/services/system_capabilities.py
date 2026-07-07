@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import PROJECT_ROOT
+from app.services.model_hub_evidence import build_model_hub_evidence
 from app.services.model_hub_registry import ModelHubRegistry
 
 
@@ -181,6 +182,21 @@ def _evidence_sources() -> list[dict[str, Any]]:
 def build_system_capabilities(registry: ModelHubRegistry) -> dict[str, Any]:
     models = [model.to_dict() for model in registry.models]
     capabilities = [_capability(model) for model in models]
+    production_evidence = build_model_hub_evidence(registry)
+    evidence_by_id = {
+        item["model_id"]: item
+        for item in production_evidence["models"]
+    }
+    for capability in capabilities:
+        capability["production_evidence"] = evidence_by_id.get(
+            capability["id"],
+            {
+                "model_id": capability["id"],
+                "runtime_kind": "metadata_missing",
+                "production_state": "metadata_missing",
+                "may_run_real_inference": False,
+            },
+        )
 
     readiness_counts = dict(Counter(model["status"] for model in models))
     for status in ["ready", "evaluable", "demo_only", "planned", "not_configured"]:

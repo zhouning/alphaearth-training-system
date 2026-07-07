@@ -23,6 +23,9 @@ dev = ["pytest>=7.0", "pytest-cov"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "realdata: tests that require locally cached public datasets and optional dataset libraries",
+]
 
 [tool.setuptools.packages.find]
 include = ["geoadapter*"]

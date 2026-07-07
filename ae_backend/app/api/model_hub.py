@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.config import PROJECT_ROOT
+from app.services.model_hub_evidence import build_model_hub_evidence
 from app.services.model_hub_jobs import ModelHubJobStore
 from app.services.model_hub_registry import ModelHubRegistry, load_model_registry
 from app.services.model_hub_runtime import ModelHubRuntimeError, run_model_hub_job
@@ -41,7 +42,24 @@ def _runtime_modes_for_model(model: dict) -> set[str]:
         runtime_modes.add("cached_demo")
     if model.get("model_id") == "lulc_6class_prithvi_houlsby":
         runtime_modes.add("demo_patch")
+        runtime_modes.add("raster_inference")
     return runtime_modes
+
+def _real_inference_guard(model_id: str, input_mode: str) -> str | None:
+    if input_mode != "real_raster_inference":
+        return None
+    evidence = build_model_hub_evidence(get_model_registry())
+    evidence_by_id = {item["model_id"]: item for item in evidence["models"]}
+    model = evidence_by_id.get(model_id)
+    if not model:
+        return f"{model_id} has no production asset evidence configured."
+    if model["may_run_real_inference"]:
+        return None
+    return (
+        f"{model_id} cannot run real inference yet: "
+        f"production_state={model['production_state']}. "
+        "Download weights/test data and verify runtime dependencies before production inference."
+    )
 
 
 @router.get("/models")
@@ -80,6 +98,10 @@ def create_job(request: ModelHubJobRequest):
         input_mode=request.input_mode,
         options=request.options,
     )
+    blocked_reason = _real_inference_guard(request.model_id, request.input_mode)
+    if blocked_reason:
+        JOB_STORE.mark_failed(job["job_id"], error=blocked_reason)
+        return JOB_STORE.get_job(job["job_id"])
     should_execute_now = request.input_mode in _runtime_modes_for_model(model_entry)
     if not should_execute_now:
         return JOB_STORE.get_job(job["job_id"])

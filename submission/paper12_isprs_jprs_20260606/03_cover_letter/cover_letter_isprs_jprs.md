@@ -11,8 +11,8 @@ The paper is well aligned with ISPRS JPRS because it combines remote sensing met
 1. A systematic evaluation of PEFT strategies for adapting Prithvi-100M to heterogeneous geospatial inputs.
 2. A diagnostic separation between standard LoRA insertion failure under fused-QKV attention and the remaining post-fix low-rank ceiling.
 3. Evidence that Houlsby adapters are more reliable than LoRA, BitFit, linear probing, and input-stage adaptation across classification, multi-label classification, and segmentation.
-4. Production-style validation on a Linhe County LULC workflow with geographic scene-level splitting, Esri-derived supervisory labels, and label-quality control.
-5. A LoveDA cross-domain replication suggesting an adapter-capacity threshold under domain shift.
+4. Production-style validation on a Linhe County LULC workflow with geographic scene-level splitting, Esri-derived supervisory labels, and a synthetic weak-label control that is not an independent manual validation set.
+5. A LoveDA cross-domain replication supporting an adapter-capacity hypothesis in the tested Prithvi-100M setting.
 
 All code, configuration files, logs, and reproducibility artifacts are prepared for release with the submission package. The manuscript has not been published, accepted, or submitted elsewhere.
 

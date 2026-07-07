@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import numpy as np
 
@@ -31,6 +31,18 @@ def _run_lulc_demo_patch(model_id: str, options: dict) -> dict:
 def run_model_hub_job(*, model_id: str, input_mode: str, options: dict) -> dict:
     if model_id == "lulc_6class_prithvi_houlsby" and input_mode == "demo_patch":
         return _run_lulc_demo_patch(model_id, options)
+    if model_id == "lulc_6class_prithvi_houlsby" and input_mode == "raster_inference":
+        from app.services.model_hub_lulc_raster import run_lulc_raster_inference
+
+        return run_lulc_raster_inference(options=options)
+    if model_id == "prithvi_crop_classification_arcgis_style" and input_mode == "real_raster_inference":
+        from app.services.model_hub_real_crop import run_real_crop_inference
+
+        return run_real_crop_inference(options=options)
+    if model_id == "water_flood_prithvi" and input_mode == "real_raster_inference":
+        from app.services.model_hub_flood import run_real_flood_inference
+
+        return run_real_flood_inference(options=options)
     if model_id == "semantic_change_prithvi" and input_mode == "cached_demo":
         from app.services.model_hub_change import summarize_cached_linhe_change
 

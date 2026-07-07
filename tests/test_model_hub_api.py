@@ -1,4 +1,4 @@
-import shutil
+﻿import shutil
 import sys
 from pathlib import Path
 
@@ -135,6 +135,43 @@ def test_model_hub_runs_lulc_demo_patch_job(monkeypatch):
     assert body["result"]["summary"]["class_area_fraction"]["crops"] == 1.0
     assert body["logs"][-1] == "ran fake LULC runtime"
 
+
+
+def test_model_hub_runs_lulc_raster_inference_job(monkeypatch):
+    from app.main import app
+    import app.api.model_hub as model_hub_api
+
+    def fake_run_model_hub_job(*, model_id, input_mode, options):
+        assert model_id == "lulc_6class_prithvi_houlsby"
+        assert input_mode == "raster_inference"
+        assert options["raster_path"] == "results/model_hub/lulc_inputs/linhe_rgb_patch.tif"
+        return {
+            "result": {
+                "task": "lulc_segmentation",
+                "input_mode": "raster_inference",
+                "summary": {"class_area_fraction": {"crops": 1.0}},
+            },
+            "artifacts": [{"kind": "geotiff", "path": "classified_lulc.tif"}],
+            "logs": ["ran fake LULC raster runtime"],
+        }
+
+    monkeypatch.setattr(model_hub_api, "run_model_hub_job", fake_run_model_hub_job)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "lulc_6class_prithvi_houlsby",
+            "input_mode": "raster_inference",
+            "options": {"raster_path": "results/model_hub/lulc_inputs/linhe_rgb_patch.tif"},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["result"]["input_mode"] == "raster_inference"
+    assert body["artifacts"][0]["kind"] == "geotiff"
 
 def test_model_hub_runs_cached_change_job(monkeypatch, tmp_path: Path):
     from app.main import app
@@ -325,6 +362,48 @@ def test_model_hub_fails_prithvi_crop_upload_raster_demo_for_unsafe_output_dir(t
     assert body["status"] == "failed"
     assert "output_dir" in body["error"]
     assert "allowed" in body["error"]
+
+
+def test_model_hub_rejects_crop_real_inference_when_assets_missing():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "prithvi_crop_classification_arcgis_style",
+            "input_mode": "real_raster_inference",
+            "options": {
+                "raster_path": "results/model_hub/prithvi_crop_inputs/crop_18band_demo.tif"
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert "prithvi_crop_classification_arcgis_style" in body["error"]
+    assert "download" in body["error"].lower() or "dependency" in body["error"].lower()
+
+
+def test_model_hub_rejects_flood_real_inference_when_assets_missing():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/ae/model-hub/jobs",
+        json={
+            "model_id": "water_flood_prithvi",
+            "input_mode": "real_raster_inference",
+            "options": {"raster_path": "data/sen1floods11/sample.tif"},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert "water_flood_prithvi" in body["error"]
+
 def test_model_hub_api_preserves_all_runtime_logs(monkeypatch):
     from app.main import app
     import app.api.model_hub as model_hub_api

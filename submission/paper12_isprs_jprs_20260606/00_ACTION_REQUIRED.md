@@ -36,6 +36,7 @@ These items require author confirmation before the package is uploaded.
 - Reconcile experiment counts in the abstract, introduction, and conclusion against the latest expanded experiment set.
 - Check every table value against `paper12_results/summary.csv`, `results/eurosat_results.json`, and the Linhe/LoveDA result files.
 - Recheck that the LoveDA table values for the completed two-direction full fine-tuning baseline match `loveda_full_finetune_summary.json` and the two raw direction JSON files.
+- Regenerate `paper12_results/review_audit_summary.json` with `python -m geoadapter.bench.paper12_audit` after any result-file change, and mirror it into `06_supplementary_material/paper12_results/`. Confirm schema version 2 includes model-scope, label-source, and decoder-capacity checks.
 - Verify the EuroSAT channel-bridge rerun JSON and summary against `paper12_results/eurosat_channel_bridge.json` and `paper12_results/eurosat_channel_bridge_summary.json` before final upload.
 - Remove or explain any claims using "first" unless the literature search is up to date.
 - Review `REQUIRED_EXPERIMENTS_ISPRS.md` and decide which Priority A experiments will be completed before initial submission.

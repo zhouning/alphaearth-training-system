@@ -1,0 +1,96 @@
+{
+  "audit_schema_version": 2,
+  "capacity_audit": {
+    "houlsby_oa_monotonic_non_decreasing": true,
+    "largest_lora_method": "lora_split_qkv_r64",
+    "largest_lora_minus_smallest_houlsby_oa": -0.15660493827160493,
+    "largest_lora_oa": 0.7078395061728395,
+    "largest_lora_params": 4726282,
+    "lora_oa_monotonic_non_decreasing": false,
+    "lora_params_over_houlsby_params": 28.73853506670396,
+    "smallest_houlsby_method": "houlsby_d8",
+    "smallest_houlsby_oa": 0.8644444444444445,
+    "smallest_houlsby_params": 164458
+  },
+  "channel_bridge_audit": {
+    "houlsby_over_linear_ordering_preserved": true,
+    "learned_houlsby_minus_linear_probe_oa": 0.1468518518518518,
+    "learned_minus_zero_pad_houlsby_oa": 0.010864197530864206,
+    "learned_minus_zero_pad_linear_probe_oa": 0.07339506172839516,
+    "zero_pad_houlsby_minus_linear_probe_oa": 0.20938271604938274
+  },
+  "linhe_label_audit": {
+    "esri_delta_over_synthetic_delta": 6.8049411764705825,
+    "houlsby_minus_linear_miou": 0.11568400000000001,
+    "houlsby_miou": 0.2932456666666667,
+    "independent_manual_ground_truth": false,
+    "linear_probe_miou": 0.17756166666666667,
+    "lora_mean_within_0_001_of_linear": true,
+    "lora_minus_linear_miou": -0.00032533333333334413,
+    "lora_miou": 0.17723633333333333,
+    "supervisory_label_source": "Esri 2022 LULC",
+    "synthetic_control_is_manual_validation": false,
+    "synthetic_control_label_source": "synth: mean(RGB) >= 140",
+    "synthetic_weak_label_delta_miou": 0.017000000000000015
+  },
+  "loveda_audit": {
+    "r2u": {
+      "full_finetune_above_small_peft_cluster": true,
+      "full_finetune_below_houlsby": true,
+      "full_finetune_minus_small_peft_cluster_miou": 0.03681826083670481,
+      "full_finetune_miou": 0.13914166438409195,
+      "houlsby_minus_full_finetune_miou": 0.07280095923900526,
+      "houlsby_miou": 0.2119426236230972,
+      "small_peft_cluster_max_miou": 0.10232340354738714
+    },
+    "u2r": {
+      "full_finetune_above_small_peft_cluster": true,
+      "full_finetune_below_houlsby": true,
+      "full_finetune_minus_small_peft_cluster_miou": 0.028236218833174093,
+      "full_finetune_miou": 0.11454497893839893,
+      "houlsby_minus_full_finetune_miou": 0.02388883670235656,
+      "houlsby_miou": 0.1384338156407555,
+      "small_peft_cluster_max_miou": 0.08630876010522484
+    }
+  },
+  "loveda_diagnostic": {
+    "best_lora_diag_dominant_prediction_share": 0.8782,
+    "best_lora_diag_method": "lora_r8_diag",
+    "best_lora_diag_miou": 0.0901,
+    "classes_above_0_05_iou": 2,
+    "nonzero_iou_classes": 5
+  },
+  "model_scope_audit": {
+    "backbone_count": 1,
+    "backbones_evaluated": [
+      "Prithvi-100M"
+    ],
+    "bigearthnet_subset": "10K train / 5K validation",
+    "general_geo_fm_ranking_supported": false,
+    "ranking_scope": "Prithvi-100M under the reported datasets and budgets",
+    "second_backbone_results_completed": false
+  },
+  "segmentation_decoder_audit": {
+    "absolute_miou_can_be_decoder_limited": true,
+    "decoder_is_lightweight_linear": true,
+    "decoder_type": "single_1x1_conv_plus_bilinear_upsample",
+    "in_dim": 768,
+    "landcoverai_head_params": 4614,
+    "landcoverai_num_classes": 6,
+    "linear_probe_params_match_head_only": true,
+    "linhe_head_params": 4614,
+    "linhe_num_classes": 6,
+    "loveda_head_params": 5383,
+    "loveda_num_classes": 7,
+    "patch_size": 16
+  },
+  "source_files": [
+    "paper12_results/peft_capacity_sweep_summary.json",
+    "paper12_results/eurosat_channel_bridge_summary.json",
+    "results/loveda/loveda_lulc_seg.json",
+    "paper12_results/loveda_full_finetune_summary.json",
+    "results/loveda/loveda_u2r_diag.json",
+    "paper12_results/landcoverai_segmentation.json",
+    "linhe_results/linhe_lulc_seg.json"
+  ]
+}
