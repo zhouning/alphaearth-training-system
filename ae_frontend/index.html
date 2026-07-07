@@ -490,6 +490,50 @@
                         <div v-else-if="systemVerificationError" class="text-sm text-red-600">System verification failed: {{ systemVerificationError }}</div>
                         <div v-else class="text-sm text-gray-500">系统能力自检尚未加载。</div>
                     </div>
+                    <div class="border border-gray-200 rounded-md p-4 bg-white space-y-3">
+                        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                                <div class="text-sm font-semibold text-gray-800">Evidence drill-down</div>
+                                <p class="text-xs text-gray-500 mt-1">Inspect verification evidence refs, safe local artifacts, and bounded previews.</p>
+                            </div>
+                            <button type="button" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loadingSystemEvidence" @click="fetchSystemEvidence">
+                                {{ loadingSystemEvidence ? 'Loading evidence...' : 'Refresh evidence' }}
+                            </button>
+                        </div>
+                        <div v-if="systemEvidence" class="space-y-3">
+                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                <span v-for="(count, status) in systemEvidence.summary" :key="status" class="px-2 py-1 rounded border" :class="evidenceStatusClass(status)">{{ status }}: {{ count }}</span>
+                            </div>
+                            <div v-if="systemEvidence.notes && systemEvidence.notes.length" class="text-xs text-gray-500 space-y-1">
+                                <div v-for="note in systemEvidence.notes" :key="note">{{ note }}</div>
+                            </div>
+                            <details v-if="systemEvidence.artifacts && systemEvidence.artifacts.length" class="text-xs">
+                                <summary class="cursor-pointer text-gray-600">Artifact previews</summary>
+                                <div class="mt-2 space-y-2">
+                                    <div v-for="artifact in systemEvidence.artifacts" :key="artifact.ref" class="border border-gray-200 rounded p-2 bg-gray-50 space-y-1">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="px-2 py-1 rounded border" :class="evidenceStatusClass(artifact.status)">{{ artifact.status }}</span>
+                                            <span class="text-gray-700">{{ artifact.kind }}</span>
+                                            <span class="text-gray-500 break-all">{{ artifact.safe_path || artifact.source_id || artifact.ref }}</span>
+                                            <span class="text-gray-400">{{ formatArtifactSize(artifact.size_bytes) }}</span>
+                                        </div>
+                                        <div class="text-gray-500">{{ artifact.message }}</div>
+                                        <details v-if="artifact.preview" class="text-xs">
+                                            <summary class="cursor-pointer text-gray-600">preview</summary>
+                                            <pre class="mt-2 max-h-48 overflow-auto bg-gray-900 text-gray-100 p-2 rounded text-[11px] leading-relaxed">{{ formatArtifactPreview(artifact) }}</pre>
+                                        </details>
+                                    </div>
+                                </div>
+                            </details>
+                            <details class="text-xs">
+                                <summary class="cursor-pointer text-gray-600">Raw evidence JSON</summary>
+                                <pre class="mt-2 max-h-64 overflow-auto bg-gray-900 text-gray-100 p-3 rounded text-[11px] leading-relaxed">{{ systemEvidenceRawJson }}</pre>
+                            </details>
+                        </div>
+                        <div v-else-if="loadingSystemEvidence" class="text-sm text-gray-500">正在加载系统证据 drill-down...</div>
+                        <div v-else-if="systemEvidenceError" class="text-sm text-red-600">System evidence failed: {{ systemEvidenceError }}</div>
+                        <div v-else class="text-sm text-gray-500">系统证据 drill-down 尚未加载。</div>
+                    </div>
                     <div v-if="systemCapabilities && systemCapabilities.notes && systemCapabilities.notes.length" class="text-xs text-gray-500 space-y-1">
                         <div v-for="note in systemCapabilities.notes" :key="note">{{ note }}</div>
                     </div>
@@ -559,10 +603,33 @@
                             </div>
                         </div>
                         <div v-if="verificationForCapability(model)" class="text-xs text-gray-500 bg-white border border-gray-200 rounded p-2 space-y-2">
-                            <div class="flex flex-wrap gap-2">
-                                <span v-for="checkId in verificationForCapability(model).checks" :key="checkId" class="px-2 py-1 rounded border bg-gray-50 border-gray-200 break-all">
-                                    {{ checkId }}
-                                </span>
+                            <div class="space-y-2">
+                                <div v-for="checkId in verificationForCapability(model).checks" :key="checkId" class="border border-gray-200 rounded p-2 bg-gray-50 space-y-2">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="px-2 py-1 rounded border bg-white border-gray-200 break-all">{{ checkId }}</span>
+                                        <span v-if="evidenceForCheck(checkId)" class="px-2 py-1 rounded border" :class="verificationStatusClass(evidenceForCheck(checkId).check_status)">
+                                            {{ evidenceForCheck(checkId).check_status }}
+                                        </span>
+                                    </div>
+                                    <div v-if="evidenceForCheck(checkId)?.check_title" class="text-gray-600">{{ evidenceForCheck(checkId).check_title }}</div>
+                                    <div v-if="evidenceForCheck(checkId)" class="space-y-2">
+                                        <div v-for="artifact in evidenceForCheck(checkId).evidence" :key="artifact.ref" class="bg-white border border-gray-200 rounded p-2 space-y-1">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="px-2 py-1 rounded border" :class="evidenceStatusClass(artifact.status)">{{ artifact.status }}</span>
+                                                <span class="text-gray-700">{{ artifact.kind }}</span>
+                                                <span class="text-gray-500 break-all">{{ artifact.safe_path || artifact.source_id || artifact.ref }}</span>
+                                                <span class="text-gray-400">{{ formatArtifactSize(artifact.size_bytes) }}</span>
+                                            </div>
+                                            <div class="text-gray-500">{{ artifact.message }}</div>
+                                            <div v-if="artifact.modified_at" class="text-gray-400">modified_at: {{ artifact.modified_at }}</div>
+                                            <details v-if="artifact.preview" class="text-xs">
+                                                <summary class="cursor-pointer text-gray-600">preview</summary>
+                                                <pre class="mt-2 max-h-48 overflow-auto bg-gray-900 text-gray-100 p-2 rounded text-[11px] leading-relaxed">{{ formatArtifactPreview(artifact) }}</pre>
+                                            </details>
+                                        </div>
+                                    </div>
+                                    <div v-else class="text-xs text-gray-400">No drill-down evidence loaded for this check.</div>
+                                </div>
                             </div>
                             <div v-if="verificationForCapability(model).blocking_issues && verificationForCapability(model).blocking_issues.length">
                                 <div class="font-medium text-red-700">Blocking issues</div>
@@ -990,6 +1057,9 @@
             const systemVerification = ref(null);
             const loadingSystemVerification = ref(false);
             const systemVerificationError = ref(null);
+            const systemEvidence = ref(null);
+            const loadingSystemEvidence = ref(false);
+            const systemEvidenceError = ref(null);
             const paper12Summary = ref(null);
             const loadingPaper12Summary = ref(false);
 
@@ -1518,6 +1588,44 @@
                 return JSON.stringify(systemVerification.value, null, 2);
             });
 
+            const evidenceForCheck = (checkId) => {
+                const checks = systemEvidence.value?.checks || [];
+                return checks.find(item => item.check_id === checkId) || null;
+            };
+
+            const evidenceStatusClass = (status) => {
+                if (status === 'available') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                if (status === 'missing') return 'bg-amber-50 text-amber-700 border-amber-200';
+                if (status === 'blocked') return 'bg-red-50 text-red-700 border-red-200';
+                if (status === 'not_applicable') return 'bg-gray-50 text-gray-600 border-gray-200';
+                return 'bg-gray-50 text-gray-700 border-gray-200';
+            };
+
+            const formatArtifactSize = (bytes) => {
+                if (bytes === undefined || bytes === null) return 'metadata only';
+                if (bytes < 1024) return `${bytes} B`;
+                if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+                return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+            };
+
+            const formatArtifactPreview = (artifact) => {
+                if (!artifact?.preview) return artifact?.message || 'No inline preview';
+                if (artifact.preview.type === 'json') return JSON.stringify(artifact.preview.content, null, 2);
+                if (artifact.preview.type === 'csv') {
+                    const rows = [artifact.preview.header, ...(artifact.preview.rows || [])]
+                        .filter(row => row && row.length)
+                        .map(row => row.join(', '));
+                    return rows.join('\n');
+                }
+                if (artifact.preview.type === 'text') return (artifact.preview.lines || []).join('\n');
+                return JSON.stringify(artifact.preview, null, 2);
+            };
+
+            const systemEvidenceRawJson = computed(() => {
+                if (!systemEvidence.value) return '';
+                return JSON.stringify(systemEvidence.value, null, 2);
+            });
+
             const paper12CapabilityFor = (model) => {
                 const capabilities = paper12Summary.value?.capabilities || [];
                 return capabilities.find(item => item.model_id === model?.model_id) || null;
@@ -1575,6 +1683,23 @@
                 }
             };
 
+            const fetchSystemEvidence = async () => {
+                if (loadingSystemEvidence.value) return;
+                loadingSystemEvidence.value = true;
+                systemEvidenceError.value = null;
+                try {
+                    const res = await fetch('/api/ae/system/evidence');
+                    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+                    systemEvidence.value = await res.json();
+                } catch (e) {
+                    console.error('Failed to load AlphaEarth System evidence', e);
+                    systemEvidenceError.value = e?.message || 'unknown error';
+                    setModelHubStatus('error', '加载系统证据 drill-down 失败，请确认后端 /api/ae/system/evidence 可访问。');
+                } finally {
+                    loadingSystemEvidence.value = false;
+                }
+            };
+
             const fetchPaper12Summary = async () => {
                 if (loadingPaper12Summary.value) return;
                 loadingPaper12Summary.value = true;
@@ -1622,6 +1747,7 @@
                     setModelHubStatus('info', `已加载 ${modelHubModels.value.length} 个模型包。`);
                     if (!systemCapabilities.value) await fetchSystemCapabilities();
                     if (!systemVerification.value) await fetchSystemVerification();
+                    if (!systemEvidence.value) await fetchSystemEvidence();
                 } catch (e) {
                     console.error('Failed to load model hub models', e);
                     setModelHubStatus('error', '加载模型中心失败，请确认后端 /api/ae/model-hub/models 可访问。');
@@ -2097,6 +2223,7 @@
                     if (modelHubModels.value.length === 0) fetchModelHubModels();
                     if (!systemCapabilities.value) fetchSystemCapabilities();
                     if (!systemVerification.value) fetchSystemVerification();
+                    if (!systemEvidence.value) fetchSystemEvidence();
                 } else if (newTab === 'lulc') {
                     if (!lulcCapabilities.value) fetchLulcModes();
                 } else if (newTab === 'demo') {
@@ -2131,9 +2258,12 @@
                 modelHubModels, modelHubJob, modelHubStatus, loadingModelHubModels,
                 systemCapabilities, loadingSystemCapabilities, systemCapabilitiesError, fetchSystemCapabilities,
                 systemVerification, loadingSystemVerification, systemVerificationError, fetchSystemVerification,
+                systemEvidence, loadingSystemEvidence, systemEvidenceError, fetchSystemEvidence,
                 paper12Summary, loadingPaper12Summary, fetchPaper12Summary,
                 runningModelHubJob, modelHubRasterPath, fetchModelHubModels, getModelHubDemoInputMode,
-                formatMetric, statusClass, systemCapabilityFor, verificationForCapability, verificationStatusClass, systemVerificationRawJson, paper12CapabilityFor, capabilityWorkflowLabel, formatEvidenceValue, summarizeModelHubJob,
+                formatMetric, statusClass, systemCapabilityFor, verificationForCapability, verificationStatusClass, systemVerificationRawJson,
+                evidenceForCheck, evidenceStatusClass, formatArtifactSize, formatArtifactPreview, systemEvidenceRawJson,
+                paper12CapabilityFor, capabilityWorkflowLabel, formatEvidenceValue, summarizeModelHubJob,
                 isModelHubRunnable, supportsModelHubRasterDemo, isModelHubExecutable, runModelHubDemo, runModelHubRasterDemo,
                 lulcCapabilities, loadingLulcModes, loadingPublicLulc, loadingLocalLulc, lulcStatus,
                 lulcLocalModels, lulcPublicProducts, publicProductsReady, publicAvailableYears,
