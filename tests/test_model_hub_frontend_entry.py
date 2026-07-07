@@ -110,3 +110,32 @@ def test_frontend_keeps_model_hub_job_controls_with_system_verification():
     assert "modelHubJob.logs" in html
     assert "fetchSystemCapabilities" in html
     assert "fetchSystemVerification" in html
+
+
+def test_frontend_exposes_system_evidence_drilldown_hooks():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "/api/ae/system/evidence" in html
+    assert "systemEvidence" in html
+    assert "loadingSystemEvidence" in html
+    assert "systemEvidenceError" in html
+    assert "fetchSystemEvidence" in html
+    assert "Evidence drill-down" in html
+    assert "evidenceForCheck" in html
+    assert "evidenceStatusClass" in html
+    assert "formatArtifactSize" in html
+    assert "formatArtifactPreview" in html
+    assert "preview" in html
+
+
+def test_frontend_keeps_model_hub_controls_with_system_evidence():
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "runModelHubDemo" in html
+    assert "runModelHubRasterDemo" in html
+    assert "fetchSystemCapabilities" in html
+    assert "fetchSystemVerification" in html
+    assert "fetchSystemEvidence" in html
+    assert "systemVerificationRawJson" in html
+    assert "modelHubJob.artifacts" in html
+    assert "modelHubJob.logs" in html
