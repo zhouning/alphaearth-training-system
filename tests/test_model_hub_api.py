@@ -462,3 +462,92 @@ def test_system_capabilities_tolerates_missing_optional_evidence(monkeypatch, tm
     ]
     assert missing_sources
     assert all("missing" in item["note"].lower() for item in missing_sources)
+
+
+def test_system_verification_endpoint_reports_contract_checks():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/verification")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["system"] == "AlphaEarth System"
+    assert body["overall_status"] in {"pass", "warning", "fail"}
+    assert set(body["summary"]) == {"pass", "warning", "fail", "not_applicable"}
+    assert set(body) >= {"generated_at", "capabilities", "checks", "notes"}
+    assert body["checks"]
+    assert body["notes"]
+
+    capabilities = {item["id"]: item for item in body["capabilities"]}
+    lulc = capabilities["lulc_6class_prithvi_houlsby"]
+    assert lulc["overall_status"] in {"pass", "warning"}
+    assert lulc["blocking_issues"] == []
+    assert any(check_id.endswith(":checkpoint_configured") for check_id in lulc["checks"])
+
+    crop_id = "prithvi_crop_classification_arcgis_style"
+    crop = capabilities[crop_id]
+    assert crop["overall_status"] in {"pass", "warning"}
+    assert crop["blocking_issues"] == []
+    assert any(check_id.endswith(":arcgis_replacement_guard") for check_id in crop["checks"])
+
+    crop_checks = {
+        check["id"]: check
+        for check in body["checks"]
+        if check["capability_id"] == crop_id
+    }
+    guard = crop_checks[f"{crop_id}:arcgis_replacement_guard"]
+    assert guard["category"] == "replacement_boundary"
+    assert guard["status"] == "pass"
+    assert "not a validated ArcGIS replacement" in guard["detail"]
+    assert "validated Prithvi crop checkpoint" in " ".join(crop["next_actions"])
+
+
+def test_system_verification_does_not_fail_planned_models_for_missing_checkpoints():
+    from app.main import app
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/verification")
+
+    assert response.status_code == 200
+    body = response.json()
+    capabilities = {item["id"]: item for item in body["capabilities"]}
+    planned = capabilities["building_extraction_prithvi"]
+    assert planned["overall_status"] in {"not_applicable", "warning"}
+    assert all("checkpoint" not in issue.lower() for issue in planned["blocking_issues"])
+
+    planned_checks = [
+        check
+        for check in body["checks"]
+        if check["capability_id"] == "building_extraction_prithvi"
+    ]
+    checkpoint_checks = [
+        check for check in planned_checks if check["category"] == "checkpoint_configuration"
+    ]
+    assert checkpoint_checks
+    assert all(check["status"] == "not_applicable" for check in checkpoint_checks)
+
+
+def test_system_verification_reports_missing_optional_evidence_as_warnings(
+    monkeypatch,
+    tmp_path: Path,
+):
+    from app.main import app
+    import app.services.system_capabilities as system_capabilities
+
+    monkeypatch.setattr(system_capabilities, "PAPER12_RESULTS_DIR", tmp_path)
+
+    client = TestClient(app)
+    response = client.get("/api/ae/system/verification")
+
+    assert response.status_code == 200
+    body = response.json()
+    evidence_checks = [
+        check
+        for check in body["checks"]
+        if check["category"] == "evidence_source"
+    ]
+    assert evidence_checks
+    assert any(check["status"] == "warning" for check in evidence_checks)
+    assert all(check["status"] != "fail" for check in evidence_checks)
+    assert any("Missing optional evidence file" in check["detail"] for check in evidence_checks)
