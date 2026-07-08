@@ -6,6 +6,8 @@ import itertools
 import gc
 from pathlib import Path
 
+from geoadapter.models.backbone_factory import build_backbone
+
 
 def load_config(path: str) -> dict:
     with open(path, encoding="utf-8") as f:
@@ -66,7 +68,6 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
     """Run one (method, modality, seed) combination. Returns metrics dict."""
     import torch
     from torch.utils.data import DataLoader, TensorDataset
-    from geoadapter.models.prithvi import PrithviBackbone
     from geoadapter.models.heads import ClassificationHead
     from geoadapter.adapters.lora import inject_lora
     from geoadapter.adapters.bitfit import configure_bitfit
@@ -87,40 +88,46 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
     epochs = global_cfg["experiment"]["epochs"]
     batch_size = global_cfg["experiment"]["batch_size"]
 
-    backbone = PrithviBackbone(
-        pretrained=global_cfg["prithvi"]["pretrained"],
-        checkpoint_path=global_cfg["prithvi"].get("checkpoint"),
-    )
+    backbone_spec = build_backbone(global_cfg)
+    backbone = backbone_spec.model
 
     peft = method_cfg.get("peft")
     if peft == "lora":
-        for block in backbone.blocks:
+        for block in backbone_spec.blocks:
             inject_lora(block, rank=method_cfg.get("rank", 8))
     elif peft == "bitfit":
         configure_bitfit(backbone)
     elif peft == "houlsby":
-        for block in backbone.blocks:
+        for block in backbone_spec.blocks:
             inject_houlsby_adapters(block, bottleneck_dim=method_cfg.get("bottleneck_dim", 64))
     elif peft == "full_finetune":
         for p in backbone.parameters():
             p.requires_grad_(True)
     elif peft == "lora_split_qkv":
         from geoadapter.adapters.lora import split_qkv_and_inject_lora
-        for block in backbone.blocks:
+        for block in backbone_spec.blocks:
             split_qkv_and_inject_lora(block, rank=method_cfg.get("rank", 8))
 
-    adapter = build_adapter(method_cfg["adapter"], in_channels=cfg_m.c_in, out_channels=6)
+    adapter = build_adapter(
+        method_cfg["adapter"],
+        in_channels=cfg_m.c_in,
+        out_channels=backbone_spec.input_channels,
+    )
 
     task_type = global_cfg["experiment"].get("task", "classification")
     num_classes = global_cfg["experiment"].get("num_classes", 10)
     if task_type == "multilabel":
         from geoadapter.models.heads import MultiLabelHead
-        head = MultiLabelHead(in_dim=768, num_classes=num_classes)
+        head = MultiLabelHead(in_dim=backbone_spec.feature_dim, num_classes=num_classes)
     elif task_type == "segmentation":
         from geoadapter.models.heads import SegmentationHead
-        head = SegmentationHead(in_dim=768, num_classes=num_classes, patch_size=16)
+        head = SegmentationHead(
+            in_dim=backbone_spec.feature_dim,
+            num_classes=num_classes,
+            patch_size=global_cfg.get("backbone", {}).get("patch_size", 16),
+        )
     else:
-        head = ClassificationHead(in_dim=768, num_classes=num_classes)
+        head = ClassificationHead(in_dim=backbone_spec.feature_dim, num_classes=num_classes)
     trainer = PEFTTrainer(
         backbone, adapter, head,
         lr=global_cfg["training"]["lr"],
@@ -138,7 +145,10 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
                       [p for p in backbone.parameters() if p.requires_grad])
 
     tag = f"{method_cfg['name']}|{modality_cfg['preset']}|seed={seed}"
-    print(f"  [{tag}] device={device}, trainable_params={n_trainable:,}")
+    print(
+        f"  [{tag}] backbone={backbone_spec.name}, "
+        f"device={device}, trainable_params={n_trainable:,}"
+    )
 
     # Try to load real dataset; optionally fall back to synthetic for smoke tests.
     train_loader = None
@@ -236,8 +246,13 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
             _save_ckpt(ckpt_path, trainer, adapter, head, epoch)
 
     # Evaluation
-    metrics = {"method": method_cfg["name"], "modality": modality_cfg["preset"],
-               "seed": seed, "trainable_params": n_trainable}
+    metrics = {
+        "backbone": backbone_spec.name,
+        "method": method_cfg["name"],
+        "modality": modality_cfg["preset"],
+        "seed": seed,
+        "trainable_params": n_trainable,
+    }
     if val_loader:
         if task_type == "multilabel":
             all_scores, all_labels = [], []

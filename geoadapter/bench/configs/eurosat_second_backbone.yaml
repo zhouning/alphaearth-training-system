@@ -1,0 +1,42 @@
+experiment:
+  name: eurosat_second_backbone
+  dataset: eurosat
+  dataset_root: ./data/eurosat
+  epochs: 50
+  batch_size: 64
+  seeds: [42, 123, 456]
+  allow_synthetic_fallback: false
+
+backbone:
+  name: satmae_vit_base
+  family: satmae
+  pretrained: true
+  checkpoint: data/weights/satmae/satmae_vit_base.pth
+  input_channels: 10
+  embed_dim: 768
+  depth: 12
+  num_heads: 12
+  patch_size: 16
+
+modalities:
+  - preset: s2_full
+  - preset: rgb
+
+methods:
+  - name: satmae_linear_probe
+    adapter: zero_pad
+    peft: null
+  - name: satmae_lora_split_qkv_r8
+    adapter: zero_pad
+    peft: lora_split_qkv
+    rank: 8
+  - name: satmae_houlsby_d64
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01

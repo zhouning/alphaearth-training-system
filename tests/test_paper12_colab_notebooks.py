@@ -120,3 +120,42 @@ def test_paper12_peft_capacity_sweep_config_contract():
         for method in methods
         if method["name"].startswith("houlsby")
     ] == [8, 16, 32, 64]
+
+
+def test_paper12_second_backbone_config_contract():
+    cfg = yaml.safe_load(
+        (CONFIG_DIR / "eurosat_second_backbone.yaml").read_text(encoding="utf-8")
+    )
+
+    assert cfg["experiment"]["name"] == "eurosat_second_backbone"
+    assert cfg["experiment"]["dataset"] == "eurosat"
+    assert cfg["experiment"]["dataset_root"] == "./data/eurosat"
+    assert cfg["experiment"]["epochs"] == 50
+    assert cfg["experiment"]["batch_size"] == 64
+    assert cfg["experiment"]["seeds"] == [42, 123, 456]
+    assert cfg["experiment"]["allow_synthetic_fallback"] is False
+
+    assert cfg["backbone"] == {
+        "name": "satmae_vit_base",
+        "family": "satmae",
+        "pretrained": True,
+        "checkpoint": "data/weights/satmae/satmae_vit_base.pth",
+        "input_channels": 10,
+        "embed_dim": 768,
+        "depth": 12,
+        "num_heads": 12,
+        "patch_size": 16,
+    }
+    assert cfg["modalities"] == [{"preset": "s2_full"}, {"preset": "rgb"}]
+    assert [method["name"] for method in cfg["methods"]] == [
+        "satmae_linear_probe",
+        "satmae_lora_split_qkv_r8",
+        "satmae_houlsby_d64",
+    ]
+
+    matrix_size = (
+        len(cfg["modalities"])
+        * len(cfg["methods"])
+        * len(cfg["experiment"]["seeds"])
+    )
+    assert matrix_size == 18

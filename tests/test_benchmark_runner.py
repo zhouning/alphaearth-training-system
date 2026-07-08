@@ -59,3 +59,63 @@ def test_run_single_experiment_can_require_real_dataset(monkeypatch, tmp_path):
             cfg,
             seed=42,
         )
+
+
+def test_run_single_experiment_uses_backbone_metadata(monkeypatch):
+    from dataclasses import dataclass
+
+    import geoadapter.bench.run_benchmark as runner
+
+    class TinyBackbone(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.blocks = nn.ModuleList()
+            self.weight = nn.Parameter(torch.zeros(1), requires_grad=False)
+
+        def forward(self, x, return_spatial=False):
+            features = torch.zeros(x.shape[0], 32, device=x.device)
+            if return_spatial:
+                return features.unsqueeze(1), (1, 1)
+            return features
+
+    @dataclass(frozen=True)
+    class TinySpec:
+        name: str
+        model: nn.Module
+        feature_dim: int
+        input_channels: int
+        blocks: nn.ModuleList
+
+    monkeypatch.setattr(
+        runner,
+        "build_backbone",
+        lambda cfg: TinySpec(
+            name="tiny_backbone",
+            model=TinyBackbone(),
+            feature_dim=32,
+            input_channels=4,
+            blocks=nn.ModuleList(),
+        ),
+    )
+
+    cfg = {
+        "experiment": {
+            "dataset": "eurosat",
+            "dataset_root": "missing",
+            "epochs": 0,
+            "batch_size": 8,
+            "allow_synthetic_fallback": True,
+        },
+        "training": {"lr": 1e-3},
+        "backbone": {"name": "tiny_backbone", "family": "satmae", "pretrained": False},
+    }
+
+    result = runner.run_single_experiment(
+        {"name": "linear_probe", "adapter": "zero_pad", "peft": None},
+        {"preset": "rgb"},
+        cfg,
+        seed=42,
+    )
+
+    assert result["backbone"] == "tiny_backbone"
+    assert result["trainable_params"] == 330
