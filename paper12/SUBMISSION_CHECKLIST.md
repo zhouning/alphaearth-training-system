@@ -48,7 +48,7 @@ If the target is **Springer LNCS** (ECCV workshops, ACCV), replace with `\docume
 
 1. **LoRA rank sensitivity**: completed for split-QKV LoRA on EuroSAT s2_full with r∈{4,8,16,32}. The curve is essentially flat (0.706--0.709 OA), which strengthens the claim that the post-fix LoRA ceiling is not explained by an underpowered rank.
 2. **Segmentation task**: all current results are classification. A single downstream segmentation benchmark (e.g., Sen1Floods11 or MADOS) would broaden the claim beyond image-level tasks.
-3. **Second backbone**: we cite SatMAE, Scale-MAE, SpectralGPT but only run Prithvi. Repeating one modality sweep on SatMAE would convert the "single-backbone" limitation into a "two-backbone, consistent ranking" strength.
+3. **Second backbone**: completed on a SatMAE-compatible EuroSAT validation track. The result converts the former single-backbone limitation into bounded two-backbone evidence, while still not supporting a universal GeoFM ranking.
 4. **Figure 3 (training curves)** is now included in the appendix. If reviewers ask for denser optimization-dynamics evidence, the raw logs in `paper12_results/*.log` can still be expanded into per-epoch plots beyond the current every-10-epoch snapshots.
 
 ## Submission-day commands

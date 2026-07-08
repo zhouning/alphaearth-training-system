@@ -65,10 +65,31 @@ Houlsby adapters are the best method on every evaluated configuration. On EuroSA
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.78\linewidth]{figures/acc_vs_params.pdf}
-\caption{EuroSAT s2\_full overall accuracy versus trainable parameter count (log scale). Houlsby adapters reach 94.5\% of the full fine-tuning ceiling using 1.4\% of the parameters; standard LoRA remains at the linear-probe baseline in this implementation.}
+\caption{EuroSAT s2\_full overall accuracy versus trainable parameter count (log scale). Houlsby adapters reach 94.5\% of the full fine-tuning ceiling using 1.4\% of the parameters; standard LoRA collapses to the linear-probe baseline.}
 \label{fig:acc-vs-params}
 \end{figure}
 
+\subsection{SatMAE-Compatible Second-Backbone Validation}
+The SatMAE-compatible second-backbone validation preserves the main PEFT ordering on EuroSAT. In the 18-row EuroSAT second-backbone audit, Houlsby remains the top-ranked method on both modalities, reaching 0.9067 OA and 0.9021 macro F1 on s2\_full and 0.8394 OA and 0.8342 macro F1 on rgb (Table~\ref{tab:second-backbone}). Split-QKV LoRA improves only slightly over linear probing and remains far below Houlsby: the Houlsby--LoRA gap is +0.3656 OA on s2\_full and +0.4970 OA on rgb. These results support a bounded two-backbone consistency claim for EuroSAT, while the audit still does not establish a universal GeoFM ranking.
+
+\begin{table}[t]
+\centering
+\small
+\caption{SatMAE-compatible second-backbone EuroSAT validation. Mean $\pm$ std over three seeds; ranks are computed within each modality by overall accuracy.}
+\label{tab:second-backbone}
+\begin{tabular}{llccc}
+\toprule
+Modality & Method & OA & Macro F1 & Rank \\
+\midrule
+s2\_full & Linear Probe & 0.5357 $\pm$ 0.0015 & 0.5038 $\pm$ 0.0015 & 3 \\
+s2\_full & Split-QKV LoRA & 0.5411 $\pm$ 0.0065 & 0.5095 $\pm$ 0.0058 & 2 \\
+s2\_full & Houlsby & \textbf{0.9067 $\pm$ 0.0040} & \textbf{0.9021 $\pm$ 0.0041} & 1 \\
+rgb & Linear Probe & 0.3349 $\pm$ 0.0067 & 0.3079 $\pm$ 0.0077 & 3 \\
+rgb & Split-QKV LoRA & 0.3423 $\pm$ 0.0059 & 0.3151 $\pm$ 0.0044 & 2 \\
+rgb & Houlsby & \textbf{0.8394 $\pm$ 0.0043} & \textbf{0.8342 $\pm$ 0.0040} & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
 \subsection{Finding 3: Modality Selection Matters More Than Method Selection}
 Across both datasets, richer spectral inputs consistently outperform reduced-band subsets. On BigEarthNet-S2, the s2\_full--rgb gap is $+0.023$ mAP for linear probing, $+0.023$ mAP for LoRA, and $+0.035$ mAP for Houlsby. On EuroSAT (Figure~\ref{fig:per-modality}), the spread between modalities is even larger: switching from s2\_full to sar\_only costs Houlsby $-20.6\%$ OA, more than the entire spread between BitFit and Houlsby on s2\_full.
 
@@ -85,4 +106,4 @@ This result suggests that practitioners should first maximize input information 
 GeoAdapter v2 consistently underperforms the linear probing baseline on EuroSAT. Although it was designed to bridge modality mismatches at the input stage, its residual adapter structure does not provide a stable optimization path under a frozen transformer backbone. The high seed variance on s2\_full ($\pm 0.056$) is itself diagnostic: the optimization landscape is unstable, and the negative result therefore reflects a structural rather than a hyperparameter issue. We conclude that modality adaptation is more effectively handled by backbone-level PEFT than by a tiny standalone input bridge.
 
 \subsection{Practical Takeaways}
-The benchmark supports three practical recommendations within the tested Prithvi-100M setting. First, Houlsby adapters are the safest default among the evaluated methods for adapting Prithvi-100M to heterogeneous inputs. Second, LoRA should not be assumed effective on fused-QKV backbones without careful architectural inspection and a corrected split-QKV control. Third, when spectral richness is available, preserving that information has larger returns than switching between weak PEFT methods.
+The benchmark supports three practical recommendations. First, Houlsby adapters are the safest default for adapting Prithvi-100M to heterogeneous inputs. Second, LoRA should not be assumed effective in GeoFMs without careful architectural inspection. Third, when spectral richness is available, preserving that information has larger returns than switching between weak PEFT methods.

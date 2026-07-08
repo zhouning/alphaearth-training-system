@@ -10,15 +10,14 @@ Purpose: address the main reviewer concern that the current conclusions are base
 
 Current status:
 
-- Prepared as an explicit SatMAE-compatible EuroSAT validation track.
+- Second-backbone validation: completed and manuscript-ready.
 - Config: `geoadapter/bench/configs/eurosat_second_backbone.yaml`.
 - Notebook: `colab/paper12_second_backbone_eurosat_colab.ipynb`.
-- Expected output files:
+- Output files verified in `paper12_results/` and mirrored into `06_supplementary_material/paper12_results/`:
   - `/content/drive/MyDrive/paper12_results/second_backbone_eurosat.json`
   - `/content/drive/MyDrive/paper12_results/second_backbone_eurosat_summary.json`
-- The matrix is 18 rows: 1 backbone x 3 methods x 2 modalities x 3 seeds.
-- The manuscript must not use this evidence until both JSON files are mirrored
-  into `paper12_results/` and audited.
+- The SatMAE-compatible EuroSAT validation has completed and produced an 18-row JSON plus summary.
+- Houlsby remains the top method on both `s2_full` and `rgb`, supporting a bounded two-backbone consistency claim rather than a universal GeoFM ranking.
 
 Minimum design:
 
@@ -145,6 +144,7 @@ This is not required for the current claim, but it would reduce the limitation t
 - The methods define the six-channel bridge boundary.
 - The EuroSAT channel-bridge notebook and config are aligned with the staged Prithvi checkpoint, and the rerun evidence is complete.
 - The EuroSAT PEFT capacity-sweep notebook, config, raw 30-row JSON, and summary JSON are complete and manuscript-ready.
+- The SatMAE-compatible second-backbone notebook, raw 18-row JSON, and summary JSON are complete and manuscript-ready.
 - The Linhe section now treats Esri-derived labels as supervisory labels, not independent ground truth.
 - The LoveDA threshold remains framed as Prithvi-specific evidence, now supported by the completed EuroSAT capacity sweep rather than left as a pending hypothesis.
 - The conclusion now includes Linhe/LoveDA and names the remaining evidence gaps.

@@ -61,14 +61,31 @@
     "nonzero_iou_classes": 5
   },
   "model_scope_audit": {
-    "backbone_count": 1,
+    "backbone_count": 2,
     "backbones_evaluated": [
-      "Prithvi-100M"
+      "Prithvi-100M",
+      "satmae_vit_base"
     ],
     "bigearthnet_subset": "10K train / 5K validation",
     "general_geo_fm_ranking_supported": false,
-    "ranking_scope": "Prithvi-100M under the reported datasets and budgets",
-    "second_backbone_results_completed": false
+    "ranking_scope": "Prithvi-100M across the reported tasks, plus SatMAE-compatible EuroSAT validation for the PEFT ordering boundary",
+    "second_backbone_results_completed": true
+  },
+  "second_backbone_audit": {
+    "best_methods_by_modality": {
+      "rgb": "satmae_houlsby_d64",
+      "s2_full": "satmae_houlsby_d64"
+    },
+    "houlsby_rgb_macro_f1": 0.8342128912343342,
+    "houlsby_rgb_oa": 0.8393827160493827,
+    "houlsby_s2_full_macro_f1": 0.9021213568943037,
+    "houlsby_s2_full_oa": 0.9066666666666667,
+    "raw_row_count": 18,
+    "rgb_houlsby_minus_lora_oa": 0.49703703703703705,
+    "row_count": 18,
+    "s2_full_houlsby_minus_lora_oa": 0.36555555555555563,
+    "schema": "paper12.second_backbone_eurosat_summary.v1",
+    "supports_second_backbone_consistency": true
   },
   "segmentation_decoder_audit": {
     "absolute_miou_can_be_decoder_limited": true,
@@ -87,6 +104,8 @@
   "source_files": [
     "paper12_results/peft_capacity_sweep_summary.json",
     "paper12_results/eurosat_channel_bridge_summary.json",
+    "paper12_results/second_backbone_eurosat.json",
+    "paper12_results/second_backbone_eurosat_summary.json",
     "results/loveda/loveda_lulc_seg.json",
     "paper12_results/loveda_full_finetune_summary.json",
     "results/loveda/loveda_u2r_diag.json",

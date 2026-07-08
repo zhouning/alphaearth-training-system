@@ -14,6 +14,8 @@ from typing import Any
 SOURCE_FILES = [
     "paper12_results/peft_capacity_sweep_summary.json",
     "paper12_results/eurosat_channel_bridge_summary.json",
+    "paper12_results/second_backbone_eurosat.json",
+    "paper12_results/second_backbone_eurosat_summary.json",
     "results/loveda/loveda_lulc_seg.json",
     "paper12_results/loveda_full_finetune_summary.json",
     "results/loveda/loveda_u2r_diag.json",
@@ -111,6 +113,52 @@ def _channel_bridge_audit(summary: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _second_backbone_audit(
+    raw_rows: list[dict[str, Any]], summary: dict[str, Any]
+) -> dict[str, Any]:
+    groups = summary["groups"]
+    by_key = {(item["method"], item["modality"]): item for item in groups}
+    best_methods_by_modality = {
+        item["modality"]: item["method"]
+        for item in groups
+        if int(item["rank_by_overall_accuracy"]) == 1
+    }
+
+    s2_houlsby = float(
+        by_key[("satmae_houlsby_d64", "s2_full")]["overall_accuracy_mean"]
+    )
+    s2_lora = float(
+        by_key[("satmae_lora_split_qkv_r8", "s2_full")]["overall_accuracy_mean"]
+    )
+    rgb_houlsby = float(
+        by_key[("satmae_houlsby_d64", "rgb")]["overall_accuracy_mean"]
+    )
+    rgb_lora = float(
+        by_key[("satmae_lora_split_qkv_r8", "rgb")]["overall_accuracy_mean"]
+    )
+
+    return {
+        "schema": summary["schema"],
+        "row_count": int(summary["row_count"]),
+        "raw_row_count": len(raw_rows),
+        "best_methods_by_modality": dict(sorted(best_methods_by_modality.items())),
+        "houlsby_s2_full_oa": s2_houlsby,
+        "houlsby_s2_full_macro_f1": float(
+            by_key[("satmae_houlsby_d64", "s2_full")]["macro_f1_mean"]
+        ),
+        "houlsby_rgb_oa": rgb_houlsby,
+        "houlsby_rgb_macro_f1": float(
+            by_key[("satmae_houlsby_d64", "rgb")]["macro_f1_mean"]
+        ),
+        "s2_full_houlsby_minus_lora_oa": s2_houlsby - s2_lora,
+        "rgb_houlsby_minus_lora_oa": rgb_houlsby - rgb_lora,
+        "supports_second_backbone_consistency": (
+            best_methods_by_modality
+            == {"rgb": "satmae_houlsby_d64", "s2_full": "satmae_houlsby_d64"}
+        ),
+    }
+
+
 def _loveda_audit(
     peft_rows: list[dict[str, Any]], full_summary: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:
@@ -148,14 +196,19 @@ def _loveda_diagnostic(diag_rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _model_scope_audit() -> dict[str, Any]:
+def _model_scope_audit(second_backbone_summary: dict[str, Any]) -> dict[str, Any]:
     return {
-        "backbones_evaluated": ["Prithvi-100M"],
-        "backbone_count": 1,
-        "second_backbone_results_completed": False,
+        "backbones_evaluated": ["Prithvi-100M", "satmae_vit_base"],
+        "backbone_count": 2,
+        "second_backbone_results_completed": (
+            int(second_backbone_summary["row_count"]) == 18
+        ),
         "general_geo_fm_ranking_supported": False,
         "bigearthnet_subset": "10K train / 5K validation",
-        "ranking_scope": "Prithvi-100M under the reported datasets and budgets",
+        "ranking_scope": (
+            "Prithvi-100M across the reported tasks, plus SatMAE-compatible "
+            "EuroSAT validation for the PEFT ordering boundary"
+        ),
     }
 
 
@@ -235,11 +288,13 @@ def build_review_audit(repo_root: str | Path) -> dict[str, Any]:
     repo_root = Path(repo_root)
     capacity_summary = _read_json(repo_root, SOURCE_FILES[0])
     channel_summary = _read_json(repo_root, SOURCE_FILES[1])
-    loveda_peft = _read_json(repo_root, SOURCE_FILES[2])
-    loveda_full = _read_json(repo_root, SOURCE_FILES[3])
-    loveda_diag = _read_json(repo_root, SOURCE_FILES[4])
-    landcover_rows = _read_json(repo_root, SOURCE_FILES[5])
-    linhe_rows = _read_json(repo_root, SOURCE_FILES[6])
+    second_backbone_raw = _read_json(repo_root, SOURCE_FILES[2])
+    second_backbone_summary = _read_json(repo_root, SOURCE_FILES[3])
+    loveda_peft = _read_json(repo_root, SOURCE_FILES[4])
+    loveda_full = _read_json(repo_root, SOURCE_FILES[5])
+    loveda_diag = _read_json(repo_root, SOURCE_FILES[6])
+    landcover_rows = _read_json(repo_root, SOURCE_FILES[7])
+    linhe_rows = _read_json(repo_root, SOURCE_FILES[8])
 
     return {
         "audit_schema_version": 2,
@@ -248,7 +303,10 @@ def build_review_audit(repo_root: str | Path) -> dict[str, Any]:
         "channel_bridge_audit": _channel_bridge_audit(channel_summary),
         "loveda_audit": _loveda_audit(loveda_peft, loveda_full),
         "loveda_diagnostic": _loveda_diagnostic(loveda_diag),
-        "model_scope_audit": _model_scope_audit(),
+        "model_scope_audit": _model_scope_audit(second_backbone_summary),
+        "second_backbone_audit": _second_backbone_audit(
+            second_backbone_raw, second_backbone_summary
+        ),
         "linhe_label_audit": _linhe_label_audit(linhe_rows),
         "segmentation_decoder_audit": _segmentation_decoder_audit(
             landcover_rows, linhe_rows, loveda_peft

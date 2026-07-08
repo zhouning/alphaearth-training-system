@@ -75,11 +75,23 @@ def test_review_audit_records_model_scope_label_and_decoder_boundaries():
     audit = build_review_audit(REPO_ROOT)
 
     scope = audit["model_scope_audit"]
-    assert scope["backbones_evaluated"] == ["Prithvi-100M"]
-    assert scope["backbone_count"] == 1
-    assert scope["second_backbone_results_completed"] is False
+    assert scope["backbones_evaluated"] == ["Prithvi-100M", "satmae_vit_base"]
+    assert scope["backbone_count"] == 2
+    assert scope["second_backbone_results_completed"] is True
     assert scope["general_geo_fm_ranking_supported"] is False
     assert scope["bigearthnet_subset"] == "10K train / 5K validation"
+
+    second = audit["second_backbone_audit"]
+    assert second["schema"] == "paper12.second_backbone_eurosat_summary.v1"
+    assert second["row_count"] == 18
+    assert second["best_methods_by_modality"] == {
+        "rgb": "satmae_houlsby_d64",
+        "s2_full": "satmae_houlsby_d64",
+    }
+    assert second["houlsby_s2_full_oa"] == pytest.approx(0.9066666666666667)
+    assert second["houlsby_rgb_oa"] == pytest.approx(0.8393827160493827)
+    assert second["s2_full_houlsby_minus_lora_oa"] == pytest.approx(0.3655555555555555)
+    assert second["rgb_houlsby_minus_lora_oa"] == pytest.approx(0.497037037037037)
 
     linhe = audit["linhe_label_audit"]
     assert linhe["supervisory_label_source"] == "Esri 2022 LULC"
@@ -113,6 +125,8 @@ def test_write_review_audit_creates_deterministic_json(tmp_path):
     assert loaded["source_files"] == [
         "paper12_results/peft_capacity_sweep_summary.json",
         "paper12_results/eurosat_channel_bridge_summary.json",
+        "paper12_results/second_backbone_eurosat.json",
+        "paper12_results/second_backbone_eurosat_summary.json",
         "results/loveda/loveda_lulc_seg.json",
         "paper12_results/loveda_full_finetune_summary.json",
         "results/loveda/loveda_u2r_diag.json",

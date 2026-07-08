@@ -1,0 +1,164 @@
+[
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_linear_probe",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 7690,
+    "overall_accuracy": 0.5351851851851852,
+    "macro_f1": 0.5026644567247216
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_linear_probe",
+    "modality": "s2_full",
+    "seed": 123,
+    "trainable_params": 7690,
+    "overall_accuracy": 0.5346296296296297,
+    "macro_f1": 0.5033396626612653
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_linear_probe",
+    "modality": "s2_full",
+    "seed": 456,
+    "trainable_params": 7690,
+    "overall_accuracy": 0.5374074074074074,
+    "macro_f1": 0.5054481437864695
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_linear_probe",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 7690,
+    "overall_accuracy": 0.32722222222222225,
+    "macro_f1": 0.29929316884613316
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_linear_probe",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 7690,
+    "overall_accuracy": 0.33814814814814814,
+    "macro_f1": 0.3103964481517197
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_linear_probe",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 7690,
+    "overall_accuracy": 0.33944444444444444,
+    "macro_f1": 0.3140288526744994
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_lora_split_qkv_r8",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 597514,
+    "overall_accuracy": 0.5355555555555556,
+    "macro_f1": 0.5041464633317219
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_lora_split_qkv_r8",
+    "modality": "s2_full",
+    "seed": 123,
+    "trainable_params": 597514,
+    "overall_accuracy": 0.5483333333333333,
+    "macro_f1": 0.5157419891034645
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_lora_split_qkv_r8",
+    "modality": "s2_full",
+    "seed": 456,
+    "trainable_params": 597514,
+    "overall_accuracy": 0.5394444444444444,
+    "macro_f1": 0.5086520534057525
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_lora_split_qkv_r8",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 597514,
+    "overall_accuracy": 0.33611111111111114,
+    "macro_f1": 0.31040796858480707
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_lora_split_qkv_r8",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 597514,
+    "overall_accuracy": 0.34314814814814815,
+    "macro_f1": 0.31560681885733965
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_lora_split_qkv_r8",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 597514,
+    "overall_accuracy": 0.3477777777777778,
+    "macro_f1": 0.31924472141012444
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_houlsby_d64",
+    "modality": "s2_full",
+    "seed": 42,
+    "trainable_params": 1197322,
+    "overall_accuracy": 0.9022222222222223,
+    "macro_f1": 0.8976275475343674
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_houlsby_d64",
+    "modality": "s2_full",
+    "seed": 123,
+    "trainable_params": 1197322,
+    "overall_accuracy": 0.9077777777777778,
+    "macro_f1": 0.9031457030541837
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_houlsby_d64",
+    "modality": "s2_full",
+    "seed": 456,
+    "trainable_params": 1197322,
+    "overall_accuracy": 0.91,
+    "macro_f1": 0.9055908200943602
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_houlsby_d64",
+    "modality": "rgb",
+    "seed": 42,
+    "trainable_params": 1197322,
+    "overall_accuracy": 0.8388888888888889,
+    "macro_f1": 0.8336665948860631
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_houlsby_d64",
+    "modality": "rgb",
+    "seed": 123,
+    "trainable_params": 1197322,
+    "overall_accuracy": 0.8353703703703703,
+    "macro_f1": 0.8305387219411309
+  },
+  {
+    "backbone": "satmae_vit_base",
+    "method": "satmae_houlsby_d64",
+    "modality": "rgb",
+    "seed": 456,
+    "trainable_params": 1197322,
+    "overall_accuracy": 0.8438888888888889,
+    "macro_f1": 0.8384333568758086
+  }
+]

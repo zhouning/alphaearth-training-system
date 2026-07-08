@@ -1,0 +1,102 @@
+{
+  "groups": [
+    {
+      "backbone": "satmae_vit_base",
+      "macro_f1_mean": 0.8342128912343342,
+      "macro_f1_std": 0.003975568508158179,
+      "method": "satmae_houlsby_d64",
+      "modality": "rgb",
+      "overall_accuracy_mean": 0.8393827160493827,
+      "overall_accuracy_std": 0.004280676159897765,
+      "rank_by_overall_accuracy": 1,
+      "seeds": [
+        42,
+        123,
+        456
+      ],
+      "trainable_params": 1197322
+    },
+    {
+      "backbone": "satmae_vit_base",
+      "macro_f1_mean": 0.9021213568943037,
+      "macro_f1_std": 0.004079263568051151,
+      "method": "satmae_houlsby_d64",
+      "modality": "s2_full",
+      "overall_accuracy_mean": 0.9066666666666667,
+      "overall_accuracy_std": 0.004006168083848872,
+      "rank_by_overall_accuracy": 1,
+      "seeds": [
+        42,
+        123,
+        456
+      ],
+      "trainable_params": 1197322
+    },
+    {
+      "backbone": "satmae_vit_base",
+      "macro_f1_mean": 0.30790615655745074,
+      "macro_f1_std": 0.007676995417528827,
+      "method": "satmae_linear_probe",
+      "modality": "rgb",
+      "overall_accuracy_mean": 0.3349382716049383,
+      "overall_accuracy_std": 0.006713654711059556,
+      "rank_by_overall_accuracy": 3,
+      "seeds": [
+        42,
+        123,
+        456
+      ],
+      "trainable_params": 7690
+    },
+    {
+      "backbone": "satmae_vit_base",
+      "macro_f1_mean": 0.5038174210574855,
+      "macro_f1_std": 0.0014520393342829425,
+      "method": "satmae_linear_probe",
+      "modality": "s2_full",
+      "overall_accuracy_mean": 0.5357407407407407,
+      "overall_accuracy_std": 0.001469861839480327,
+      "rank_by_overall_accuracy": 3,
+      "seeds": [
+        42,
+        123,
+        456
+      ],
+      "trainable_params": 7690
+    },
+    {
+      "backbone": "satmae_vit_base",
+      "macro_f1_mean": 0.3150865029507571,
+      "macro_f1_std": 0.004441294474128101,
+      "method": "satmae_lora_split_qkv_r8",
+      "modality": "rgb",
+      "overall_accuracy_mean": 0.3423456790123457,
+      "overall_accuracy_std": 0.005874584692828454,
+      "rank_by_overall_accuracy": 2,
+      "seeds": [
+        42,
+        123,
+        456
+      ],
+      "trainable_params": 597514
+    },
+    {
+      "backbone": "satmae_vit_base",
+      "macro_f1_mean": 0.5095135019469796,
+      "macro_f1_std": 0.005845564529852828,
+      "method": "satmae_lora_split_qkv_r8",
+      "modality": "s2_full",
+      "overall_accuracy_mean": 0.5411111111111111,
+      "overall_accuracy_std": 0.00654990340141756,
+      "rank_by_overall_accuracy": 2,
+      "seeds": [
+        42,
+        123,
+        456
+      ],
+      "trainable_params": 597514
+    }
+  ],
+  "row_count": 18,
+  "schema": "paper12.second_backbone_eurosat_summary.v1"
+}

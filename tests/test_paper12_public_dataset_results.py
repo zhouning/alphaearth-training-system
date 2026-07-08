@@ -146,6 +146,9 @@ def test_required_experiments_tracks_colab_result_status():
     assert "colab/paper12_peft_capacity_sweep_colab.ipynb" in text
     assert "peft_capacity_sweep_summary.json" in text
     assert "The EuroSAT PEFT capacity sweep has completed and produced a 30-row JSON plus summary." in text
+    assert "Second-backbone validation: completed and manuscript-ready." in text
+    assert "The SatMAE-compatible EuroSAT validation has completed and produced an 18-row JSON plus summary." in text
+    assert "must not use this evidence" not in text
 
 
 def test_capacity_sweep_is_completed_and_marked_manuscript_ready():
@@ -163,6 +166,32 @@ def test_capacity_sweep_is_completed_and_marked_manuscript_ready():
     assert "peft_capacity_sweep_summary.json" in action
     assert "review\\_audit\\_summary.json" in method
 
+
+def test_second_backbone_summary_matches_raw_results_and_is_mirrored():
+    rows = json.loads(
+        (PAPER12_RESULTS / "second_backbone_eurosat.json").read_text(encoding="utf-8")
+    )
+    summary = json.loads(
+        (PAPER12_RESULTS / "second_backbone_eurosat_summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert len(rows) == 18
+    assert summary["schema"] == "paper12.second_backbone_eurosat_summary.v1"
+    assert summary["row_count"] == 18
+    assert len(summary["groups"]) == 6
+
+    by_key = {(item["method"], item["modality"]): item for item in summary["groups"]}
+    assert by_key[("satmae_houlsby_d64", "s2_full")]["rank_by_overall_accuracy"] == 1
+    assert by_key[("satmae_houlsby_d64", "rgb")]["rank_by_overall_accuracy"] == 1
+    assert by_key[("satmae_houlsby_d64", "s2_full")]["overall_accuracy_mean"] == pytest.approx(0.9066666666666667)
+    assert by_key[("satmae_houlsby_d64", "rgb")]["overall_accuracy_mean"] == pytest.approx(0.8393827160493827)
+
+    for name in ["second_backbone_eurosat.json", "second_backbone_eurosat_summary.json"]:
+        assert (SUPPLEMENTARY_RESULTS / name).read_text(encoding="utf-8") == (
+            PAPER12_RESULTS / name
+        ).read_text(encoding="utf-8")
 
 def test_peft_capacity_sweep_summary_matches_raw_results():
     rows = json.loads(
@@ -243,6 +272,8 @@ def test_public_dataset_results_are_mirrored_in_supplementary_package():
         "loveda_full_finetune_u2r.json",
         "loveda_full_finetune_summary.json",
         "review_audit_summary.json",
+        "second_backbone_eurosat.json",
+        "second_backbone_eurosat_summary.json",
     ]:
         assert (SUPPLEMENTARY_RESULTS / name).read_text(encoding="utf-8") == (
             PAPER12_RESULTS / name
@@ -305,6 +336,30 @@ def test_manuscript_bounds_reviewer_sensitive_claims_after_audit_extension():
     for phrase in required_phrases:
         assert phrase in combined
 
+
+def test_second_backbone_evidence_is_reflected_in_manuscript_and_submission():
+    manuscript_paths = [
+        REPO_ROOT / "paper12" / "sections" / "method.tex",
+        REPO_ROOT / "paper12" / "sections" / "results.tex",
+        REPO_ROOT / "paper12" / "sections" / "discussion.tex",
+        REPO_ROOT / "paper12" / "sections" / "conclusion.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "method.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "results.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "discussion.tex",
+        REPO_ROOT / "submission" / "paper12_isprs_jprs_20260606" / "02_latex_source" / "sections" / "conclusion.tex",
+    ]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in manuscript_paths)
+
+    required_phrases = [
+        "SatMAE-compatible second-backbone validation",
+        "18-row EuroSAT second-backbone audit",
+        "0.9067 OA and 0.9021 macro F1 on s2\\_full",
+        "0.8394 OA and 0.8342 macro F1 on rgb",
+        "does not establish a universal GeoFM ranking",
+        "second\\_backbone\\_eurosat\\_summary.json",
+    ]
+    for phrase in required_phrases:
+        assert phrase in combined
 
 def test_submission_side_materials_bound_reviewer_sensitive_claims():
     side_material_paths = [
