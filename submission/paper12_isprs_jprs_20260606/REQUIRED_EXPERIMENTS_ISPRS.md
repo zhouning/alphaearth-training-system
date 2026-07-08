@@ -8,6 +8,18 @@ This document records evidence gaps identified during the ISPRS JPRS-style revie
 
 Purpose: address the main reviewer concern that the current conclusions are based on Prithvi-100M only.
 
+Current status:
+
+- Prepared as an explicit SatMAE-compatible EuroSAT validation track.
+- Config: `geoadapter/bench/configs/eurosat_second_backbone.yaml`.
+- Notebook: `colab/paper12_second_backbone_eurosat_colab.ipynb`.
+- Expected output files:
+  - `/content/drive/MyDrive/paper12_results/second_backbone_eurosat.json`
+  - `/content/drive/MyDrive/paper12_results/second_backbone_eurosat_summary.json`
+- The matrix is 18 rows: 1 backbone x 3 methods x 2 modalities x 3 seeds.
+- The manuscript must not use this evidence until both JSON files are mirrored
+  into `paper12_results/` and audited.
+
 Minimum design:
 
 - Backbone: SatMAE, Scale-MAE, or SpectralGPT, whichever is fastest to run in the current codebase.

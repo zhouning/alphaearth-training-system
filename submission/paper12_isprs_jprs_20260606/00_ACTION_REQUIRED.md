@@ -30,6 +30,11 @@ These items require author confirmation before the package is uploaded.
 
 ## Technical Checks
 
+- Run or intentionally defer the second-backbone EuroSAT notebook:
+  `colab/paper12_second_backbone_eurosat_colab.ipynb`.
+- If completed, mirror `second_backbone_eurosat.json` and
+  `second_backbone_eurosat_summary.json` from Drive into `paper12_results/` and
+  the supplementary result directory before making manuscript claims from them.
 - Verify the completed PEFT capacity-sweep artifacts from `colab/paper12_peft_capacity_sweep_colab.ipynb`: `paper12_results/peft_capacity_sweep.json` and `paper12_results/peft_capacity_sweep_summary.json`.
 - Confirm both capacity-sweep files are mirrored into `06_supplementary_material/paper12_results/` before final upload.
 - Regenerate all figures from the latest result files.

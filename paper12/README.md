@@ -62,7 +62,16 @@ All numerical values in tables and figures trace back to:
 - `paper12_results/loveda_full_finetune_u2r.json`, `paper12_results/loveda_full_finetune_r2u.json`, and `paper12_results/loveda_full_finetune_summary.json` - LoveDA two-direction full fine-tuning baseline (3 seeds per direction)
 - `paper12_results/eurosat_channel_bridge.json` and `paper12_results/eurosat_channel_bridge_summary.json` - EuroSAT channel-bridge rerun output after the checkpoint-path fix. These values are now manuscript-ready evidence.
 - `paper12_results/peft_capacity_sweep.json` and `paper12_results/peft_capacity_sweep_summary.json` - completed EuroSAT parameter-capacity sweep outputs, mirrored from `colab/paper12_peft_capacity_sweep_colab.ipynb` and ready to cite.
+- `paper12_results/second_backbone_eurosat.json` and
+  `paper12_results/second_backbone_eurosat_summary.json` - SatMAE-compatible
+  second-backbone EuroSAT validation outputs. These files are expected after the
+  Colab notebook run and should be treated as absent evidence until mirrored
+  locally.
 
 ## Status
 
 Current state: ISPRS JPRS revision framing is updated around architecture-aware PEFT diagnosis. EuroSAT channel-bridge, LoveDA full fine-tuning, and the completed PEFT capacity sweep evidence are mirrored; broader backbone generalization remains the main follow-up. See `SUBMISSION_CHECKLIST.md` and `submission/paper12_isprs_jprs_20260606/REQUIRED_EXPERIMENTS_ISPRS.md` for remaining tasks before submission.
+
+Second-backbone validation is prepared but not manuscript evidence until the
+18-row Colab run is completed and result JSON files are mirrored into
+`paper12_results/`.
