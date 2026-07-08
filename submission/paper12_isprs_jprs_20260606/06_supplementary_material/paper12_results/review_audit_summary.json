@@ -1,4 +1,30 @@
 {
+  "arcgis_replacement_audit": {
+    "arcgis_reference_available": false,
+    "arcgis_replacement_ready": false,
+    "current_boundary": "Paper12 supports local weak-supervision adaptation evidence, not a validated ArcGIS replacement claim.",
+    "decision_status": "not_validated",
+    "evidence_level": "weak_supervision_evidence",
+    "manual_ground_truth_available": false,
+    "missing_evidence": [
+      "independent_manual_ground_truth",
+      "arcgis_reference_output",
+      "paper12_checkpoint_backed_output",
+      "same_area_same_time_same_taxonomy_pairing",
+      "paired_model_output_metrics"
+    ],
+    "next_actions": [
+      "Sample and manually annotate Linhe validation patches or polygons using the highest-resolution imagery available.",
+      "Export ArcGIS or Esri reference predictions for the same samples and class taxonomy.",
+      "Run the Paper12 checkpoint-backed Houlsby workflow on the same samples.",
+      "Report per-class IoU, overall accuracy, macro F1, and confusion matrices for both systems against the same manual labels."
+    ],
+    "paired_model_outputs_available": false,
+    "paper12_model_checkpoint_available": false,
+    "replacement_claim_supported": false,
+    "same_area_same_time_same_taxonomy": false,
+    "schema": "paper12.arcgis_replacement_validation.v1"
+  },
   "audit_schema_version": 2,
   "capacity_audit": {
     "houlsby_oa_monotonic_non_decreasing": true,
@@ -110,6 +136,7 @@
     "paper12_results/loveda_full_finetune_summary.json",
     "results/loveda/loveda_u2r_diag.json",
     "paper12_results/landcoverai_segmentation.json",
-    "linhe_results/linhe_lulc_seg.json"
+    "linhe_results/linhe_lulc_seg.json",
+    "paper12_results/arcgis_replacement_validation_template.json"
   ]
 }

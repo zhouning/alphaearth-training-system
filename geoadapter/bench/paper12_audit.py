@@ -21,6 +21,7 @@ SOURCE_FILES = [
     "results/loveda/loveda_u2r_diag.json",
     "paper12_results/landcoverai_segmentation.json",
     "linhe_results/linhe_lulc_seg.json",
+    "paper12_results/arcgis_replacement_validation_template.json",
 ]
 
 
@@ -212,6 +213,24 @@ def _model_scope_audit(second_backbone_summary: dict[str, Any]) -> dict[str, Any
     }
 
 
+
+def _arcgis_replacement_audit(template: dict[str, Any]) -> dict[str, Any]:
+    required = template["required_evidence"]
+    return {
+        "schema": template["schema"],
+        "decision_status": template["decision_status"],
+        "evidence_level": template["evidence_level"],
+        "replacement_claim_supported": bool(template["replacement_claim_supported"]),
+        "arcgis_replacement_ready": template["decision_status"] == "replacement_candidate",
+        "manual_ground_truth_available": bool(required["manual_ground_truth_available"]),
+        "arcgis_reference_available": bool(required["arcgis_reference_available"]),
+        "paper12_model_checkpoint_available": bool(required["paper12_model_checkpoint_available"]),
+        "same_area_same_time_same_taxonomy": bool(required["same_area_same_time_same_taxonomy"]),
+        "paired_model_outputs_available": bool(required["paired_model_outputs_available"]),
+        "missing_evidence": list(template["missing_evidence"]),
+        "current_boundary": template["current_boundary"],
+        "next_actions": list(template["next_actions"]),
+    }
 def _linhe_label_audit(rows: list[dict[str, Any]]) -> dict[str, Any]:
     means = _mean_by_method(rows)
     linear_miou = means["linear_probe"]
@@ -295,6 +314,7 @@ def build_review_audit(repo_root: str | Path) -> dict[str, Any]:
     loveda_diag = _read_json(repo_root, SOURCE_FILES[6])
     landcover_rows = _read_json(repo_root, SOURCE_FILES[7])
     linhe_rows = _read_json(repo_root, SOURCE_FILES[8])
+    arcgis_replacement_template = _read_json(repo_root, SOURCE_FILES[9])
 
     return {
         "audit_schema_version": 2,
@@ -308,6 +328,9 @@ def build_review_audit(repo_root: str | Path) -> dict[str, Any]:
             second_backbone_raw, second_backbone_summary
         ),
         "linhe_label_audit": _linhe_label_audit(linhe_rows),
+        "arcgis_replacement_audit": _arcgis_replacement_audit(
+            arcgis_replacement_template
+        ),
         "segmentation_decoder_audit": _segmentation_decoder_audit(
             landcover_rows, linhe_rows, loveda_peft
         ),

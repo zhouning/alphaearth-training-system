@@ -1,4 +1,4 @@
-﻿import shutil
+import shutil
 import sys
 from pathlib import Path
 
@@ -461,6 +461,13 @@ def test_model_hub_returns_paper12_summary():
         for item in body["capabilities"]
     }["prithvi_crop_classification_arcgis_style"]
     assert crop["readiness"] == "demo_only"
+
+    validation = body["arcgis_replacement_validation"]
+    assert validation["decision_status"] == "not_validated"
+    assert validation["evidence_level"] == "weak_supervision_evidence"
+    assert validation["replacement_claim_supported"] is False
+    assert validation["required_evidence"]["manual_ground_truth_available"] is False
+    assert "independent_manual_ground_truth" in validation["missing_evidence"]
     assert crop["arcgis_replacement_status"] == "not_yet"
     assert "No validated crop checkpoint" in crop["reason"]
 
@@ -513,6 +520,11 @@ def test_system_capabilities_endpoint_reports_operational_readiness():
     assert lulc["checkpoint"]["configured"] is True
     assert "demo_patch" in lulc["runtime_modes"]
     assert any(item["label"] == "mIoU" for item in lulc["evidence"])
+
+    evidence_sources = {item["path"]: item for item in body["evidence_sources"]}
+    validation_source = evidence_sources["paper12_results/arcgis_replacement_validation_template.json"]
+    assert validation_source["available"] is True
+    assert validation_source["label"] == "ArcGIS replacement validation boundary"
 
     crop = capabilities["prithvi_crop_classification_arcgis_style"]
     assert crop["readiness"] == "demo_only"

@@ -63,6 +63,12 @@ Decision rule:
 ### 3. Linhe label-quality validation
 
 Purpose: address the concern that Esri 2022 labels are pseudo-labels for 2025 imagery.
+Current status:
+
+- Not completed as an independent replacement validation.
+- A conservative protocol template is now committed at `paper12_results/arcgis_replacement_validation_template.json` and mirrored into the supplementary package.
+- The template keeps the decision status at `not_validated` because independent manual ground truth, ArcGIS reference outputs, Paper12 checkpoint-backed outputs, and paired same-area metrics are not yet available.
+- The manuscript now states that Linhe supports local weak-supervision adaptation evidence, not a validated ArcGIS replacement claim.
 
 Minimum design:
 

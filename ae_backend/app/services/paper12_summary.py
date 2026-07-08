@@ -155,6 +155,26 @@ def _loveda_full_finetune() -> dict[str, Any]:
     }
 
 
+
+def _arcgis_replacement_validation() -> dict[str, Any]:
+    source_name = "arcgis_replacement_validation_template.json"
+    data = _load_json(PAPER12_RESULTS_DIR / source_name)
+    if not isinstance(data, dict):
+        return {
+            "schema": "paper12.arcgis_replacement_validation.v1",
+            "decision_status": "missing",
+            "evidence_level": "missing",
+            "replacement_claim_supported": False,
+            "source": f"paper12_results/{source_name}",
+            "status": "missing",
+            "note": f"Missing local result file: paper12_results/{source_name}",
+            "required_evidence": {},
+            "missing_evidence": ["arcgis_replacement_validation_template"],
+        }
+    payload = dict(data)
+    payload["source"] = f"paper12_results/{source_name}"
+    payload["status"] = "available"
+    return payload
 def _arcgis_replacement_status(model: dict[str, Any]) -> tuple[str, str, str]:
     model_id = model["model_id"]
     status = model["status"]
@@ -235,6 +255,7 @@ def build_paper12_summary(registry: ModelHubRegistry) -> dict[str, Any]:
         "paper": "paper12",
         "readiness_counts": readiness_counts,
         "benchmarks": benchmarks,
+        "arcgis_replacement_validation": _arcgis_replacement_validation(),
         "capabilities": capabilities,
         "notes": [
             "Paper 12 results are local benchmark evidence for AlphaEarth System model-hub integration.",

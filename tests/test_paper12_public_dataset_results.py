@@ -80,6 +80,27 @@ SUBMISSION_HIGHLIGHTS = (
 )
 
 
+
+def test_arcgis_replacement_validation_template_is_conservative_and_mirrored():
+    template_path = PAPER12_RESULTS / "arcgis_replacement_validation_template.json"
+    mirror_path = SUPPLEMENTARY_RESULTS / "arcgis_replacement_validation_template.json"
+    payload = json.loads(template_path.read_text(encoding="utf-8"))
+
+    assert payload["schema"] == "paper12.arcgis_replacement_validation.v1"
+    assert payload["decision_status"] == "not_validated"
+    assert payload["evidence_level"] == "weak_supervision_evidence"
+    assert payload["replacement_claim_supported"] is False
+    evidence = payload["required_evidence"]
+    assert evidence["manual_ground_truth_available"] is False
+    assert evidence["arcgis_reference_available"] is False
+    assert evidence["paper12_model_checkpoint_available"] is False
+    assert evidence["same_area_same_time_same_taxonomy"] is False
+    assert evidence["paired_model_outputs_available"] is False
+    assert payload["metrics"]["paper12_vs_manual"] is None
+    assert payload["metrics"]["arcgis_vs_manual"] is None
+    assert "independent_manual_ground_truth" in payload["missing_evidence"]
+    assert "arcgis_reference_output" in payload["missing_evidence"]
+    assert mirror_path.read_text(encoding="utf-8") == template_path.read_text(encoding="utf-8")
 def test_eurosat_channel_bridge_summary_matches_raw_results():
     rows = json.loads(
         (PAPER12_RESULTS / "eurosat_channel_bridge.json").read_text(encoding="utf-8")
@@ -274,6 +295,7 @@ def test_public_dataset_results_are_mirrored_in_supplementary_package():
         "review_audit_summary.json",
         "second_backbone_eurosat.json",
         "second_backbone_eurosat_summary.json",
+        "arcgis_replacement_validation_template.json",
     ]:
         assert (SUPPLEMENTARY_RESULTS / name).read_text(encoding="utf-8") == (
             PAPER12_RESULTS / name
@@ -332,6 +354,8 @@ def test_manuscript_bounds_reviewer_sensitive_claims_after_audit_extension():
         "lightweight linear segmentation decoder may limit absolute mIoU",
         "review\\_audit\\_summary.json",
         "model-scope, label-source, and decoder-capacity checks",
+        "not a validated ArcGIS replacement",
+        "arcgis\\_replacement\\_validation\\_template.json",
     ]
     for phrase in required_phrases:
         assert phrase in combined

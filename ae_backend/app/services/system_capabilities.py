@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
@@ -176,8 +176,11 @@ def _evidence_sources() -> list[dict[str, Any]]:
             PAPER12_RESULTS_DIR / "loveda_full_finetune_summary.json",
             "LoveDA full fine-tuning",
         ),
+        _evidence_source(
+            PAPER12_RESULTS_DIR / "arcgis_replacement_validation_template.json",
+            "ArcGIS replacement validation boundary",
+        ),
     ]
-
 
 def build_system_capabilities(registry: ModelHubRegistry) -> dict[str, Any]:
     models = [model.to_dict() for model in registry.models]

@@ -114,6 +114,27 @@ def test_review_audit_records_model_scope_label_and_decoder_boundaries():
     assert decoder["absolute_miou_can_be_decoder_limited"] is True
 
 
+def test_review_audit_records_arcgis_replacement_boundary():
+    audit = build_review_audit(REPO_ROOT)
+
+    replacement = audit["arcgis_replacement_audit"]
+    assert replacement["schema"] == "paper12.arcgis_replacement_validation.v1"
+    assert replacement["decision_status"] == "not_validated"
+    assert replacement["evidence_level"] == "weak_supervision_evidence"
+    assert replacement["replacement_claim_supported"] is False
+    assert replacement["arcgis_replacement_ready"] is False
+    assert replacement["manual_ground_truth_available"] is False
+    assert replacement["arcgis_reference_available"] is False
+    assert replacement["paper12_model_checkpoint_available"] is False
+    assert replacement["same_area_same_time_same_taxonomy"] is False
+    assert replacement["paired_model_outputs_available"] is False
+    assert replacement["current_boundary"] == (
+        "Paper12 supports local weak-supervision adaptation evidence, not a "
+        "validated ArcGIS replacement claim."
+    )
+    assert "independent_manual_ground_truth" in replacement["missing_evidence"]
+    assert "arcgis_reference_output" in replacement["missing_evidence"]
+
 def test_write_review_audit_creates_deterministic_json(tmp_path):
     output = tmp_path / "review_audit_summary.json"
     audit = write_review_audit(REPO_ROOT, output)
@@ -132,6 +153,7 @@ def test_write_review_audit_creates_deterministic_json(tmp_path):
         "results/loveda/loveda_u2r_diag.json",
         "paper12_results/landcoverai_segmentation.json",
         "linhe_results/linhe_lulc_seg.json",
+        "paper12_results/arcgis_replacement_validation_template.json",
     ]
 
 
