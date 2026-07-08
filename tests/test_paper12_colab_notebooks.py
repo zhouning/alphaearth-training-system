@@ -159,3 +159,24 @@ def test_paper12_second_backbone_config_contract():
         * len(cfg["experiment"]["seeds"])
     )
     assert matrix_size == 18
+
+
+def test_paper12_second_backbone_eurosat_colab_notebook_contract():
+    path = COLAB_DIR / "paper12_second_backbone_eurosat_colab.ipynb"
+    text = read_notebook_text(path)
+
+    assert f"blob/{PAPER12_RESULTS_BRANCH}/colab/paper12_second_backbone_eurosat_colab.ipynb" in text
+    assert f"--branch {PAPER12_RESULTS_BRANCH}" in text
+    assert "git rev-parse --abbrev-ref HEAD" in text
+    assert "Colab Pro L4" in text
+    assert "/content/AlphaEarth-System/data/eurosat" in text
+    assert "/content/drive/MyDrive/paper12_results" in text
+    assert "/content/second_backbone_eurosat_runs" in text
+    assert "scripts/download_public_datasets.py --dataset eurosat" in text
+    assert "eurosat_second_backbone.yaml" in text
+    assert "second_backbone_eurosat.json" in text
+    assert "second_backbone_eurosat_summary.json" in text
+    assert "satmae_vit_base.pth" in text
+    assert "python -m geoadapter.bench.run_benchmark" in text
+    assert "python -m geoadapter.bench.second_backbone_summary" in text
+    assert "expected_rows = 18" in text

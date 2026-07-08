@@ -9,6 +9,7 @@ COLAB_DIR = ROOT / "colab"
 LOVE_OUT = COLAB_DIR / "paper12_loveda_full_finetune_colab.ipynb"
 EURO_OUT = COLAB_DIR / "paper12_eurosat_channel_bridge_colab.ipynb"
 CAPACITY_OUT = COLAB_DIR / "paper12_peft_capacity_sweep_colab.ipynb"
+SECOND_BACKBONE_OUT = COLAB_DIR / "paper12_second_backbone_eurosat_colab.ipynb"
 PAPER12_RESULTS_BRANCH = "paper12-results-colab-20260619"
 
 
@@ -398,6 +399,133 @@ def eurosat_notebook() -> dict:
     )
 
 
+
+def second_backbone_notebook() -> dict:
+    return notebook(
+        [
+            markdown_cell(
+                """
+                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/paper12-results-colab-20260619/colab/paper12_second_backbone_eurosat_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+
+                # Paper 12 Second-Backbone EuroSAT Validation
+
+                This notebook runs the compact second-backbone validation for Paper 12. It uses a SatMAE-compatible ViT backbone and compares linear probing, split-QKV LoRA, and Houlsby adapters on EuroSAT `s2_full` and `rgb`.
+
+                **Required runtime:** Colab Pro L4. A100 is faster but not required. T4 is acceptable only for a one-epoch smoke run.
+
+                **Required weight file:** copy an official SatMAE-compatible checkpoint to `/content/drive/MyDrive/satmae_vit_base.pth` before running the training cell. The notebook fails if this file is missing so the experiment cannot silently run random weights.
+
+                **Outputs written to Drive:**
+                - `second_backbone_eurosat.json`
+                - `second_backbone_eurosat_summary.json`
+
+                **Expected matrix:** 1 backbone x 3 methods x 2 modalities x 3 seeds = 18 rows.
+                """
+            ),
+            code_cell(
+                """
+                # 1. Mount Drive and create the results directory.
+                from google.colab import drive
+                drive.mount("/content/drive")
+
+                import os
+
+                RESULTS_DIR = "/content/drive/MyDrive/paper12_results"
+                os.makedirs(RESULTS_DIR, exist_ok=True)
+                print("Drive results directory:", RESULTS_DIR)
+                """
+            ),
+            code_cell(
+                """
+                # 2. GPU, Python, and disk sanity check.
+                !nvidia-smi
+                !python --version
+                !df -h /content
+                """
+            ),
+            code_cell(
+                """
+                # 3. Clone the Paper 12 results branch into local SSD.
+                %cd /content
+                !rm -rf /content/AlphaEarth-System
+                !git clone --branch paper12-results-colab-20260619 https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System
+                %cd /content/AlphaEarth-System
+                !git rev-parse --abbrev-ref HEAD
+                !git rev-parse HEAD
+                !git log --oneline -3
+                """
+            ),
+            code_cell(
+                """
+                # 4. Install the local package and notebook helpers.
+                %cd /content/AlphaEarth-System
+                !pip install -q -e . torchgeo pyyaml
+                """
+            ),
+            code_cell(
+                """
+                # 5. Stage the SatMAE-compatible checkpoint at the path the config expects.
+                %cd /content/AlphaEarth-System
+                import os
+                import shutil
+
+                DRIVE_WEIGHTS = "/content/drive/MyDrive/satmae_vit_base.pth"
+                LOCAL_WEIGHTS = "/content/AlphaEarth-System/data/weights/satmae/satmae_vit_base.pth"
+                os.makedirs(os.path.dirname(LOCAL_WEIGHTS), exist_ok=True)
+
+                assert os.path.exists(DRIVE_WEIGHTS), (
+                    "Missing /content/drive/MyDrive/satmae_vit_base.pth. "
+                    "Copy an official SatMAE-compatible checkpoint to Drive before running this notebook."
+                )
+                shutil.copy(DRIVE_WEIGHTS, LOCAL_WEIGHTS)
+                print("Copied SatMAE checkpoint to", LOCAL_WEIGHTS)
+                !ls -lh /content/AlphaEarth-System/data/weights/satmae
+                """
+            ),
+            code_cell(
+                """
+                # 6. Download the public EuroSAT cache into local SSD and smoke one sample per split.
+                %cd /content/AlphaEarth-System
+                !python scripts/download_public_datasets.py --dataset eurosat --eurosat-root data/eurosat --max-samples 1
+                !du -sh /content/AlphaEarth-System/data/eurosat
+                """
+            ),
+            code_cell(
+                """
+                # 7. Dry-run the full second-backbone matrix before training.
+                %cd /content/AlphaEarth-System
+                !python -m geoadapter.bench.run_benchmark --config geoadapter/bench/configs/eurosat_second_backbone.yaml --dry-run
+                """
+            ),
+            code_cell(
+                """
+                # 8. Run the 18-row second-backbone EuroSAT benchmark.
+                # The runner resumes from existing rows in second_backbone_eurosat.json if the Colab session restarts.
+                %cd /content/AlphaEarth-System
+                !mkdir -p /content/second_backbone_eurosat_runs
+                !python -m geoadapter.bench.run_benchmark --config geoadapter/bench/configs/eurosat_second_backbone.yaml --output /content/drive/MyDrive/paper12_results/second_backbone_eurosat.json --checkpoint-dir /content/second_backbone_eurosat_runs --checkpoint-every 5
+                """
+            ),
+            code_cell(
+                """
+                # 9. Verify row count and write grouped summary JSON.
+                import json
+                from pathlib import Path
+
+                results_dir = Path("/content/drive/MyDrive/paper12_results")
+                raw_path = results_dir / "second_backbone_eurosat.json"
+                summary_path = results_dir / "second_backbone_eurosat_summary.json"
+                rows = json.loads(raw_path.read_text(encoding="utf-8"))
+                expected_rows = 18
+                assert len(rows) == expected_rows, f"expected {expected_rows} rows, got {len(rows)}"
+
+                !python -m geoadapter.bench.second_backbone_summary --input /content/drive/MyDrive/paper12_results/second_backbone_eurosat.json --output /content/drive/MyDrive/paper12_results/second_backbone_eurosat_summary.json
+                print(summary_path.read_text(encoding="utf-8")[:4000])
+                """
+            ),
+        ]
+    )
+
 def capacity_sweep_notebook() -> dict:
     return notebook(
         [
@@ -563,6 +691,7 @@ def capacity_sweep_notebook() -> dict:
 def main() -> None:
     COLAB_DIR.mkdir(parents=True, exist_ok=True)
     outputs = {
+        SECOND_BACKBONE_OUT: second_backbone_notebook(),
         CAPACITY_OUT: capacity_sweep_notebook(),
         LOVE_OUT: loveda_notebook(),
         EURO_OUT: eurosat_notebook(),
