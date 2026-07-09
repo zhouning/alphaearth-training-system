@@ -272,6 +272,51 @@ def decide_replacement_status(
     }
 
 
+def _critical_class_support(
+    manual: np.ndarray,
+    *,
+    class_names: Sequence[str],
+    critical_classes: Sequence[str],
+    ignore_index: int | None,
+) -> dict[str, int]:
+    truth = np.asarray(manual).ravel()
+    if ignore_index is not None:
+        truth = truth[truth != ignore_index]
+    class_to_index = {class_name: index for index, class_name in enumerate(class_names)}
+    return {
+        class_name: int(np.count_nonzero(truth == class_to_index[class_name]))
+        for class_name in critical_classes
+        if class_name in class_to_index
+    }
+
+
+def _apply_critical_class_coverage_guard(
+    decision: dict[str, object],
+    *,
+    critical_class_support: dict[str, int],
+) -> dict[str, object]:
+    missing = [
+        class_name
+        for class_name, support in critical_class_support.items()
+        if support <= 0
+    ]
+    if not missing:
+        return decision
+
+    reasons = [
+        reason
+        for reason in list(decision.get("reasons", []))
+        if not str(reason).startswith("missing_critical_class:")
+    ]
+    for class_name in missing:
+        reasons.append(f"missing_manual_critical_class:{class_name}")
+    return {
+        "decision_status": "insufficient_class_coverage",
+        "replacement_claim_supported": False,
+        "arcgis_replacement_ready": False,
+        "reasons": reasons,
+    }
+
 def _apply_minimum_sample_guard(
     decision: dict[str, object],
     *,
@@ -432,10 +477,19 @@ def evaluate_manifest(
         arcgis_parts.append(np.asarray(arcgis).ravel())
         paper12_parts.append(np.asarray(paper12).ravel())
 
+    manual_all = np.concatenate(manual_parts)
+    arcgis_all = np.concatenate(arcgis_parts)
+    paper12_all = np.concatenate(paper12_parts)
+    critical_class_support = _critical_class_support(
+        manual_all,
+        class_names=class_names,
+        critical_classes=critical_classes,
+        ignore_index=ignore_index,
+    )
     metrics = compute_replacement_metrics(
-        manual=np.concatenate(manual_parts),
-        arcgis=np.concatenate(arcgis_parts),
-        paper12=np.concatenate(paper12_parts),
+        manual=manual_all,
+        arcgis=arcgis_all,
+        paper12=paper12_all,
         class_names=class_names,
         ignore_index=ignore_index,
     )
@@ -443,6 +497,10 @@ def evaluate_manifest(
         metrics,
         critical_classes=critical_classes,
         tolerance=tolerance,
+    )
+    decision = _apply_critical_class_coverage_guard(
+        decision,
+        critical_class_support=critical_class_support,
     )
     decision = _apply_minimum_sample_guard(
         decision,
@@ -466,6 +524,7 @@ def evaluate_manifest(
         **base_payload,
         "metrics": metrics,
         "bootstrap": bootstrap,
+        "critical_class_support": critical_class_support,
         "missing_evidence": [],
         **decision,
     }

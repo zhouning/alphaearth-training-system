@@ -212,6 +212,7 @@ def test_validation_protocol_points_to_packet_builder():
     template = json.loads(template_path.read_text(encoding="utf-8"))
 
     assert protocol == supplementary
+    assert "insufficient_class_coverage" in protocol["decision_rule"]
     assert (
         protocol["packet_builder_script"]
         == "scripts/prepare_arcgis_replacement_validation_packet.py"

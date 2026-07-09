@@ -4,7 +4,8 @@
                           "not_validated":  "Use when independent manual ground truth, ArcGIS reference output, or Paper12 checkpoint-backed output is missing.",
                           "partial":  "Use when all paired outputs exist but Paper12 does not meet the replacement threshold on at least one primary metric or critical class.",
                           "replacement_candidate":  "Use only when Paper12 matches or exceeds the ArcGIS reference on the same manual labels, area, time window, and taxonomy.",
-                          "insufficient_sample_size":  "Use when paired outputs exist but the evaluator has fewer than the minimum manifest rows required for a replacement-candidate decision."
+                          "insufficient_sample_size":  "Use when paired outputs exist but the evaluator has fewer than the minimum manifest rows required for a replacement-candidate decision.",
+                          "insufficient_class_coverage":  "Use when paired outputs exist but independent manual labels do not cover every required critical class."
                       },
     "decision_status":  "not_validated",
     "evidence_level":  "weak_supervision_evidence",

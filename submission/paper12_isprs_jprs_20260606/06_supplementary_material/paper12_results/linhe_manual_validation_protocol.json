@@ -75,7 +75,8 @@
                           "not_validated":  "Use when required paired evidence is missing.",
                           "partial":  "Use when paired evidence exists but Paper12 is below ArcGIS beyond tolerance on mIoU or any critical class.",
                           "replacement_candidate":  "Use only when Paper12 matches or exceeds ArcGIS within tolerance on mIoU and all critical classes.",
-                          "insufficient_sample_size":  "Use when paired outputs exist but the evaluator has fewer than the minimum manifest rows required for a replacement-candidate decision."
+                          "insufficient_sample_size":  "Use when paired outputs exist but the evaluator has fewer than the minimum manifest rows required for a replacement-candidate decision.",
+                          "insufficient_class_coverage":  "Use when paired outputs exist but independent manual labels do not cover every required critical class."
                       },
     "packet_finalizer_script":  "scripts/finalize_arcgis_replacement_validation_packet.py",
     "paper12_prediction_exporter_script":  "scripts/export_paper12_packet_predictions.py",

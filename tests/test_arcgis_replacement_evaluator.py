@@ -289,6 +289,38 @@ def test_perfect_small_manifest_is_not_a_replacement_candidate_by_default(tmp_pa
     assert smoke_result["decision_status"] == "replacement_candidate"
     assert smoke_result["replacement_claim_supported"] is True
 
+
+def test_candidate_requires_manual_coverage_for_each_critical_class(tmp_path):
+    from scripts.evaluate_arcgis_replacement import evaluate_manifest
+
+    rows = [
+        "sample_id,manual_mask_path,manual_label,arcgis_mask_path,arcgis_label,"
+        "paper12_mask_path,paper12_label\n"
+    ]
+    for index in range(30):
+        label = index % 2
+        rows.append(f"s{index},,{label},,{label},,{label}\n")
+
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("".join(rows), encoding="utf-8")
+
+    result = evaluate_manifest(
+        manifest,
+        class_names=["water", "crops", "built"],
+        min_candidate_rows=30,
+    )
+
+    assert result["decision_status"] == "insufficient_class_coverage"
+    assert result["replacement_claim_supported"] is False
+    assert result["arcgis_replacement_ready"] is False
+    assert result["critical_class_support"] == {
+        "water": 15,
+        "crops": 15,
+        "built": 0,
+    }
+    assert "missing_manual_critical_class:built" in result["reasons"]
+
+
 def test_cli_evaluates_manifest_and_writes_json(tmp_path):
     import subprocess
     import sys
@@ -359,6 +391,7 @@ def test_arcgis_replacement_template_points_to_evaluator_script():
     assert template == supplementary
     assert template["decision_status"] == "not_validated"
     assert template["replacement_claim_supported"] is False
+    assert "insufficient_class_coverage" in template["decision_rule"]
     assert any(
         "scripts/evaluate_arcgis_replacement.py" in action
         for action in template["next_actions"]
