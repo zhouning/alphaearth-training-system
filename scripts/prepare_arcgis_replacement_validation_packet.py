@@ -90,6 +90,46 @@ def _read_index(index_path: Path) -> list[dict[str, str]]:
     raise ValueError(f"Unsupported index format: {index_path}")
 
 
+def _relative_or_absolute(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def discover_lulc_rows_from_patch_root(
+    patch_root: str | Path,
+    *,
+    year: int,
+    repo_root: str | Path | None = None,
+) -> list[dict[str, str]]:
+    """Discover Linhe patch/mask pairs without requiring a parquet reader."""
+    patch_root = Path(patch_root)
+    relative_root = Path(repo_root) if repo_root is not None else patch_root
+    rows: list[dict[str, str]] = []
+    for patch_path in sorted(patch_root.glob("*/p_*.npz")):
+        scene_id = patch_path.parent.name
+        lulc_path = patch_path.with_name(f"lulc_{year}_{patch_path.name}")
+        if not lulc_path.exists():
+            continue
+        sample_id = _safe_id(f"{scene_id}_{patch_path.stem}")
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "scene_id": scene_id,
+                "year": str(year),
+                "patch_path": _relative_or_absolute(patch_path, relative_root),
+                "lulc_path": _relative_or_absolute(lulc_path, relative_root),
+                "minx": "",
+                "miny": "",
+                "maxx": "",
+                "maxy": "",
+                "index_source": "filesystem_scan",
+            }
+        )
+    return rows
+
+
 def _load_npz_array(path: Path, preferred_key: str) -> np.ndarray:
     payload = np.load(path)
     if preferred_key in payload.files:
@@ -143,7 +183,6 @@ def _candidate_from_row(
 ) -> dict[str, Any]:
     patch_path = _resolve(index_dir, row["patch_path"])
     lulc_path = _resolve(index_dir, row["lulc_path"])
-    rgb = _load_npz_array(patch_path, "rgb")
     mask = _load_npz_array(lulc_path, "mask")
     fractions = class_fractions(mask)
     sample_id = row.get("sample_id") or f"{row.get('scene_id', 'scene')}_{row_number:04d}"
@@ -153,7 +192,6 @@ def _candidate_from_row(
         "sample_id": _safe_id(str(sample_id)),
         "patch_path": patch_path,
         "lulc_path": lulc_path,
-        "rgb": rgb,
         "mask": np.asarray(mask, dtype=np.uint8),
         "fractions": fractions,
         "dominant_esri_class": _dominant_class(fractions),
@@ -291,6 +329,7 @@ has been evaluated.
 def build_validation_packet(
     *,
     index_path: str | Path,
+    patch_root: str | Path | None = None,
     output_dir: str | Path,
     sample_count: int = 30,
     year: int | None = 2022,
@@ -298,12 +337,26 @@ def build_validation_packet(
     required_classes: Sequence[str] = ("water", "crops", "built"),
     min_class_fraction: float = 0.01,
 ) -> dict[str, Any]:
-    index_path = Path(index_path)
+    index_value = str(index_path)
     output_dir = Path(output_dir)
-    rows = _read_index(index_path)
+    if index_value.lower() == "auto":
+        if year is None:
+            raise ValueError("year is required when index_path='auto'")
+        patch_root_path = Path(patch_root or "data/linhe_patches")
+        rows = discover_lulc_rows_from_patch_root(
+            patch_root_path,
+            year=year,
+            repo_root=Path.cwd(),
+        )
+        index_dir = Path.cwd()
+    else:
+        index_path = Path(index_path)
+        rows = _read_index(index_path)
+        index_dir = index_path.parent
+        patch_root_path = Path(patch_root) if patch_root is not None else None
     selected = select_candidates(
         rows,
-        index_dir=index_path.parent,
+        index_dir=index_dir,
         sample_count=sample_count,
         year=year,
         seed=seed,
@@ -316,9 +369,10 @@ def build_validation_packet(
 
     for candidate in selected:
         sample_id = candidate["sample_id"]
-        np.save(output_dir / "rgb" / f"{sample_id}.npy", ensure_hwc_rgb(candidate["rgb"]))
+        rgb = _load_npz_array(candidate["patch_path"], "rgb")
+        np.save(output_dir / "rgb" / f"{sample_id}.npy", ensure_hwc_rgb(rgb))
         np.save(output_dir / "arcgis_masks" / f"{sample_id}.npy", candidate["mask"])
-        _make_preview(candidate["rgb"], candidate["mask"]).save(
+        _make_preview(rgb, candidate["mask"]).save(
             output_dir / "previews" / f"{sample_id}.png"
         )
 
@@ -334,7 +388,8 @@ def build_validation_packet(
     class_order = {class_name: index for index, class_name in enumerate(CLASS_NAMES)}
     summary: dict[str, Any] = {
         "schema": PACKET_SCHEMA,
-        "index_path": str(index_path),
+        "index_path": index_value,
+        "patch_root": None if patch_root_path is None else str(patch_root_path),
         "output_dir": str(output_dir),
         "manifest_path": str(manifest_path),
         "sample_count": len(selected),
@@ -387,8 +442,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     parser.add_argument(
         "--index",
-        default="data/linhe_patches/_lulc_index.parquet",
-        help="Linhe LULC index CSV or parquet.",
+        default="auto",
+        help="Linhe LULC index CSV/parquet, or 'auto' to scan --patch-root.",
+    )
+    parser.add_argument(
+        "--patch-root",
+        default="data/linhe_patches",
+        help="Patch root used when --index auto.",
     )
     parser.add_argument(
         "--output-dir",
@@ -403,6 +463,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     summary = build_validation_packet(
         index_path=args.index,
+        patch_root=args.patch_root,
         output_dir=args.output_dir,
         sample_count=args.sample_count,
         year=args.year,

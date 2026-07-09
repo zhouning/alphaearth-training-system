@@ -21,6 +21,10 @@ The builder reads a Linhe LULC index from CSV or parquet. Required columns are
 indexes require `pyarrow` or `fastparquet`; CSV input is used by tests and works
 without extra engines.
 
+The builder also supports `--index auto`, which scans a Linhe patch root for
+`*/p_*.npz` and matching `*/lulc_<year>_p_*.npz` files. This mode avoids the
+local parquet-reader dependency and works with the checked-out Linhe patch tree.
+
 ## Outputs
 
 The packet directory contains:
@@ -42,5 +46,8 @@ fractions, then fills remaining slots by seeded shuffle.
 ## Validation
 
 Tests cover CSV input, conservative output status, critical-class coverage,
-preview and manifest creation, CLI execution, and protocol links to the packet
-builder.
+preview and manifest creation, CLI execution, filesystem auto-discovery, lazy
+RGB loading, and protocol links to the packet builder. A local smoke run on
+`data/linhe_patches` generated a six-sample packet under `D:\tmp` and the
+evaluator correctly kept it `not_validated` because manual and Paper12 masks
+remain missing.

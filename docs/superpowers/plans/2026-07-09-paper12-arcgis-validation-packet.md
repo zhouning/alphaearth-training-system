@@ -21,7 +21,17 @@ manual ArcGIS-vs-Paper12 validation without fabricating evidence.
 - [x] Add protocol links to `scripts/prepare_arcgis_replacement_validation_packet.py`.
 - [x] Keep ArcGIS replacement status conservative.
 
-## Task 4: Verification
+## Task 4: Local Auto-Discovery
+
+- [x] Add `--index auto` and `--patch-root` support to scan local Linhe
+  `p_*.npz` / `lulc_<year>_p_*.npz` pairs without parquet dependencies.
+- [x] Make sampling load only masks during candidate ranking and defer RGB
+  loading until selected samples are exported.
+- [x] Smoke-run a six-sample packet from `data/linhe_patches` to `D:\tmp` and
+  confirm the evaluator remains `not_validated` until manual and Paper12 masks
+  are filled.
+
+## Task 5: Verification
 
 - [ ] Run focused packet and evaluator tests.
 - [ ] Run full pytest.

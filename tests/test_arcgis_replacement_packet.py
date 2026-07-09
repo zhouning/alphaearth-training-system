@@ -180,3 +180,128 @@ def test_validation_protocol_points_to_packet_builder():
         "scripts/prepare_arcgis_replacement_validation_packet.py" in action
         for action in template["next_actions"]
     )
+
+
+def test_packet_builder_discovers_lulc_rows_from_patch_root(tmp_path):
+    from scripts.prepare_arcgis_replacement_validation_packet import (
+        build_validation_packet,
+        discover_lulc_rows_from_patch_root,
+    )
+
+    scene_dir = tmp_path / "scene_auto"
+    scene_dir.mkdir()
+    _write_patch(scene_dir / "p_00000_00000.npz", value=32)
+    _write_patch(scene_dir / "p_00000_00004.npz", value=96)
+    _write_mask(scene_dir / "lulc_2022_p_00000_00000.npz", 4)
+    _write_mask(scene_dir / "lulc_2022_p_00000_00004.npz", 1)
+
+    rows = discover_lulc_rows_from_patch_root(
+        tmp_path,
+        year=2022,
+        repo_root=tmp_path,
+    )
+
+    assert [row["sample_id"] for row in rows] == [
+        "scene_auto_p_00000_00000",
+        "scene_auto_p_00000_00004",
+    ]
+    assert rows[0]["patch_path"] == "scene_auto/p_00000_00000.npz"
+    assert rows[0]["lulc_path"] == "scene_auto/lulc_2022_p_00000_00000.npz"
+
+    output_dir = tmp_path / "auto_packet"
+    summary = build_validation_packet(
+        index_path="auto",
+        patch_root=tmp_path,
+        output_dir=output_dir,
+        sample_count=2,
+        year=2022,
+        required_classes=["water", "built"],
+    )
+
+    assert summary["index_path"] == "auto"
+    assert summary["patch_root"] == str(tmp_path)
+    assert summary["sample_count"] == 2
+    assert summary["critical_classes_covered"] == ["built", "water"]
+    assert (output_dir / "packet_summary.json").exists()
+
+
+def test_packet_builder_cli_auto_index_scans_patch_root(tmp_path):
+    scene_dir = tmp_path / "scene_cli"
+    scene_dir.mkdir()
+    _write_patch(scene_dir / "p_00000_00000.npz", value=48)
+    _write_mask(scene_dir / "lulc_2022_p_00000_00000.npz", 4)
+    output_dir = tmp_path / "auto_packet_cli"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts/prepare_arcgis_replacement_validation_packet.py"),
+            "--index",
+            "auto",
+            "--patch-root",
+            str(tmp_path),
+            "--output-dir",
+            str(output_dir),
+            "--sample-count",
+            "1",
+            "--year",
+            "2022",
+            "--required-classes",
+            "water",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    summary = json.loads((output_dir / "packet_summary.json").read_text(encoding="utf-8"))
+    assert summary["index_path"] == "auto"
+    assert summary["patch_root"] == str(tmp_path)
+    assert summary["sample_count"] == 1
+
+
+def test_packet_builder_loads_rgb_only_for_selected_samples(tmp_path):
+    from scripts.prepare_arcgis_replacement_validation_packet import build_validation_packet
+
+    _write_patch(tmp_path / "patch_water.npz", value=80)
+    _write_mask(tmp_path / "mask_water.npz", 4)
+    (tmp_path / "patch_broken.npz").write_text("not an npz", encoding="utf-8")
+    _write_mask(tmp_path / "mask_broken.npz", 1)
+
+    index_path = tmp_path / "lazy_index.csv"
+    with index_path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=["sample_id", "scene_id", "year", "patch_path", "lulc_path"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "sample_id": "water_ok",
+                "scene_id": "scene_lazy",
+                "year": "2022",
+                "patch_path": "patch_water.npz",
+                "lulc_path": "mask_water.npz",
+            }
+        )
+        writer.writerow(
+            {
+                "sample_id": "broken_unselected",
+                "scene_id": "scene_lazy",
+                "year": "2022",
+                "patch_path": "patch_broken.npz",
+                "lulc_path": "mask_broken.npz",
+            }
+        )
+
+    summary = build_validation_packet(
+        index_path=index_path,
+        output_dir=tmp_path / "lazy_packet",
+        sample_count=1,
+        year=2022,
+        required_classes=["water"],
+    )
+
+    assert summary["sample_count"] == 1
+    assert summary["samples"][0]["sample_id"] == "water_ok"
