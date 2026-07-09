@@ -1,0 +1,62 @@
+{
+  "schema": "paper12.linhe_manual_validation_protocol.v1",
+  "purpose": "Define the paired Linhe validation inputs needed before Paper12 can be assessed as an ArcGIS or Esri-reference replacement candidate.",
+  "decision_status_before_evidence": "not_validated",
+  "non_goals": [
+    "Do not create or infer manual labels.",
+    "Do not run ArcGIS or Esri services.",
+    "Do not run Paper12 inference.",
+    "Do not upgrade the ArcGIS replacement claim without paired evidence."
+  ],
+  "required_manifest_columns": [
+    "sample_id",
+    "manual_mask_path",
+    "manual_label",
+    "arcgis_mask_path",
+    "arcgis_label",
+    "paper12_mask_path",
+    "paper12_label"
+  ],
+  "column_rule": "Each row must include sample_id plus either a mask path or a scalar label for manual, ArcGIS, and Paper12 evidence.",
+  "optional_manifest_columns": [
+    "scene_id",
+    "x",
+    "y",
+    "dominant_esri_class",
+    "dominant_paper12_class",
+    "annotator_id",
+    "review_status"
+  ],
+  "path_resolution": "Mask paths are resolved relative to the manifest CSV location.",
+  "supported_mask_formats": [
+    ".npy",
+    ".npz",
+    ".csv",
+    "raster masks when rasterio is installed"
+  ],
+  "required_evidence": [
+    "independent_manual_ground_truth",
+    "arcgis_reference_output",
+    "paper12_checkpoint_backed_output",
+    "same_area_same_time_same_taxonomy_pairing"
+  ],
+  "metrics": [
+    "overall_accuracy",
+    "macro_f1",
+    "per_class_iou",
+    "miou",
+    "confusion_matrix",
+    "paired_delta"
+  ],
+  "default_critical_classes": [
+    "water",
+    "crops",
+    "built"
+  ],
+  "default_tolerance": 0.0,
+  "decision_rule": {
+    "not_validated": "Use when required paired evidence is missing.",
+    "partial": "Use when paired evidence exists but Paper12 is below ArcGIS beyond tolerance on mIoU or any critical class.",
+    "replacement_candidate": "Use only when Paper12 matches or exceeds ArcGIS within tolerance on mIoU and all critical classes."
+  }
+}
