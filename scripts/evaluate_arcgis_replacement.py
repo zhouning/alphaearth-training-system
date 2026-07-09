@@ -290,6 +290,30 @@ def _critical_class_support(
     }
 
 
+def _critical_class_row_support(
+    manual_parts: Sequence[np.ndarray],
+    *,
+    class_names: Sequence[str],
+    critical_classes: Sequence[str],
+    ignore_index: int | None,
+) -> dict[str, int]:
+    class_to_index = {class_name: index for index, class_name in enumerate(class_names)}
+    support = {
+        class_name: 0
+        for class_name in critical_classes
+        if class_name in class_to_index
+    }
+    for manual in manual_parts:
+        truth = np.asarray(manual).ravel()
+        if ignore_index is not None:
+            truth = truth[truth != ignore_index]
+        present = set(int(value) for value in np.unique(truth))
+        for class_name, class_index in class_to_index.items():
+            if class_name in support and class_index in present:
+                support[class_name] += 1
+    return support
+
+
 def _apply_critical_class_coverage_guard(
     decision: dict[str, object],
     *,
@@ -486,6 +510,12 @@ def evaluate_manifest(
         critical_classes=critical_classes,
         ignore_index=ignore_index,
     )
+    critical_class_row_support = _critical_class_row_support(
+        manual_parts,
+        class_names=class_names,
+        critical_classes=critical_classes,
+        ignore_index=ignore_index,
+    )
     metrics = compute_replacement_metrics(
         manual=manual_all,
         arcgis=arcgis_all,
@@ -525,6 +555,7 @@ def evaluate_manifest(
         "metrics": metrics,
         "bootstrap": bootstrap,
         "critical_class_support": critical_class_support,
+        "critical_class_row_support": critical_class_row_support,
         "missing_evidence": [],
         **decision,
     }

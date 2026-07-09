@@ -132,6 +132,10 @@ def test_review_audit_records_arcgis_replacement_boundary():
         "Paper12 supports local weak-supervision adaptation evidence, not a "
         "validated ArcGIS replacement claim."
     )
+    assert replacement["coverage_diagnostics"] == {
+        "critical_class_support": "valid manual pixels or scalar labels per critical class",
+        "critical_class_row_support": "manifest rows containing each critical class after ignore-index filtering",
+    }
     assert replacement["recommended_statistical_controls"] == {
         "paired_delta_bootstrap_unit": "manifest_row",
         "paired_delta_bootstrap_iterations": 1000,
@@ -148,6 +152,7 @@ def test_review_audit_records_arcgis_replacement_boundary():
         "scripts/export_paper12_packet_predictions.py" in action
         for action in replacement["next_actions"]
     )
+
 
 def test_write_review_audit_creates_deterministic_json(tmp_path):
     output = tmp_path / "review_audit_summary.json"

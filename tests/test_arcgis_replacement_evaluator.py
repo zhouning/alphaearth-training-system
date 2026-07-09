@@ -57,6 +57,10 @@ def test_linhe_manual_validation_protocol_and_manifest_schema_exist():
         "confidence_level": 0.95,
         "minimum_candidate_manifest_rows": 30,
     }
+    assert protocol["coverage_diagnostics"] == {
+        "critical_class_support": "valid manual pixels or scalar labels per critical class",
+        "critical_class_row_support": "manifest rows containing each critical class after ignore-index filtering",
+    }
 
     header = next(csv.reader(manifest_path.read_text(encoding="utf-8").splitlines()))
     supplementary_header = next(
@@ -321,6 +325,44 @@ def test_candidate_requires_manual_coverage_for_each_critical_class(tmp_path):
     assert "missing_manual_critical_class:built" in result["reasons"]
 
 
+def test_evaluator_reports_critical_class_row_support(tmp_path):
+    from scripts.evaluate_arcgis_replacement import evaluate_manifest
+
+    rows = [
+        "sample_id,manual_mask_path,manual_label,arcgis_mask_path,arcgis_label,"
+        "paper12_mask_path,paper12_label\n"
+    ]
+    for index in range(30):
+        if index == 0:
+            label = 1
+        elif index == 1:
+            label = 2
+        else:
+            label = 0
+        rows.append(f"s{index},,{label},,{label},,{label}\n")
+
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("".join(rows), encoding="utf-8")
+
+    result = evaluate_manifest(
+        manifest,
+        class_names=["water", "crops", "built"],
+        min_candidate_rows=30,
+    )
+
+    assert result["decision_status"] == "replacement_candidate"
+    assert result["critical_class_support"] == {
+        "water": 28,
+        "crops": 1,
+        "built": 1,
+    }
+    assert result["critical_class_row_support"] == {
+        "water": 28,
+        "crops": 1,
+        "built": 1,
+    }
+
+
 def test_cli_evaluates_manifest_and_writes_json(tmp_path):
     import subprocess
     import sys
@@ -397,6 +439,10 @@ def test_arcgis_replacement_template_points_to_evaluator_script():
         for action in template["next_actions"]
     )
     assert any("--bootstrap-iterations" in action for action in template["next_actions"])
+    assert template["coverage_diagnostics"] == {
+        "critical_class_support": "valid manual pixels or scalar labels per critical class",
+        "critical_class_row_support": "manifest rows containing each critical class after ignore-index filtering",
+    }
     assert template["recommended_statistical_controls"] == {
         "paired_delta_bootstrap_unit": "manifest_row",
         "paired_delta_bootstrap_iterations": 1000,

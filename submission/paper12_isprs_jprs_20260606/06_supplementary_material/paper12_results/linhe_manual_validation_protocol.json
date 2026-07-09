@@ -86,5 +86,9 @@
                                              "paired_delta_bootstrap_iterations":  1000,
                                              "confidence_level":  0.95,
                                              "minimum_candidate_manifest_rows":  30
-                                         }
+                                         },
+    "coverage_diagnostics":  {
+                                 "critical_class_support":  "valid manual pixels or scalar labels per critical class",
+                                 "critical_class_row_support":  "manifest rows containing each critical class after ignore-index filtering"
+                             }
 }

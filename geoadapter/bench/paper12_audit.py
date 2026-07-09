@@ -229,6 +229,7 @@ def _arcgis_replacement_audit(template: dict[str, Any]) -> dict[str, Any]:
         "paired_model_outputs_available": bool(required["paired_model_outputs_available"]),
         "missing_evidence": list(template["missing_evidence"]),
         "current_boundary": template["current_boundary"],
+        "coverage_diagnostics": dict(template.get("coverage_diagnostics", {})),
         "recommended_statistical_controls": dict(
             template.get("recommended_statistical_controls", {})
         ),

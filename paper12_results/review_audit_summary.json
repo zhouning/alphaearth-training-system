@@ -2,6 +2,10 @@
   "arcgis_replacement_audit": {
     "arcgis_reference_available": false,
     "arcgis_replacement_ready": false,
+    "coverage_diagnostics": {
+      "critical_class_row_support": "manifest rows containing each critical class after ignore-index filtering",
+      "critical_class_support": "valid manual pixels or scalar labels per critical class"
+    },
     "current_boundary": "Paper12 supports local weak-supervision adaptation evidence, not a validated ArcGIS replacement claim.",
     "decision_status": "not_validated",
     "evidence_level": "weak_supervision_evidence",
