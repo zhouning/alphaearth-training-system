@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image
 
 
+DEFAULT_MIN_CANDIDATE_ROWS = 30
 PACKET_SCHEMA = "paper12.arcgis_replacement_validation_packet.v1"
 CLASS_NAMES = ["background", "built", "crops", "trees", "water", "rangeland_bare"]
 PALETTE = np.array(
@@ -305,7 +306,18 @@ def _write_manifest(
     return manifest_path
 
 
-def _write_readme(output_dir: Path, manifest_path: Path) -> None:
+def _write_readme(
+    output_dir: Path,
+    *,
+    min_candidate_rows: int,
+    replacement_candidate_sample_size_gap: int,
+) -> None:
+    sample_note = ""
+    if replacement_candidate_sample_size_gap > 0:
+        sample_note = (
+            f"\nSample-size gate: Add {replacement_candidate_sample_size_gap} more "
+            "validation samples before treating Paper12 as a replacement candidate.\n"
+        )
     text = f"""# Linhe ArcGIS Replacement Annotation Packet
 
 This packet is not evaluator-ready yet. It contains RGB chips, Esri reference
@@ -315,17 +327,18 @@ masks, and preview PNGs for manual review.
 2. Save manual masks to `manual_masks/<sample_id>.npy` using the Linhe 6-class
    schema: {', '.join(CLASS_NAMES)}.
 3. Audit current evidence status with
-   `scripts/audit_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`.
+   `scripts/audit_arcgis_replacement_validation_packet.py --packet-dir {output_dir} --min-candidate-rows {min_candidate_rows}`.
 4. Export checkpoint-backed Paper12 outputs with
    `scripts/export_paper12_packet_predictions.py --packet-dir {output_dir} --checkpoint <paper12_checkpoint.pt>`.
-5. Run `scripts/audit_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`
+5. Run `scripts/audit_arcgis_replacement_validation_packet.py --packet-dir {output_dir} --min-candidate-rows {min_candidate_rows}`
    again to verify whether only manual masks remain missing or the packet is ready for finalization.
-6. Run `scripts/finalize_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`
+6. Run `scripts/finalize_arcgis_replacement_validation_packet.py --packet-dir {output_dir} --min-candidate-rows {min_candidate_rows}`
    to validate evidence paths and write `arcgis_replacement_evaluator_manifest.csv`.
-7. Run `scripts/evaluate_arcgis_replacement.py --manifest {output_dir / "arcgis_replacement_evaluator_manifest.csv"}`.
+7. Run `scripts/evaluate_arcgis_replacement.py --manifest {output_dir / "arcgis_replacement_evaluator_manifest.csv"} --min-candidate-rows {min_candidate_rows}`.
 
 Do not change the Paper12 ArcGIS replacement status until the finalizer manifest
 has been evaluated.
+{sample_note}
 """
     (output_dir / "annotation_readme.md").write_text(text, encoding="utf-8")
 
@@ -340,7 +353,10 @@ def build_validation_packet(
     seed: int = 0,
     required_classes: Sequence[str] = ("water", "crops", "built"),
     min_class_fraction: float = 0.01,
+    min_candidate_rows: int = DEFAULT_MIN_CANDIDATE_ROWS,
 ) -> dict[str, Any]:
+    if min_candidate_rows < 1:
+        raise ValueError("min_candidate_rows must be at least 1")
     index_value = str(index_path)
     output_dir = Path(output_dir)
     if index_value.lower() == "auto":
@@ -381,7 +397,13 @@ def build_validation_packet(
         )
 
     manifest_path = _write_manifest(output_dir=output_dir, selected=selected)
-    _write_readme(output_dir, manifest_path)
+    replacement_candidate_sample_size_gap = max(0, min_candidate_rows - len(selected))
+    replacement_candidate_sample_size_ready = replacement_candidate_sample_size_gap == 0
+    _write_readme(
+        output_dir,
+        min_candidate_rows=min_candidate_rows,
+        replacement_candidate_sample_size_gap=replacement_candidate_sample_size_gap,
+    )
 
     covered = {
         class_name
@@ -397,6 +419,9 @@ def build_validation_packet(
         "output_dir": str(output_dir),
         "manifest_path": str(manifest_path),
         "sample_count": len(selected),
+        "min_candidate_rows": int(min_candidate_rows),
+        "replacement_candidate_sample_size_ready": replacement_candidate_sample_size_ready,
+        "replacement_candidate_sample_size_gap": replacement_candidate_sample_size_gap,
         "year": year,
         "seed": seed,
         "class_names": CLASS_NAMES,
@@ -464,6 +489,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--required-classes", default="water,crops,built")
     parser.add_argument("--min-class-fraction", type=float, default=0.01)
+    parser.add_argument(
+        "--min-candidate-rows",
+        type=int,
+        default=DEFAULT_MIN_CANDIDATE_ROWS,
+        help="Minimum packet samples needed before replacement-candidate evaluation.",
+    )
     args = parser.parse_args(argv)
 
     summary = build_validation_packet(
@@ -475,6 +506,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         seed=args.seed,
         required_classes=_parse_csv_list(args.required_classes),
         min_class_fraction=args.min_class_fraction,
+        min_candidate_rows=args.min_candidate_rows,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
 

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +93,9 @@ def test_packet_builder_creates_conservative_annotation_packet(tmp_path):
 
     assert summary["schema"] == "paper12.arcgis_replacement_validation_packet.v1"
     assert summary["sample_count"] == 3
+    assert summary["min_candidate_rows"] == 30
+    assert summary["replacement_candidate_sample_size_ready"] is False
+    assert summary["replacement_candidate_sample_size_gap"] == 27
     assert summary["evaluator_ready"] is False
     assert summary["manual_ground_truth_available"] is False
     assert summary["paper12_outputs_available"] is False
@@ -120,8 +124,45 @@ def test_packet_builder_creates_conservative_annotation_packet(tmp_path):
     assert summary_payload == summary
     readme = (output_dir / "annotation_readme.md").read_text(encoding="utf-8")
     assert "scripts/audit_arcgis_replacement_validation_packet.py" in readme
+    assert "--min-candidate-rows 30" in readme
+    assert "Add 27 more validation samples" in readme
     assert "scripts/export_paper12_packet_predictions.py" in readme
     assert "scripts/finalize_arcgis_replacement_validation_packet.py" in readme
+
+
+def test_packet_builder_allows_explicit_smoke_candidate_sample_threshold(tmp_path):
+    from scripts.prepare_arcgis_replacement_validation_packet import build_validation_packet
+
+    index_path = _write_index(tmp_path)
+    output_dir = tmp_path / "packet_smoke"
+
+    summary = build_validation_packet(
+        index_path=index_path,
+        output_dir=output_dir,
+        sample_count=3,
+        year=2022,
+        required_classes=["water", "crops", "built"],
+        min_candidate_rows=3,
+    )
+
+    assert summary["min_candidate_rows"] == 3
+    assert summary["replacement_candidate_sample_size_ready"] is True
+    assert summary["replacement_candidate_sample_size_gap"] == 0
+
+
+def test_packet_builder_rejects_invalid_min_candidate_rows(tmp_path):
+    from scripts.prepare_arcgis_replacement_validation_packet import build_validation_packet
+
+    index_path = _write_index(tmp_path)
+
+    with pytest.raises(ValueError, match="min_candidate_rows"):
+        build_validation_packet(
+            index_path=index_path,
+            output_dir=tmp_path / "packet_invalid",
+            sample_count=3,
+            year=2022,
+            min_candidate_rows=0,
+        )
 
 
 def test_packet_builder_cli_writes_summary_json(tmp_path):
