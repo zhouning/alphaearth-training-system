@@ -356,6 +356,8 @@ def test_manuscript_bounds_reviewer_sensitive_claims_after_audit_extension():
         "model-scope, label-source, and decoder-capacity checks",
         "not a validated ArcGIS replacement",
         "arcgis\\_replacement\\_validation\\_template.json",
+        "audit\\_arcgis\\_replacement\\_validation\\_packet.py",
+        "packet\\_readiness\\_summary.json",
     ]
     for phrase in required_phrases:
         assert phrase in combined
