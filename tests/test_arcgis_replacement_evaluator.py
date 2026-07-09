@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import csv
 import json
@@ -51,6 +51,11 @@ def test_linhe_manual_validation_protocol_and_manifest_schema_exist():
         "same_area_same_time_same_taxonomy_pairing",
     ]
     assert protocol["default_critical_classes"] == ["water", "crops", "built"]
+    assert protocol["recommended_statistical_controls"] == {
+        "paired_delta_bootstrap_unit": "manifest_row",
+        "paired_delta_bootstrap_iterations": 1000,
+        "confidence_level": 0.95,
+    }
 
     header = next(csv.reader(manifest_path.read_text(encoding="utf-8").splitlines()))
     supplementary_header = next(
@@ -193,6 +198,63 @@ def test_manifest_missing_paper12_evidence_remains_not_validated(tmp_path):
     assert result["metrics"] is None
 
 
+def test_manifest_bootstrap_reports_row_level_paired_delta_intervals(tmp_path):
+    from scripts.evaluate_arcgis_replacement import evaluate_manifest
+
+    samples = {
+        "manual_a.npy": np.array([[0, 1], [1, 2]]),
+        "arcgis_a.npy": np.array([[0, 1], [0, 2]]),
+        "paper12_a.npy": np.array([[0, 1], [1, 2]]),
+        "manual_b.npy": np.array([[0, 1], [2, 2]]),
+        "arcgis_b.npy": np.array([[0, 1], [2, 2]]),
+        "paper12_b.npy": np.array([[0, 2], [2, 2]]),
+        "manual_c.npy": np.array([[0, 0], [1, 2]]),
+        "arcgis_c.npy": np.array([[0, 2], [1, 2]]),
+        "paper12_c.npy": np.array([[0, 0], [1, 2]]),
+    }
+    for name, mask in samples.items():
+        np.save(tmp_path / name, mask)
+
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text(
+        "sample_id,manual_mask_path,manual_label,arcgis_mask_path,arcgis_label,"
+        "paper12_mask_path,paper12_label\n"
+        "a,manual_a.npy,,arcgis_a.npy,,paper12_a.npy,\n"
+        "b,manual_b.npy,,arcgis_b.npy,,paper12_b.npy,\n"
+        "c,manual_c.npy,,arcgis_c.npy,,paper12_c.npy,\n",
+        encoding="utf-8",
+    )
+
+    result = evaluate_manifest(
+        manifest,
+        class_names=["water", "crops", "built"],
+        bootstrap_iterations=40,
+        bootstrap_seed=7,
+    )
+    repeated = evaluate_manifest(
+        manifest,
+        class_names=["water", "crops", "built"],
+        bootstrap_iterations=40,
+        bootstrap_seed=7,
+    )
+
+    bootstrap = result["bootstrap"]
+    assert bootstrap == repeated["bootstrap"]
+    assert bootstrap["schema"] == "paper12.arcgis_replacement_bootstrap.v1"
+    assert bootstrap["sample_unit"] == "manifest_row"
+    assert bootstrap["iterations"] == 40
+    assert bootstrap["seed"] == 7
+    assert bootstrap["confidence_level"] == pytest.approx(0.95)
+    assert bootstrap["row_count"] == 3
+
+    ci = bootstrap["paired_delta_ci"]
+    assert set(ci) == {"overall_accuracy", "macro_f1", "miou"}
+    for metric_ci in ci.values():
+        assert metric_ci["lower"] <= metric_ci["mean"] <= metric_ci["upper"]
+        assert metric_ci["point_estimate"] == pytest.approx(
+            result["metrics"]["paired_delta"][metric_ci["metric"]]
+        )
+
 def test_cli_evaluates_manifest_and_writes_json(tmp_path):
     import subprocess
     import sys
@@ -224,6 +286,10 @@ def test_cli_evaluates_manifest_and_writes_json(tmp_path):
             "water,crops,built",
             "--output",
             str(output),
+            "--bootstrap-iterations",
+            "20",
+            "--bootstrap-seed",
+            "11",
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -238,6 +304,8 @@ def test_cli_evaluates_manifest_and_writes_json(tmp_path):
     assert payload["replacement_claim_supported"] is True
     assert payload["metrics"]["pixel_count"] == 6
     assert payload["metrics"]["paired_delta"]["miou"] == pytest.approx(0.0)
+    assert payload["bootstrap"]["iterations"] == 20
+    assert payload["bootstrap"]["seed"] == 11
 
 
 def test_arcgis_replacement_template_points_to_evaluator_script():
@@ -258,3 +326,9 @@ def test_arcgis_replacement_template_points_to_evaluator_script():
         "scripts/evaluate_arcgis_replacement.py" in action
         for action in template["next_actions"]
     )
+    assert any("--bootstrap-iterations" in action for action in template["next_actions"])
+    assert template["recommended_statistical_controls"] == {
+        "paired_delta_bootstrap_unit": "manifest_row",
+        "paired_delta_bootstrap_iterations": 1000,
+        "confidence_level": 0.95,
+    }

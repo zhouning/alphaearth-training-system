@@ -1,4 +1,4 @@
-﻿"""Evaluate paired ArcGIS-vs-Paper12 replacement evidence.
+"""Evaluate paired ArcGIS-vs-Paper12 replacement evidence.
 
 This script consumes existing paired labels or masks. It does not create manual
 truth, run ArcGIS, or run Paper12 inference.
@@ -15,6 +15,7 @@ import numpy as np
 
 
 EVALUATION_SCHEMA = "paper12.arcgis_replacement_evaluation.v1"
+BOOTSTRAP_SCHEMA = "paper12.arcgis_replacement_bootstrap.v1"
 DEFAULT_CLASS_NAMES = [
     "background",
     "built",
@@ -162,6 +163,69 @@ def compute_replacement_metrics(
     }
 
 
+def _bootstrap_paired_delta_intervals(
+    *,
+    manual_parts: Sequence[np.ndarray],
+    arcgis_parts: Sequence[np.ndarray],
+    paper12_parts: Sequence[np.ndarray],
+    class_names: Sequence[str],
+    ignore_index: int | None,
+    point_delta: dict[str, float],
+    iterations: int,
+    seed: int,
+    confidence_level: float,
+) -> dict[str, object]:
+    if iterations < 1:
+        raise ValueError("bootstrap_iterations must be positive when enabled")
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level must be between 0 and 1")
+    if not manual_parts:
+        raise ValueError("Cannot bootstrap an empty manifest")
+
+    rng = np.random.default_rng(seed)
+    row_count = len(manual_parts)
+    alpha = (1.0 - confidence_level) / 2.0
+    quantiles = [alpha, 1.0 - alpha]
+    deltas: dict[str, list[float]] = {
+        "overall_accuracy": [],
+        "macro_f1": [],
+        "miou": [],
+    }
+
+    for _ in range(iterations):
+        indices = rng.integers(0, row_count, size=row_count)
+        metrics = compute_replacement_metrics(
+            manual=np.concatenate([manual_parts[int(index)] for index in indices]),
+            arcgis=np.concatenate([arcgis_parts[int(index)] for index in indices]),
+            paper12=np.concatenate([paper12_parts[int(index)] for index in indices]),
+            class_names=class_names,
+            ignore_index=ignore_index,
+        )
+        for metric_name in deltas:
+            deltas[metric_name].append(float(metrics["paired_delta"][metric_name]))
+
+    paired_delta_ci: dict[str, dict[str, float | str]] = {}
+    for metric_name, values in deltas.items():
+        sample = np.asarray(values, dtype=np.float64)
+        lower, upper = np.quantile(sample, quantiles)
+        paired_delta_ci[metric_name] = {
+            "metric": metric_name,
+            "point_estimate": float(point_delta[metric_name]),
+            "mean": float(sample.mean()),
+            "lower": float(lower),
+            "upper": float(upper),
+        }
+
+    return {
+        "schema": BOOTSTRAP_SCHEMA,
+        "sample_unit": "manifest_row",
+        "iterations": int(iterations),
+        "seed": int(seed),
+        "confidence_level": float(confidence_level),
+        "row_count": int(row_count),
+        "paired_delta_ci": paired_delta_ci,
+    }
+
 def decide_replacement_status(
     metrics: dict[str, Any] | None,
     *,
@@ -286,6 +350,9 @@ def evaluate_manifest(
     critical_classes: Sequence[str] = DEFAULT_CRITICAL_CLASSES,
     tolerance: float = 0.0,
     ignore_index: int | None = 255,
+    bootstrap_iterations: int = 0,
+    bootstrap_seed: int = 0,
+    confidence_level: float = 0.95,
 ) -> dict[str, object]:
     """Evaluate a manifest of paired manual, ArcGIS, and Paper12 outputs."""
     manifest_path = Path(manifest_path)
@@ -305,6 +372,7 @@ def evaluate_manifest(
         return {
             **base_payload,
             "metrics": None,
+            "bootstrap": None,
             "missing_evidence": missing,
             **decision,
         }
@@ -350,9 +418,23 @@ def evaluate_manifest(
         critical_classes=critical_classes,
         tolerance=tolerance,
     )
+    bootstrap = None
+    if bootstrap_iterations:
+        bootstrap = _bootstrap_paired_delta_intervals(
+            manual_parts=manual_parts,
+            arcgis_parts=arcgis_parts,
+            paper12_parts=paper12_parts,
+            class_names=class_names,
+            ignore_index=ignore_index,
+            point_delta=metrics["paired_delta"],
+            iterations=bootstrap_iterations,
+            seed=bootstrap_seed,
+            confidence_level=confidence_level,
+        )
     return {
         **base_payload,
         "metrics": metrics,
+        "bootstrap": bootstrap,
         "missing_evidence": [],
         **decision,
     }
@@ -380,6 +462,24 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     parser.add_argument("--tolerance", type=float, default=0.0)
     parser.add_argument("--ignore-index", type=int, default=255)
+    parser.add_argument(
+        "--bootstrap-iterations",
+        type=int,
+        default=0,
+        help="Optional row-level bootstrap iterations for paired delta intervals.",
+    )
+    parser.add_argument(
+        "--bootstrap-seed",
+        type=int,
+        default=0,
+        help="Random seed used when --bootstrap-iterations is enabled.",
+    )
+    parser.add_argument(
+        "--confidence-level",
+        type=float,
+        default=0.95,
+        help="Confidence level for optional bootstrap intervals.",
+    )
     args = parser.parse_args(argv)
 
     payload = evaluate_manifest(
@@ -388,6 +488,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         critical_classes=_parse_csv_list(args.critical_classes),
         tolerance=args.tolerance,
         ignore_index=args.ignore_index,
+        bootstrap_iterations=args.bootstrap_iterations,
+        bootstrap_seed=args.bootstrap_seed,
+        confidence_level=args.confidence_level,
     )
     text = json.dumps(payload, indent=2, sort_keys=True)
     if args.output:
