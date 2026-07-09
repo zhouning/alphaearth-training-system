@@ -143,6 +143,7 @@ def test_packet_finalizer_writes_evaluator_manifest_when_outputs_exist(tmp_path)
         manifest_path,
         class_names=class_names,
         min_candidate_rows=1,
+        min_critical_class_rows=1,
     )
     assert smoke_evaluation["decision_status"] == "replacement_candidate"
     assert smoke_evaluation["replacement_claim_supported"] is True

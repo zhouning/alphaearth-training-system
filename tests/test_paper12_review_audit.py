@@ -141,6 +141,7 @@ def test_review_audit_records_arcgis_replacement_boundary():
         "paired_delta_bootstrap_iterations": 1000,
         "confidence_level": 0.95,
         "minimum_candidate_manifest_rows": 30,
+        "minimum_critical_class_rows": 3,
     }
     assert "independent_manual_ground_truth" in replacement["missing_evidence"]
     assert "arcgis_reference_output" in replacement["missing_evidence"]

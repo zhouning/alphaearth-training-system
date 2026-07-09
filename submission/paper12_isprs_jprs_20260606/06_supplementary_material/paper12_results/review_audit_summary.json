@@ -25,13 +25,14 @@
       "Run scripts/export_paper12_packet_predictions.py with the Paper12 checkpoint-backed Houlsby workflow on the same samples.",
       "Run scripts/finalize_arcgis_replacement_validation_packet.py --min-candidate-rows 30 to create an evaluator-ready manifest once manual, ArcGIS, and Paper12 masks exist while recording sample-size readiness.",
       "Report per-class IoU, overall accuracy, macro F1, and confusion matrices for both systems against the same manual labels.",
-      "Run scripts/evaluate_arcgis_replacement.py on the finalizer manifest with --bootstrap-iterations 1000 --min-candidate-rows 30 before changing decision_status."
+      "Run scripts/evaluate_arcgis_replacement.py on the finalizer manifest with --bootstrap-iterations 1000 --min-candidate-rows 30 --min-critical-class-rows 3 before changing decision_status."
     ],
     "paired_model_outputs_available": false,
     "paper12_model_checkpoint_available": false,
     "recommended_statistical_controls": {
       "confidence_level": 0.95,
       "minimum_candidate_manifest_rows": 30,
+      "minimum_critical_class_rows": 3,
       "paired_delta_bootstrap_iterations": 1000,
       "paired_delta_bootstrap_unit": "manifest_row"
     },

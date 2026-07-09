@@ -56,6 +56,7 @@ def test_linhe_manual_validation_protocol_and_manifest_schema_exist():
         "paired_delta_bootstrap_iterations": 1000,
         "confidence_level": 0.95,
         "minimum_candidate_manifest_rows": 30,
+        "minimum_critical_class_rows": 3,
     }
     assert protocol["coverage_diagnostics"] == {
         "critical_class_support": "valid manual pixels or scalar labels per critical class",
@@ -289,6 +290,7 @@ def test_perfect_small_manifest_is_not_a_replacement_candidate_by_default(tmp_pa
         manifest,
         class_names=["water", "crops", "built"],
         min_candidate_rows=1,
+        min_critical_class_rows=1,
     )
     assert smoke_result["decision_status"] == "replacement_candidate"
     assert smoke_result["replacement_claim_supported"] is True
@@ -325,7 +327,7 @@ def test_candidate_requires_manual_coverage_for_each_critical_class(tmp_path):
     assert "missing_manual_critical_class:built" in result["reasons"]
 
 
-def test_evaluator_reports_critical_class_row_support(tmp_path):
+def test_candidate_requires_repeated_manual_row_coverage_for_each_critical_class(tmp_path):
     from scripts.evaluate_arcgis_replacement import evaluate_manifest
 
     rows = [
@@ -350,7 +352,10 @@ def test_evaluator_reports_critical_class_row_support(tmp_path):
         min_candidate_rows=30,
     )
 
-    assert result["decision_status"] == "replacement_candidate"
+    assert result["decision_status"] == "insufficient_class_row_coverage"
+    assert result["replacement_claim_supported"] is False
+    assert result["arcgis_replacement_ready"] is False
+    assert result["min_critical_class_rows"] == 3
     assert result["critical_class_support"] == {
         "water": 28,
         "crops": 1,
@@ -361,6 +366,18 @@ def test_evaluator_reports_critical_class_row_support(tmp_path):
         "crops": 1,
         "built": 1,
     }
+    assert "insufficient_critical_class_rows:crops=1<3" in result["reasons"]
+    assert "insufficient_critical_class_rows:built=1<3" in result["reasons"]
+
+    smoke_result = evaluate_manifest(
+        manifest,
+        class_names=["water", "crops", "built"],
+        min_candidate_rows=30,
+        min_critical_class_rows=1,
+    )
+
+    assert smoke_result["decision_status"] == "replacement_candidate"
+    assert smoke_result["replacement_claim_supported"] is True
 
 
 def test_cli_evaluates_manifest_and_writes_json(tmp_path):
@@ -400,6 +417,8 @@ def test_cli_evaluates_manifest_and_writes_json(tmp_path):
             "11",
             "--min-candidate-rows",
             "1",
+            "--min-critical-class-rows",
+            "1",
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -415,6 +434,7 @@ def test_cli_evaluates_manifest_and_writes_json(tmp_path):
     assert payload["metrics"]["pixel_count"] == 6
     assert payload["metrics"]["paired_delta"]["miou"] == pytest.approx(0.0)
     assert payload["min_candidate_rows"] == 1
+    assert payload["min_critical_class_rows"] == 1
     assert payload["bootstrap"]["iterations"] == 20
     assert payload["bootstrap"]["seed"] == 11
 
@@ -434,6 +454,7 @@ def test_arcgis_replacement_template_points_to_evaluator_script():
     assert template["decision_status"] == "not_validated"
     assert template["replacement_claim_supported"] is False
     assert "insufficient_class_coverage" in template["decision_rule"]
+    assert "insufficient_class_row_coverage" in template["decision_rule"]
     assert any(
         "scripts/evaluate_arcgis_replacement.py" in action
         for action in template["next_actions"]
@@ -448,4 +469,5 @@ def test_arcgis_replacement_template_points_to_evaluator_script():
         "paired_delta_bootstrap_iterations": 1000,
         "confidence_level": 0.95,
         "minimum_candidate_manifest_rows": 30,
+        "minimum_critical_class_rows": 3,
     }

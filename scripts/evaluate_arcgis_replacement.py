@@ -26,6 +26,7 @@ DEFAULT_CLASS_NAMES = [
 ]
 DEFAULT_CRITICAL_CLASSES = ["water", "crops", "built"]
 DEFAULT_MIN_CANDIDATE_ROWS = 30
+DEFAULT_MIN_CRITICAL_CLASS_ROWS = 3
 
 
 def _flatten_pair(
@@ -341,6 +342,39 @@ def _apply_critical_class_coverage_guard(
         "reasons": reasons,
     }
 
+def _apply_minimum_critical_class_row_guard(
+    decision: dict[str, object],
+    *,
+    critical_class_row_support: dict[str, int],
+    min_critical_class_rows: int,
+) -> dict[str, object]:
+    if min_critical_class_rows < 1:
+        raise ValueError("min_critical_class_rows must be at least 1")
+    if decision["decision_status"] != "replacement_candidate":
+        return decision
+
+    insufficient = [
+        (class_name, support)
+        for class_name, support in critical_class_row_support.items()
+        if support < min_critical_class_rows
+    ]
+    if not insufficient:
+        return decision
+
+    reasons = list(decision.get("reasons", []))
+    for class_name, support in insufficient:
+        reasons.append(
+            f"insufficient_critical_class_rows:{class_name}="
+            f"{support}<{min_critical_class_rows}"
+        )
+    return {
+        "decision_status": "insufficient_class_row_coverage",
+        "replacement_claim_supported": False,
+        "arcgis_replacement_ready": False,
+        "reasons": reasons,
+    }
+
+
 def _apply_minimum_sample_guard(
     decision: dict[str, object],
     *,
@@ -447,6 +481,7 @@ def evaluate_manifest(
     bootstrap_seed: int = 0,
     confidence_level: float = 0.95,
     min_candidate_rows: int = DEFAULT_MIN_CANDIDATE_ROWS,
+    min_critical_class_rows: int = DEFAULT_MIN_CRITICAL_CLASS_ROWS,
 ) -> dict[str, object]:
     """Evaluate a manifest of paired manual, ArcGIS, and Paper12 outputs."""
     manifest_path = Path(manifest_path)
@@ -460,6 +495,7 @@ def evaluate_manifest(
         "critical_classes": list(critical_classes),
         "tolerance": float(tolerance),
         "min_candidate_rows": int(min_candidate_rows),
+        "min_critical_class_rows": int(min_critical_class_rows),
     }
 
     if missing:
@@ -537,6 +573,11 @@ def evaluate_manifest(
         manifest_row_count=len(rows),
         min_candidate_rows=min_candidate_rows,
     )
+    decision = _apply_minimum_critical_class_row_guard(
+        decision,
+        critical_class_row_support=critical_class_row_support,
+        min_critical_class_rows=min_critical_class_rows,
+    )
     bootstrap = None
     if bootstrap_iterations:
         bootstrap = _bootstrap_paired_delta_intervals(
@@ -607,6 +648,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=DEFAULT_MIN_CANDIDATE_ROWS,
         help="Minimum manifest rows required before reporting replacement_candidate.",
     )
+    parser.add_argument(
+        "--min-critical-class-rows",
+        type=int,
+        default=DEFAULT_MIN_CRITICAL_CLASS_ROWS,
+        help=(
+            "Minimum manifest rows containing each critical class before "
+            "reporting replacement_candidate."
+        ),
+    )
     args = parser.parse_args(argv)
 
     payload = evaluate_manifest(
@@ -619,6 +669,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         bootstrap_seed=args.bootstrap_seed,
         confidence_level=args.confidence_level,
         min_candidate_rows=args.min_candidate_rows,
+        min_critical_class_rows=args.min_critical_class_rows,
     )
     text = json.dumps(payload, indent=2, sort_keys=True)
     if args.output:

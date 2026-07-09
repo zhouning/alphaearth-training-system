@@ -5,7 +5,8 @@
                           "partial":  "Use when all paired outputs exist but Paper12 does not meet the replacement threshold on at least one primary metric or critical class.",
                           "replacement_candidate":  "Use only when Paper12 matches or exceeds the ArcGIS reference on the same manual labels, area, time window, and taxonomy.",
                           "insufficient_sample_size":  "Use when paired outputs exist but the evaluator has fewer than the minimum manifest rows required for a replacement-candidate decision.",
-                          "insufficient_class_coverage":  "Use when paired outputs exist but independent manual labels do not cover every required critical class."
+                          "insufficient_class_coverage":  "Use when paired outputs exist but independent manual labels do not cover every required critical class.",
+                          "insufficient_class_row_coverage":  "Use when paired outputs exist and every critical class appears, but at least one required critical class appears in too few independent manifest rows for a replacement-candidate decision."
                       },
     "decision_status":  "not_validated",
     "evidence_level":  "weak_supervision_evidence",
@@ -33,7 +34,7 @@
                          "Run scripts/export_paper12_packet_predictions.py with the Paper12 checkpoint-backed Houlsby workflow on the same samples.",
                          "Run scripts/finalize_arcgis_replacement_validation_packet.py --min-candidate-rows 30 to create an evaluator-ready manifest once manual, ArcGIS, and Paper12 masks exist while recording sample-size readiness.",
                          "Report per-class IoU, overall accuracy, macro F1, and confusion matrices for both systems against the same manual labels.",
-                         "Run scripts/evaluate_arcgis_replacement.py on the finalizer manifest with --bootstrap-iterations 1000 --min-candidate-rows 30 before changing decision_status."
+                         "Run scripts/evaluate_arcgis_replacement.py on the finalizer manifest with --bootstrap-iterations 1000 --min-candidate-rows 30 --min-critical-class-rows 3 before changing decision_status."
                      ],
     "replacement_claim_supported":  false,
     "required_evidence":  {
@@ -48,7 +49,8 @@
                                              "paired_delta_bootstrap_unit":  "manifest_row",
                                              "paired_delta_bootstrap_iterations":  1000,
                                              "confidence_level":  0.95,
-                                             "minimum_candidate_manifest_rows":  30
+                                             "minimum_candidate_manifest_rows":  30,
+                                             "minimum_critical_class_rows":  3
                                          },
     "coverage_diagnostics":  {
                                  "critical_class_support":  "valid manual pixels or scalar labels per critical class",

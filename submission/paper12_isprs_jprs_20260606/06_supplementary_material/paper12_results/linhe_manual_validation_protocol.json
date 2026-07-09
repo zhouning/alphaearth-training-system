@@ -69,14 +69,15 @@
                          "Manually annotate the packet samples and save masks to the manifest target paths.",
                          "Run scripts/export_paper12_packet_predictions.py with a Paper12 checkpoint to save checkpoint-backed masks to the packet target paths.",
                          "Run scripts/finalize_arcgis_replacement_validation_packet.py --min-candidate-rows 30 on the packet directory to create an evaluator-ready manifest only when all evidence exists and shapes match while recording sample-size readiness.",
-                         "Run scripts/evaluate_arcgis_replacement.py on the finalizer output with --bootstrap-iterations 1000 --min-candidate-rows 30 before changing decision_status."
+                         "Run scripts/evaluate_arcgis_replacement.py on the finalizer output with --bootstrap-iterations 1000 --min-candidate-rows 30 --min-critical-class-rows 3 before changing decision_status."
                      ],
     "decision_rule":  {
                           "not_validated":  "Use when required paired evidence is missing.",
                           "partial":  "Use when paired evidence exists but Paper12 is below ArcGIS beyond tolerance on mIoU or any critical class.",
                           "replacement_candidate":  "Use only when Paper12 matches or exceeds ArcGIS within tolerance on mIoU and all critical classes.",
                           "insufficient_sample_size":  "Use when paired outputs exist but the evaluator has fewer than the minimum manifest rows required for a replacement-candidate decision.",
-                          "insufficient_class_coverage":  "Use when paired outputs exist but independent manual labels do not cover every required critical class."
+                          "insufficient_class_coverage":  "Use when paired outputs exist but independent manual labels do not cover every required critical class.",
+                          "insufficient_class_row_coverage":  "Use when paired outputs exist and every critical class appears, but at least one required critical class appears in too few independent manifest rows for a replacement-candidate decision."
                       },
     "packet_finalizer_script":  "scripts/finalize_arcgis_replacement_validation_packet.py",
     "paper12_prediction_exporter_script":  "scripts/export_paper12_packet_predictions.py",
@@ -85,7 +86,8 @@
                                              "paired_delta_bootstrap_unit":  "manifest_row",
                                              "paired_delta_bootstrap_iterations":  1000,
                                              "confidence_level":  0.95,
-                                             "minimum_candidate_manifest_rows":  30
+                                             "minimum_candidate_manifest_rows":  30,
+                                             "minimum_critical_class_rows":  3
                                          },
     "coverage_diagnostics":  {
                                  "critical_class_support":  "valid manual pixels or scalar labels per critical class",
