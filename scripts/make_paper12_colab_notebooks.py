@@ -10,6 +10,7 @@ LOVE_OUT = COLAB_DIR / "paper12_loveda_full_finetune_colab.ipynb"
 EURO_OUT = COLAB_DIR / "paper12_eurosat_channel_bridge_colab.ipynb"
 CAPACITY_OUT = COLAB_DIR / "paper12_peft_capacity_sweep_colab.ipynb"
 SECOND_BACKBONE_OUT = COLAB_DIR / "paper12_second_backbone_eurosat_colab.ipynb"
+LANDCOVER_DECODER_OUT = COLAB_DIR / "paper12_landcoverai_decoder_ablation_colab.ipynb"
 PAPER12_RESULTS_BRANCH = "paper12-results-colab-20260619"
 
 
@@ -688,9 +689,223 @@ def capacity_sweep_notebook() -> dict:
     )
 
 
+
+def landcoverai_decoder_ablation_notebook() -> dict:
+    return notebook(
+        [
+            markdown_cell(
+                """
+                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/master/colab/paper12_landcoverai_decoder_ablation_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+
+                # Paper 12 LandCover.ai Decoder Ablation
+
+                This notebook runs the Paper 12 decoder-capacity ablation on LandCover.ai. It uses the existing YAML experiment matrix and compares the original linear segmentation decoder against the optional `conv_lite` decoder for linear probing, LoRA r8, and Houlsby adapters.
+
+                **Required runtime:** Colab Pro L4 or A100. T4 is acceptable only for a one-epoch smoke run.
+
+                **Storage policy:** download LandCover.ai to Colab local SSD under `/content/AlphaEarth-System/data/landcoverai`, persist result JSON and checkpoints to Google Drive, and resume from completed rows if Colab restarts.
+
+                **Outputs written to Drive:**
+                - `landcoverai_decoder_ablation.json`
+                - `landcoverai_decoder_ablation_summary.json`
+
+                **Expected matrix:** 3 PEFT settings x 2 decoders x 3 seeds = 18 rows.
+                """
+            ),
+            code_cell(
+                """
+                # 1. Mount Drive and create persistent result/checkpoint directories.
+                from google.colab import drive
+                drive.mount("/content/drive")
+
+                import os
+
+                RESULTS_DIR = "/content/drive/MyDrive/paper12_results"
+                CHECKPOINT_DIR = "/content/drive/MyDrive/paper12_checkpoints/landcoverai_decoder_ablation"
+                os.makedirs(RESULTS_DIR, exist_ok=True)
+                os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+                print("Drive results directory:", RESULTS_DIR)
+                print("Drive checkpoint directory:", CHECKPOINT_DIR)
+                """
+            ),
+            code_cell(
+                """
+                # 2. GPU, Python, and disk sanity check.
+                !nvidia-smi
+                !python --version
+                !df -h /content /content/drive
+                """
+            ),
+            code_cell(
+                """
+                # 3. Clone the latest master branch into Colab local SSD.
+                %cd /content
+                !rm -rf /content/AlphaEarth-System
+                !git clone --branch master https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System
+                %cd /content/AlphaEarth-System
+                !git pull --ff-only origin master
+                !git rev-parse --abbrev-ref HEAD
+                !git rev-parse HEAD
+                !git log --oneline -3
+                """
+            ),
+            code_cell(
+                """
+                # 4. Install the local package and benchmark dependencies.
+                %cd /content/AlphaEarth-System
+                !pip install -q -e . torchgeo pyyaml huggingface_hub
+                """
+            ),
+            code_cell(
+                """
+                # 5. Stage Prithvi weights and write a Colab-local config with absolute paths.
+                %cd /content/AlphaEarth-System
+                import os
+                import shutil
+                import yaml
+                from huggingface_hub import hf_hub_download
+
+                DRIVE_WEIGHTS = "/content/drive/MyDrive/Prithvi_100M.pt"
+                LOCAL_WEIGHTS = "/content/AlphaEarth-System/data/weights/prithvi/Prithvi_100M.pt"
+                os.makedirs(os.path.dirname(LOCAL_WEIGHTS), exist_ok=True)
+
+                if os.path.exists(DRIVE_WEIGHTS):
+                    shutil.copy(DRIVE_WEIGHTS, LOCAL_WEIGHTS)
+                    print("Copied Prithvi weights from Drive.")
+                elif not os.path.exists(LOCAL_WEIGHTS):
+                    downloaded = hf_hub_download(
+                        repo_id="ibm-nasa-geospatial/Prithvi-100M",
+                        filename="Prithvi_100M.pt",
+                    )
+                    shutil.copy(downloaded, LOCAL_WEIGHTS)
+                    print("Downloaded Prithvi weights from Hugging Face.")
+                else:
+                    print("Prithvi weights already present locally.")
+
+                CONFIG_IN = "/content/AlphaEarth-System/geoadapter/bench/configs/landcoverai_decoder_ablation.yaml"
+                CONFIG_COLAB = "/content/AlphaEarth-System/geoadapter/bench/configs/landcoverai_decoder_ablation_colab.yaml"
+                with open(CONFIG_IN, encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f)
+                cfg["experiment"]["dataset_root"] = "/content/AlphaEarth-System/data/landcoverai"
+                cfg["experiment"]["allow_synthetic_fallback"] = False
+                cfg.setdefault("prithvi", {})["checkpoint"] = LOCAL_WEIGHTS
+                with open(CONFIG_COLAB, "w", encoding="utf-8") as f:
+                    yaml.safe_dump(cfg, f, sort_keys=False)
+
+                print("Colab config:", CONFIG_COLAB)
+                print("Prithvi checkpoint:", LOCAL_WEIGHTS)
+                !ls -lh /content/AlphaEarth-System/data/weights/prithvi
+                """
+            ),
+            code_cell(
+                """
+                # 6. Download/smoke-test LandCover.ai train and validation splits.
+                %cd /content/AlphaEarth-System
+                from geoadapter.data.datasets import load_landcoverai
+
+                LANDCOVER_ROOT = "/content/AlphaEarth-System/data/landcoverai"
+                for split in ("train", "val"):
+                    ds = load_landcoverai(root=LANDCOVER_ROOT, split=split, max_samples=1)
+                    image, mask = ds[0]
+                    print(
+                        split,
+                        "len=", len(ds),
+                        "image_shape=", tuple(image.shape),
+                        "mask_shape=", tuple(mask.shape),
+                        "mask_values=", mask.unique()[:20].tolist(),
+                    )
+                """
+            ),
+            code_cell(
+                """
+                # 7. Dry-run the full 18-row decoder-ablation matrix.
+                %cd /content/AlphaEarth-System
+                !python -m geoadapter.bench.run_benchmark --config {CONFIG_COLAB} --dry-run
+                """
+            ),
+            code_cell(
+                """
+                # 8. Run the full decoder ablation. The runner resumes completed rows from the Drive JSON.
+                %cd /content/AlphaEarth-System
+                OUTPUT_JSON = f"{RESULTS_DIR}/landcoverai_decoder_ablation.json"
+                !python -m geoadapter.bench.run_benchmark --config {CONFIG_COLAB} --output {OUTPUT_JSON} --checkpoint-dir {CHECKPOINT_DIR} --checkpoint-every 5
+                """
+            ),
+            code_cell(
+                """
+                # 9. Verify row count and summarize decoder effects by PEFT family.
+                import json
+                from collections import defaultdict
+                from pathlib import Path
+                from statistics import mean, stdev
+
+                results_path = Path(RESULTS_DIR) / "landcoverai_decoder_ablation.json"
+                summary_path = Path(RESULTS_DIR) / "landcoverai_decoder_ablation_summary.json"
+                rows = json.loads(results_path.read_text(encoding="utf-8"))
+                expected_rows = 18
+                assert len(rows) == expected_rows, f"expected {expected_rows} rows, got {len(rows)}"
+
+                def method_family(method: str) -> str:
+                    if method.startswith("linear_probe"):
+                        return "linear_probe"
+                    if method.startswith("lora_r8"):
+                        return "lora_r8"
+                    if method.startswith("houlsby"):
+                        return "houlsby"
+                    return method
+
+                def decoder_name(method: str) -> str:
+                    return "conv_lite_d128" if "conv_lite" in method else "linear"
+
+                grouped = defaultdict(list)
+                for row in rows:
+                    grouped[(method_family(row["method"]), decoder_name(row["method"]))].append(row)
+
+                groups = []
+                for (family, decoder), group_rows in sorted(grouped.items()):
+                    miou = [float(row["mIoU"]) for row in group_rows]
+                    groups.append(
+                        {
+                            "method_family": family,
+                            "decoder": decoder,
+                            "mIoU_mean": mean(miou),
+                            "mIoU_std": stdev(miou) if len(miou) > 1 else 0.0,
+                            "seeds": [int(row["seed"]) for row in group_rows],
+                            "trainable_params": sorted({int(row["trainable_params"]) for row in group_rows}),
+                        }
+                    )
+
+                by_family = defaultdict(dict)
+                for group in groups:
+                    by_family[group["method_family"]][group["decoder"]] = group["mIoU_mean"]
+
+                deltas = []
+                for family, payload in sorted(by_family.items()):
+                    if "linear" in payload and "conv_lite_d128" in payload:
+                        deltas.append(
+                            {
+                                "method_family": family,
+                                "conv_lite_minus_linear_mIoU": payload["conv_lite_d128"] - payload["linear"],
+                            }
+                        )
+
+                summary = {
+                    "schema": "paper12.landcoverai_decoder_ablation_summary.v1",
+                    "row_count": len(rows),
+                    "groups": groups,
+                    "decoder_deltas": deltas,
+                }
+                summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+                print(json.dumps(summary, indent=2))
+                print("Wrote", summary_path)
+                """
+            ),
+        ]
+    )
 def main() -> None:
     COLAB_DIR.mkdir(parents=True, exist_ok=True)
     outputs = {
+        LANDCOVER_DECODER_OUT: landcoverai_decoder_ablation_notebook(),
         SECOND_BACKBONE_OUT: second_backbone_notebook(),
         CAPACITY_OUT: capacity_sweep_notebook(),
         LOVE_OUT: loveda_notebook(),
