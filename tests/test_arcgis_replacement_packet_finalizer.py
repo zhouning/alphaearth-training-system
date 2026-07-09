@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -145,6 +146,34 @@ def test_packet_finalizer_writes_evaluator_manifest_when_outputs_exist(tmp_path)
     )
     assert smoke_evaluation["decision_status"] == "replacement_candidate"
     assert smoke_evaluation["replacement_claim_supported"] is True
+
+
+def test_packet_finalizer_records_replacement_candidate_sample_size_gap(tmp_path):
+    from scripts.finalize_arcgis_replacement_validation_packet import finalize_packet
+
+    packet_dir = _build_packet(tmp_path)
+    _write_critical_class_mask(packet_dir / "manual_masks" / "water_sample.npy")
+    _write_critical_class_mask(packet_dir / "paper12_masks" / "water_sample.npy")
+
+    summary = finalize_packet(packet_dir=packet_dir)
+
+    assert summary["min_candidate_rows"] == 30
+    assert summary["replacement_candidate_sample_size_ready"] is False
+    assert summary["replacement_candidate_sample_size_gap"] == 29
+    assert summary["evaluator_ready"] is True
+
+    smoke_summary = finalize_packet(packet_dir=packet_dir, min_candidate_rows=1)
+    assert smoke_summary["replacement_candidate_sample_size_ready"] is True
+    assert smoke_summary["replacement_candidate_sample_size_gap"] == 0
+
+
+def test_packet_finalizer_rejects_invalid_min_candidate_rows(tmp_path):
+    from scripts.finalize_arcgis_replacement_validation_packet import finalize_packet
+
+    packet_dir = _build_packet(tmp_path)
+
+    with pytest.raises(ValueError, match="min_candidate_rows"):
+        finalize_packet(packet_dir=packet_dir, min_candidate_rows=0)
 
 
 def test_packet_finalizer_rejects_shape_mismatched_outputs(tmp_path):

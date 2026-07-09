@@ -14,6 +14,7 @@ from typing import Any, Sequence
 import numpy as np
 
 
+DEFAULT_MIN_CANDIDATE_ROWS = 30
 FINALIZATION_SCHEMA = "paper12.arcgis_replacement_packet_finalization.v1"
 ANNOTATION_MANIFEST_NAME = "arcgis_replacement_annotation_manifest.csv"
 EVALUATOR_MANIFEST_NAME = "arcgis_replacement_evaluator_manifest.csv"
@@ -98,8 +99,13 @@ def _evaluator_row(row: dict[str, str], *, manual_path: str, paper12_path: str) 
     }
 
 
-def finalize_packet(packet_dir: str | Path) -> dict[str, Any]:
+def finalize_packet(
+    packet_dir: str | Path,
+    min_candidate_rows: int = DEFAULT_MIN_CANDIDATE_ROWS,
+) -> dict[str, Any]:
     """Create an evaluator manifest once all required packet evidence exists."""
+    if min_candidate_rows < 1:
+        raise ValueError("min_candidate_rows must be at least 1")
     packet_dir = Path(packet_dir)
     annotation_manifest_path = packet_dir / ANNOTATION_MANIFEST_NAME
     evaluator_manifest_path = packet_dir / EVALUATOR_MANIFEST_NAME
@@ -168,6 +174,8 @@ def finalize_packet(packet_dir: str | Path) -> dict[str, Any]:
             )
         )
 
+    replacement_candidate_sample_size_gap = max(0, min_candidate_rows - len(rows))
+    replacement_candidate_sample_size_ready = replacement_candidate_sample_size_gap == 0
     evaluator_ready = (
         bool(rows)
         and ready_sample_count == len(rows)
@@ -191,6 +199,9 @@ def finalize_packet(packet_dir: str | Path) -> dict[str, Any]:
         "annotation_manifest_path": str(annotation_manifest_path),
         "evaluator_manifest_path": evaluator_manifest_value,
         "sample_count": len(rows),
+        "min_candidate_rows": int(min_candidate_rows),
+        "replacement_candidate_sample_size_ready": replacement_candidate_sample_size_ready,
+        "replacement_candidate_sample_size_gap": replacement_candidate_sample_size_gap,
         "ready_sample_count": ready_sample_count,
         "evaluator_ready": evaluator_ready,
         "missing_evidence": missing_evidence,
@@ -205,9 +216,24 @@ def main(argv: Sequence[str] | None = None) -> None:
         description="Finalize a Paper12 ArcGIS replacement validation packet."
     )
     parser.add_argument("--packet-dir", required=True, help="Validation packet directory.")
+    parser.add_argument(
+        "--min-candidate-rows",
+        type=int,
+        default=DEFAULT_MIN_CANDIDATE_ROWS,
+        help="Minimum packet samples needed before replacement-candidate evaluation.",
+    )
     args = parser.parse_args(argv)
 
-    print(json.dumps(finalize_packet(args.packet_dir), indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            finalize_packet(
+                args.packet_dir,
+                min_candidate_rows=args.min_candidate_rows,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

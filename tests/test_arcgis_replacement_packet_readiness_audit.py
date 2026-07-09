@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -99,6 +100,34 @@ def test_readiness_audit_reports_missing_manual_and_paper12_outputs(tmp_path):
     assert any("manual_masks/<sample_id>.npy" in action for action in summary["next_actions"])
     assert any("scripts/export_paper12_packet_predictions.py" in action for action in summary["next_actions"])
     assert (packet_dir / "packet_readiness_summary.json").exists()
+
+
+def test_readiness_audit_reports_replacement_candidate_sample_size_gap(tmp_path):
+    from scripts.audit_arcgis_replacement_validation_packet import audit_packet_readiness
+
+    packet_dir = _build_packet(tmp_path)
+
+    summary = audit_packet_readiness(packet_dir=packet_dir)
+
+    assert summary["min_candidate_rows"] == 30
+    assert summary["replacement_candidate_sample_size_ready"] is False
+    assert summary["replacement_candidate_sample_size_gap"] == 29
+    assert any(
+        "29 more validation samples" in action for action in summary["next_actions"]
+    )
+
+    smoke_summary = audit_packet_readiness(packet_dir=packet_dir, min_candidate_rows=1)
+    assert smoke_summary["replacement_candidate_sample_size_ready"] is True
+    assert smoke_summary["replacement_candidate_sample_size_gap"] == 0
+
+
+def test_readiness_audit_rejects_invalid_min_candidate_rows(tmp_path):
+    from scripts.audit_arcgis_replacement_validation_packet import audit_packet_readiness
+
+    packet_dir = _build_packet(tmp_path)
+
+    with pytest.raises(ValueError, match="min_candidate_rows"):
+        audit_packet_readiness(packet_dir=packet_dir, min_candidate_rows=0)
 
 
 def test_readiness_audit_reports_only_missing_manual_after_paper12_export(tmp_path):

@@ -14,6 +14,7 @@ from typing import Any, Sequence
 import numpy as np
 
 
+DEFAULT_MIN_CANDIDATE_ROWS = 30
 READINESS_SCHEMA = "paper12.arcgis_replacement_packet_readiness.v1"
 ANNOTATION_MANIFEST_NAME = "arcgis_replacement_annotation_manifest.csv"
 EVALUATOR_MANIFEST_NAME = "arcgis_replacement_evaluator_manifest.csv"
@@ -110,24 +111,34 @@ def _next_actions(
     status: str,
     packet_dir: Path,
     checkpoint_path: str | Path | None,
+    replacement_candidate_sample_size_gap: int,
 ) -> list[str]:
     packet_arg = str(packet_dir)
     checkpoint = str(checkpoint_path or "<paper12_checkpoint.pt>")
+    actions: list[str] = []
+    if replacement_candidate_sample_size_gap > 0:
+        actions.append(
+            f"Add {replacement_candidate_sample_size_gap} more validation samples "
+            "before treating Paper12 as a replacement candidate."
+        )
     if status == "empty_packet":
-        return ["Rebuild the packet with at least one validation sample."]
+        actions.append("Rebuild the packet with at least one validation sample.")
+        return actions
     if status == "blocked_by_shape_errors":
-        return ["Fix mask shape mismatches before running the packet finalizer."]
+        actions.append("Fix mask shape mismatches before running the packet finalizer.")
+        return actions
     if status == "ready_for_finalization":
-        return [
+        actions.append(
             "Run scripts/finalize_arcgis_replacement_validation_packet.py "
             f"--packet-dir {packet_arg}."
-        ]
+        )
+        return actions
     if status == "ready_for_evaluation":
-        return [
+        actions.append(
             "Run scripts/evaluate_arcgis_replacement.py --manifest "
             f"{packet_dir / EVALUATOR_MANIFEST_NAME}."
-        ]
-    actions: list[str] = []
+        )
+        return actions
     if status in {"waiting_for_manual_ground_truth", "waiting_for_manual_and_paper12", "missing_arcgis_reference", "waiting_for_evidence"}:
         actions.append(
             "Save independent manual masks to manual_masks/<sample_id>.npy for "
@@ -148,8 +159,11 @@ def audit_packet_readiness(
     packet_dir: str | Path,
     checkpoint_path: str | Path | None = None,
     output_path: str | Path | None = None,
+    min_candidate_rows: int = DEFAULT_MIN_CANDIDATE_ROWS,
 ) -> dict[str, Any]:
     """Inspect whether a validation packet can be finalized or evaluated."""
+    if min_candidate_rows < 1:
+        raise ValueError("min_candidate_rows must be at least 1")
     packet_dir = Path(packet_dir)
     annotation_manifest_path = packet_dir / ANNOTATION_MANIFEST_NAME
     evaluator_manifest_path = packet_dir / EVALUATOR_MANIFEST_NAME
@@ -195,6 +209,8 @@ def audit_packet_readiness(
             )
 
     evaluator_manifest_ready = evaluator_manifest_path.exists()
+    replacement_candidate_sample_size_gap = max(0, min_candidate_rows - len(rows))
+    replacement_candidate_sample_size_ready = replacement_candidate_sample_size_gap == 0
     evidence_ready = (
         bool(rows)
         and not missing_evidence_by_sample
@@ -212,6 +228,9 @@ def audit_packet_readiness(
         "annotation_manifest_path": str(annotation_manifest_path),
         "checkpoint_path": None if checkpoint_path is None else str(checkpoint_path),
         "sample_count": len(rows),
+        "min_candidate_rows": int(min_candidate_rows),
+        "replacement_candidate_sample_size_ready": replacement_candidate_sample_size_ready,
+        "replacement_candidate_sample_size_gap": replacement_candidate_sample_size_gap,
         "available_counts": available_counts,
         "evidence_ready_for_finalizer": evidence_ready,
         "evaluator_manifest_path": str(evaluator_manifest_path),
@@ -223,6 +242,7 @@ def audit_packet_readiness(
             status=status,
             packet_dir=packet_dir,
             checkpoint_path=checkpoint_path,
+            replacement_candidate_sample_size_gap=replacement_candidate_sample_size_gap,
         ),
     }
     output_path.write_text(
@@ -239,6 +259,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--packet-dir", required=True, help="Validation packet directory.")
     parser.add_argument("--checkpoint", help="Optional Paper12 checkpoint for next-action text.")
     parser.add_argument("--output", help="Optional readiness summary JSON path.")
+    parser.add_argument(
+        "--min-candidate-rows",
+        type=int,
+        default=DEFAULT_MIN_CANDIDATE_ROWS,
+        help="Minimum packet samples needed before replacement-candidate evaluation.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -246,6 +272,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             packet_dir=args.packet_dir,
             checkpoint_path=args.checkpoint,
             output_path=args.output,
+            min_candidate_rows=args.min_candidate_rows,
         )
     except Exception as exc:
         print(str(exc))

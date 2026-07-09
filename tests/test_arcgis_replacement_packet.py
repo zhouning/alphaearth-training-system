@@ -196,11 +196,21 @@ def test_validation_protocol_points_to_packet_builder():
         for action in protocol["next_actions"]
     )
     assert any(
+        "scripts/audit_arcgis_replacement_validation_packet.py" in action
+        and "--min-candidate-rows 30" in action
+        for action in protocol["next_actions"]
+    )
+    assert any(
         "scripts/export_paper12_packet_predictions.py" in action
         for action in protocol["next_actions"]
     )
     assert any(
         "scripts/finalize_arcgis_replacement_validation_packet.py" in action
+        for action in protocol["next_actions"]
+    )
+    assert any(
+        "scripts/finalize_arcgis_replacement_validation_packet.py" in action
+        and "--min-candidate-rows 30" in action
         for action in protocol["next_actions"]
     )
     assert any(
@@ -212,11 +222,21 @@ def test_validation_protocol_points_to_packet_builder():
         for action in template["next_actions"]
     )
     assert any(
+        "scripts/audit_arcgis_replacement_validation_packet.py" in action
+        and "--min-candidate-rows 30" in action
+        for action in template["next_actions"]
+    )
+    assert any(
         "scripts/export_paper12_packet_predictions.py" in action
         for action in template["next_actions"]
     )
     assert any(
         "scripts/finalize_arcgis_replacement_validation_packet.py" in action
+        for action in template["next_actions"]
+    )
+    assert any(
+        "scripts/finalize_arcgis_replacement_validation_packet.py" in action
+        and "--min-candidate-rows 30" in action
         for action in template["next_actions"]
     )
 
