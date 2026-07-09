@@ -314,8 +314,8 @@ masks, and preview PNGs for manual review.
 1. Annotate each sample independently from the RGB/context imagery.
 2. Save manual masks to `manual_masks/<sample_id>.npy` using the Linhe 6-class
    schema: {', '.join(CLASS_NAMES)}.
-3. Run Paper12 on the same samples and save outputs to
-   `paper12_masks/<sample_id>.npy`.
+3. Export checkpoint-backed Paper12 outputs with
+   `scripts/export_paper12_packet_predictions.py --packet-dir {output_dir} --checkpoint <paper12_checkpoint.pt>`.
 4. Run `scripts/finalize_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`
    to validate evidence paths and write `arcgis_replacement_evaluator_manifest.csv`.
 5. Run `scripts/evaluate_arcgis_replacement.py --manifest {output_dir / "arcgis_replacement_evaluator_manifest.csv"}`.
@@ -405,9 +405,9 @@ def build_validation_packet(
         "paper12_outputs_available": False,
         "evaluator_ready": False,
         "next_action": (
-            "Save manual and Paper12 masks to the target paths, then run "
-            "scripts/finalize_arcgis_replacement_validation_packet.py before "
-            "scripts/evaluate_arcgis_replacement.py."
+            "Save manual masks, run scripts/export_paper12_packet_predictions.py, "
+            "then run scripts/finalize_arcgis_replacement_validation_packet.py "
+            "before scripts/evaluate_arcgis_replacement.py."
         ),
         "samples": [
             {

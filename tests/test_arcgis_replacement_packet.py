@@ -119,6 +119,7 @@ def test_packet_builder_creates_conservative_annotation_packet(tmp_path):
     )
     assert summary_payload == summary
     readme = (output_dir / "annotation_readme.md").read_text(encoding="utf-8")
+    assert "scripts/export_paper12_packet_predictions.py" in readme
     assert "scripts/finalize_arcgis_replacement_validation_packet.py" in readme
 
 
@@ -174,6 +175,10 @@ def test_validation_protocol_points_to_packet_builder():
         == "scripts/prepare_arcgis_replacement_validation_packet.py"
     )
     assert (
+        protocol["paper12_prediction_exporter_script"]
+        == "scripts/export_paper12_packet_predictions.py"
+    )
+    assert (
         protocol["packet_finalizer_script"]
         == "scripts/finalize_arcgis_replacement_validation_packet.py"
     )
@@ -182,11 +187,19 @@ def test_validation_protocol_points_to_packet_builder():
         for action in protocol["next_actions"]
     )
     assert any(
+        "scripts/export_paper12_packet_predictions.py" in action
+        for action in protocol["next_actions"]
+    )
+    assert any(
         "scripts/finalize_arcgis_replacement_validation_packet.py" in action
         for action in protocol["next_actions"]
     )
     assert any(
         "scripts/prepare_arcgis_replacement_validation_packet.py" in action
+        for action in template["next_actions"]
+    )
+    assert any(
+        "scripts/export_paper12_packet_predictions.py" in action
         for action in template["next_actions"]
     )
     assert any(

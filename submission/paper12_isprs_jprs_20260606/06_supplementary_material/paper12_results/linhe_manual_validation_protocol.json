@@ -66,7 +66,7 @@
   "next_actions": [
     "Run scripts/prepare_arcgis_replacement_validation_packet.py to prepare a conservative annotation packet from Linhe patch and Esri mask indexes.",
     "Manually annotate the packet samples and save masks to the manifest target paths.",
-    "Run Paper12 on the same samples and save checkpoint-backed masks to the manifest target paths.",
+    "Run scripts/export_paper12_packet_predictions.py with a Paper12 checkpoint to save checkpoint-backed masks to the packet target paths.",
     "Run scripts/finalize_arcgis_replacement_validation_packet.py on the packet directory to create an evaluator-ready manifest only when all evidence exists and shapes match.",
     "Run scripts/evaluate_arcgis_replacement.py on the finalizer output before changing decision_status."
   ],
@@ -75,5 +75,6 @@
     "partial": "Use when paired evidence exists but Paper12 is below ArcGIS beyond tolerance on mIoU or any critical class.",
     "replacement_candidate": "Use only when Paper12 matches or exceeds ArcGIS within tolerance on mIoU and all critical classes."
   },
-  "packet_finalizer_script": "scripts/finalize_arcgis_replacement_validation_packet.py"
+  "packet_finalizer_script": "scripts/finalize_arcgis_replacement_validation_packet.py",
+  "paper12_prediction_exporter_script": "scripts/export_paper12_packet_predictions.py"
 }
