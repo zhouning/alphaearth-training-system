@@ -314,11 +314,15 @@ masks, and preview PNGs for manual review.
 1. Annotate each sample independently from the RGB/context imagery.
 2. Save manual masks to `manual_masks/<sample_id>.npy` using the Linhe 6-class
    schema: {', '.join(CLASS_NAMES)}.
-3. Export checkpoint-backed Paper12 outputs with
+3. Audit current evidence status with
+   `scripts/audit_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`.
+4. Export checkpoint-backed Paper12 outputs with
    `scripts/export_paper12_packet_predictions.py --packet-dir {output_dir} --checkpoint <paper12_checkpoint.pt>`.
-4. Run `scripts/finalize_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`
+5. Run `scripts/audit_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`
+   again to verify whether only manual masks remain missing or the packet is ready for finalization.
+6. Run `scripts/finalize_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`
    to validate evidence paths and write `arcgis_replacement_evaluator_manifest.csv`.
-5. Run `scripts/evaluate_arcgis_replacement.py --manifest {output_dir / "arcgis_replacement_evaluator_manifest.csv"}`.
+7. Run `scripts/evaluate_arcgis_replacement.py --manifest {output_dir / "arcgis_replacement_evaluator_manifest.csv"}`.
 
 Do not change the Paper12 ArcGIS replacement status until the finalizer manifest
 has been evaluated.
@@ -405,9 +409,9 @@ def build_validation_packet(
         "paper12_outputs_available": False,
         "evaluator_ready": False,
         "next_action": (
-            "Save manual masks, run scripts/export_paper12_packet_predictions.py, "
-            "then run scripts/finalize_arcgis_replacement_validation_packet.py "
-            "before scripts/evaluate_arcgis_replacement.py."
+            "Run scripts/audit_arcgis_replacement_validation_packet.py to inspect "
+            "missing evidence, then export Paper12 masks, add manual masks, "
+            "finalize the packet, and evaluate."
         ),
         "samples": [
             {

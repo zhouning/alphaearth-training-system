@@ -5,16 +5,17 @@
 Prepare the missing steps between the conservative ArcGIS replacement boundary
 and the evaluator: a reproducible Linhe annotation packet that selects existing
 patches, exports Esri reference masks, creates a manifest stub for manual truth
-and Paper12 outputs, exports checkpoint-backed Paper12 predictions, and
-finalizes completed packets only after evidence files exist and pass shape
-checks.
+and Paper12 outputs, audits packet readiness, exports checkpoint-backed Paper12
+predictions, and finalizes completed packets only after evidence files exist and
+pass shape checks.
 
 ## Boundary
 
-The packet builder, prediction exporter, and finalizer do not create manual
-labels, run ArcGIS, or evaluate replacement status. Builder output remains
-`evaluator_ready: false`; the exporter only writes Paper12 checkpoint outputs to
-`paper12_masks/`; the finalizer only produces an evaluator manifest after
+The packet builder, readiness audit, prediction exporter, and finalizer do not
+create manual labels, run ArcGIS, or evaluate replacement status. Builder output
+remains `evaluator_ready: false`; the audit writes only diagnostic readiness
+summaries and next actions; the exporter only writes Paper12 checkpoint outputs
+to `paper12_masks/`; the finalizer only produces an evaluator manifest after
 independent manual masks and checkpoint-backed Paper12 masks exist for every
 packet sample and match the Esri mask shapes.
 
@@ -30,8 +31,11 @@ The builder also supports `--index auto`, which scans a Linhe patch root for
 `*/p_*.npz` and matching `*/lulc_<year>_p_*.npz` files. This mode avoids the
 local parquet-reader dependency and works with the checked-out Linhe patch tree.
 
-The prediction exporter reads packet RGB chips and a benchmark-style Paper12
-LULC segmentation checkpoint. The finalizer reads
+The readiness audit reads the packet manifest and existing mask files to report
+whether the packet is waiting for manual labels, waiting for Paper12 predictions,
+ready for finalization, ready for evaluation, or blocked by shape errors. The
+prediction exporter reads packet RGB chips and a benchmark-style Paper12 LULC
+segmentation checkpoint. The finalizer reads
 `arcgis_replacement_annotation_manifest.csv` from a packet directory and checks
 only existing `manual_masks/`, `paper12_masks/`, and `arcgis_masks/` files.
 
@@ -46,6 +50,11 @@ The packet directory contains:
 - `previews/*.png` for human review,
 - `annotation_readme.md`,
 - `packet_summary.json`.
+
+At any point, the readiness audit can write:
+
+- `packet_readiness_summary.json` with status, evidence counts, missing-evidence
+  rows, shape errors, and next-action commands.
 
 When a Paper12 checkpoint is supplied, the prediction exporter writes:
 
@@ -69,10 +78,10 @@ fractions, then fills remaining slots by seeded shuffle.
 
 Tests cover CSV input, conservative output status, critical-class coverage,
 preview and manifest creation, CLI execution, filesystem auto-discovery, lazy
-RGB loading, prediction export, resume-safe skip/overwrite behavior, prediction
-shape mismatch rejection, finalizer missing-evidence handling,
-evaluator-manifest creation, finalizer shape mismatch rejection, and protocol
-links to the packet builder/exporter/finalizer. A local smoke run on
-`data/linhe_patches` generated a six-sample packet under `D:\tmp` and the
-evaluator correctly kept it `not_validated` because manual and Paper12 masks
-remain missing.
+RGB loading, readiness statuses and next actions, prediction export,
+resume-safe skip/overwrite behavior, prediction shape mismatch rejection,
+finalizer missing-evidence handling, evaluator-manifest creation, finalizer
+shape mismatch rejection, and protocol links to the packet builder/audit/exporter/finalizer.
+A local smoke run on `data/linhe_patches` generated a six-sample packet under
+`D:\tmp` and the evaluator correctly kept it `not_validated` because manual and
+Paper12 masks remain missing.

@@ -135,6 +135,10 @@ def test_review_audit_records_arcgis_replacement_boundary():
     assert "independent_manual_ground_truth" in replacement["missing_evidence"]
     assert "arcgis_reference_output" in replacement["missing_evidence"]
     assert any(
+        "scripts/audit_arcgis_replacement_validation_packet.py" in action
+        for action in replacement["next_actions"]
+    )
+    assert any(
         "scripts/export_paper12_packet_predictions.py" in action
         for action in replacement["next_actions"]
     )

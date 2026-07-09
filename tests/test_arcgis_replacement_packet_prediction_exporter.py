@@ -172,6 +172,27 @@ def test_exporter_rejects_prediction_shape_mismatch(tmp_path):
     assert not (packet_dir / "paper12_masks" / "water_sample.npy").exists()
 
 
+def test_default_service_factory_adds_backend_and_repo_roots_to_import_path():
+    from scripts.export_paper12_packet_predictions import _default_service_factory
+
+    repo_root = str(REPO_ROOT)
+    backend_root = str(REPO_ROOT / "ae_backend")
+    original_path = list(sys.path)
+    try:
+        sys.path[:] = [item for item in sys.path if item not in {repo_root, backend_root}]
+        _default_service_factory(
+            checkpoint_path="fake_checkpoint.pt",
+            prithvi_checkpoint_path=None,
+            model_id=None,
+            device="cpu",
+        )
+
+        assert repo_root in sys.path
+        assert backend_root in sys.path
+    finally:
+        sys.path[:] = original_path
+
+
 def test_exporter_cli_fails_fast_when_checkpoint_is_missing(tmp_path):
     packet_dir = _build_packet(tmp_path)
 

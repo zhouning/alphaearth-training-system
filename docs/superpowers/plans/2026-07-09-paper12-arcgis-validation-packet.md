@@ -1,8 +1,8 @@
 # Paper12 ArcGIS Validation Packet Implementation Plan
 
-**Goal:** Add an offline packet builder, Paper12 prediction exporter, and finalizer
-that prepare real Linhe samples for manual ArcGIS-vs-Paper12 validation without
-fabricating evidence.
+**Goal:** Add an offline packet builder, readiness audit, Paper12 prediction
+exporter, and finalizer that prepare real Linhe samples for manual
+ArcGIS-vs-Paper12 validation without fabricating evidence.
 
 ## Task 1: Packet Builder Tests
 
@@ -54,9 +54,24 @@ fabricating evidence.
 - [x] Update protocol, validation template, generated packet README, and review
   audit to include the exporter before finalization/evaluation.
 
-## Task 7: Verification
+## Task 7: Packet Readiness Audit
 
-- [x] Run focused packet, exporter, finalizer, evaluator, and audit tests.
+- [x] Add tests for missing evidence, partial evidence, finalizer-ready evidence,
+  evaluator-ready evidence, shape mismatch blocking, and CLI execution.
+- [x] Implement `scripts/audit_arcgis_replacement_validation_packet.py` to write
+  `packet_readiness_summary.json` with status, counts, missing evidence, shape
+  errors, and next actions.
+- [x] Keep the audit diagnostic-only: it does not create masks, run inference,
+  finalize manifests, evaluate metrics, or change replacement status.
+- [x] Update protocol, validation template, packet README, review audit, and
+  supplementary notes to include the readiness audit.
+- [x] Smoke-run a one-sample packet under ignored `data/` outputs with the local
+  Houlsby LULC checkpoint; confirm Paper12 mask export succeeds and readiness
+  advances from `waiting_for_manual_and_paper12` to `waiting_for_manual_ground_truth`.
+
+## Task 8: Verification
+
+- [x] Run focused packet, readiness, exporter, finalizer, evaluator, and audit tests.
 - [x] Run full pytest.
 - [x] Run `git diff --check`.
 - [ ] Commit and push to `origin/master`.

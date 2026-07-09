@@ -15,6 +15,7 @@
     ],
     "next_actions": [
       "Run scripts/prepare_arcgis_replacement_validation_packet.py to create the manual annotation packet before filling paired-evidence manifest fields.",
+      "Run scripts/audit_arcgis_replacement_validation_packet.py to inspect packet evidence readiness and next actions.",
       "Sample and manually annotate Linhe validation patches or polygons using the highest-resolution imagery available.",
       "Export ArcGIS or Esri reference predictions for the same samples and class taxonomy.",
       "Run scripts/export_paper12_packet_predictions.py with the Paper12 checkpoint-backed Houlsby workflow on the same samples.",
