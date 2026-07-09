@@ -2,6 +2,8 @@
   "schema": "paper12.linhe_manual_validation_protocol.v1",
   "purpose": "Define the paired Linhe validation inputs needed before Paper12 can be assessed as an ArcGIS or Esri-reference replacement candidate.",
   "decision_status_before_evidence": "not_validated",
+  "packet_builder_script": "scripts/prepare_arcgis_replacement_validation_packet.py",
+  "evaluator_script": "scripts/evaluate_arcgis_replacement.py",
   "non_goals": [
     "Do not create or infer manual labels.",
     "Do not run ArcGIS or Esri services.",
@@ -25,7 +27,14 @@
     "dominant_esri_class",
     "dominant_paper12_class",
     "annotator_id",
-    "review_status"
+    "review_status",
+    "manual_mask_target_path",
+    "paper12_mask_target_path",
+    "source_rgb_path",
+    "source_patch_path",
+    "source_lulc_path",
+    "preview_path",
+    "year"
   ],
   "path_resolution": "Mask paths are resolved relative to the manifest CSV location.",
   "supported_mask_formats": [
@@ -54,6 +63,12 @@
     "built"
   ],
   "default_tolerance": 0.0,
+  "next_actions": [
+    "Run scripts/prepare_arcgis_replacement_validation_packet.py to prepare a conservative annotation packet from Linhe patch and Esri mask indexes.",
+    "Manually annotate the packet samples and save masks to the manifest target paths.",
+    "Run Paper12 on the same samples and save checkpoint-backed masks to the manifest target paths.",
+    "Fill manual_mask_path and paper12_mask_path in the manifest, then run scripts/evaluate_arcgis_replacement.py."
+  ],
   "decision_rule": {
     "not_validated": "Use when required paired evidence is missing.",
     "partial": "Use when paired evidence exists but Paper12 is below ArcGIS beyond tolerance on mIoU or any critical class.",
