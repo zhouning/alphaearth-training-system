@@ -25,6 +25,7 @@ DEFAULT_CLASS_NAMES = [
     "rangeland_bare",
 ]
 DEFAULT_CRITICAL_CLASSES = ["water", "crops", "built"]
+DEFAULT_MIN_CANDIDATE_ROWS = 30
 
 
 def _flatten_pair(
@@ -271,6 +272,29 @@ def decide_replacement_status(
     }
 
 
+def _apply_minimum_sample_guard(
+    decision: dict[str, object],
+    *,
+    manifest_row_count: int,
+    min_candidate_rows: int,
+) -> dict[str, object]:
+    if min_candidate_rows < 1:
+        raise ValueError("min_candidate_rows must be at least 1")
+    if decision["decision_status"] != "replacement_candidate":
+        return decision
+    if manifest_row_count >= min_candidate_rows:
+        return decision
+
+    reasons = list(decision.get("reasons", []))
+    reasons.append(f"insufficient_manifest_rows:{manifest_row_count}<{min_candidate_rows}")
+    return {
+        "decision_status": "insufficient_sample_size",
+        "replacement_claim_supported": False,
+        "arcgis_replacement_ready": False,
+        "reasons": reasons,
+    }
+
+
 def _nonempty(value: str | None) -> str:
     return (value or "").strip()
 
@@ -353,6 +377,7 @@ def evaluate_manifest(
     bootstrap_iterations: int = 0,
     bootstrap_seed: int = 0,
     confidence_level: float = 0.95,
+    min_candidate_rows: int = DEFAULT_MIN_CANDIDATE_ROWS,
 ) -> dict[str, object]:
     """Evaluate a manifest of paired manual, ArcGIS, and Paper12 outputs."""
     manifest_path = Path(manifest_path)
@@ -365,6 +390,7 @@ def evaluate_manifest(
         "class_names": list(class_names),
         "critical_classes": list(critical_classes),
         "tolerance": float(tolerance),
+        "min_candidate_rows": int(min_candidate_rows),
     }
 
     if missing:
@@ -417,6 +443,11 @@ def evaluate_manifest(
         metrics,
         critical_classes=critical_classes,
         tolerance=tolerance,
+    )
+    decision = _apply_minimum_sample_guard(
+        decision,
+        manifest_row_count=len(rows),
+        min_candidate_rows=min_candidate_rows,
     )
     bootstrap = None
     if bootstrap_iterations:
@@ -480,6 +511,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=0.95,
         help="Confidence level for optional bootstrap intervals.",
     )
+    parser.add_argument(
+        "--min-candidate-rows",
+        type=int,
+        default=DEFAULT_MIN_CANDIDATE_ROWS,
+        help="Minimum manifest rows required before reporting replacement_candidate.",
+    )
     args = parser.parse_args(argv)
 
     payload = evaluate_manifest(
@@ -491,6 +528,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         bootstrap_iterations=args.bootstrap_iterations,
         bootstrap_seed=args.bootstrap_seed,
         confidence_level=args.confidence_level,
+        min_candidate_rows=args.min_candidate_rows,
     )
     text = json.dumps(payload, indent=2, sort_keys=True)
     if args.output:

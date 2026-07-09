@@ -55,6 +55,7 @@ def test_linhe_manual_validation_protocol_and_manifest_schema_exist():
         "paired_delta_bootstrap_unit": "manifest_row",
         "paired_delta_bootstrap_iterations": 1000,
         "confidence_level": 0.95,
+        "minimum_candidate_manifest_rows": 30,
     }
 
     header = next(csv.reader(manifest_path.read_text(encoding="utf-8").splitlines()))
@@ -255,6 +256,39 @@ def test_manifest_bootstrap_reports_row_level_paired_delta_intervals(tmp_path):
             result["metrics"]["paired_delta"][metric_ci["metric"]]
         )
 
+
+def test_perfect_small_manifest_is_not_a_replacement_candidate_by_default(tmp_path):
+    from scripts.evaluate_arcgis_replacement import evaluate_manifest
+
+    manual = np.array([[0, 1, 2], [0, 1, 2]])
+    np.save(tmp_path / "manual.npy", manual)
+    np.save(tmp_path / "arcgis.npy", manual)
+    np.save(tmp_path / "paper12.npy", manual)
+
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text(
+        "sample_id,manual_mask_path,manual_label,arcgis_mask_path,arcgis_label,"
+        "paper12_mask_path,paper12_label\n"
+        "s1,manual.npy,,arcgis.npy,,paper12.npy,\n",
+        encoding="utf-8",
+    )
+
+    result = evaluate_manifest(manifest, class_names=["water", "crops", "built"])
+
+    assert result["decision_status"] == "insufficient_sample_size"
+    assert result["replacement_claim_supported"] is False
+    assert result["arcgis_replacement_ready"] is False
+    assert result["min_candidate_rows"] == 30
+    assert "insufficient_manifest_rows:1<30" in result["reasons"]
+
+    smoke_result = evaluate_manifest(
+        manifest,
+        class_names=["water", "crops", "built"],
+        min_candidate_rows=1,
+    )
+    assert smoke_result["decision_status"] == "replacement_candidate"
+    assert smoke_result["replacement_claim_supported"] is True
+
 def test_cli_evaluates_manifest_and_writes_json(tmp_path):
     import subprocess
     import sys
@@ -290,6 +324,8 @@ def test_cli_evaluates_manifest_and_writes_json(tmp_path):
             "20",
             "--bootstrap-seed",
             "11",
+            "--min-candidate-rows",
+            "1",
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -304,6 +340,7 @@ def test_cli_evaluates_manifest_and_writes_json(tmp_path):
     assert payload["replacement_claim_supported"] is True
     assert payload["metrics"]["pixel_count"] == 6
     assert payload["metrics"]["paired_delta"]["miou"] == pytest.approx(0.0)
+    assert payload["min_candidate_rows"] == 1
     assert payload["bootstrap"]["iterations"] == 20
     assert payload["bootstrap"]["seed"] == 11
 
@@ -331,4 +368,5 @@ def test_arcgis_replacement_template_points_to_evaluator_script():
         "paired_delta_bootstrap_unit": "manifest_row",
         "paired_delta_bootstrap_iterations": 1000,
         "confidence_level": 0.95,
+        "minimum_candidate_manifest_rows": 30,
     }

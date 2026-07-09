@@ -132,9 +132,19 @@ def test_packet_finalizer_writes_evaluator_manifest_when_outputs_exist(tmp_path)
         }
     ]
 
-    evaluation = evaluate_manifest(manifest_path, class_names=["background", "built", "crops", "trees", "water", "rangeland_bare"])
-    assert evaluation["decision_status"] == "replacement_candidate"
-    assert evaluation["replacement_claim_supported"] is True
+    class_names = ["background", "built", "crops", "trees", "water", "rangeland_bare"]
+    evaluation = evaluate_manifest(manifest_path, class_names=class_names)
+    assert evaluation["decision_status"] == "insufficient_sample_size"
+    assert evaluation["replacement_claim_supported"] is False
+    assert "insufficient_manifest_rows:1<30" in evaluation["reasons"]
+
+    smoke_evaluation = evaluate_manifest(
+        manifest_path,
+        class_names=class_names,
+        min_candidate_rows=1,
+    )
+    assert smoke_evaluation["decision_status"] == "replacement_candidate"
+    assert smoke_evaluation["replacement_claim_supported"] is True
 
 
 def test_packet_finalizer_rejects_shape_mismatched_outputs(tmp_path):

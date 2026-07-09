@@ -229,8 +229,13 @@ def _arcgis_replacement_audit(template: dict[str, Any]) -> dict[str, Any]:
         "paired_model_outputs_available": bool(required["paired_model_outputs_available"]),
         "missing_evidence": list(template["missing_evidence"]),
         "current_boundary": template["current_boundary"],
+        "recommended_statistical_controls": dict(
+            template.get("recommended_statistical_controls", {})
+        ),
         "next_actions": list(template["next_actions"]),
     }
+
+
 def _linhe_label_audit(rows: list[dict[str, Any]]) -> dict[str, Any]:
     means = _mean_by_method(rows)
     linear_miou = means["linear_probe"]

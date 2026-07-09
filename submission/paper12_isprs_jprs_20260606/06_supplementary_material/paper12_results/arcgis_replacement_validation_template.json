@@ -3,7 +3,8 @@
     "decision_rule":  {
                           "not_validated":  "Use when independent manual ground truth, ArcGIS reference output, or Paper12 checkpoint-backed output is missing.",
                           "partial":  "Use when all paired outputs exist but Paper12 does not meet the replacement threshold on at least one primary metric or critical class.",
-                          "replacement_candidate":  "Use only when Paper12 matches or exceeds the ArcGIS reference on the same manual labels, area, time window, and taxonomy."
+                          "replacement_candidate":  "Use only when Paper12 matches or exceeds the ArcGIS reference on the same manual labels, area, time window, and taxonomy.",
+                          "insufficient_sample_size":  "Use when paired outputs exist but the evaluator has fewer than the minimum manifest rows required for a replacement-candidate decision."
                       },
     "decision_status":  "not_validated",
     "evidence_level":  "weak_supervision_evidence",
@@ -31,7 +32,7 @@
                          "Run scripts/export_paper12_packet_predictions.py with the Paper12 checkpoint-backed Houlsby workflow on the same samples.",
                          "Run scripts/finalize_arcgis_replacement_validation_packet.py to create an evaluator-ready manifest once manual, ArcGIS, and Paper12 masks exist.",
                          "Report per-class IoU, overall accuracy, macro F1, and confusion matrices for both systems against the same manual labels.",
-                         "Run scripts/evaluate_arcgis_replacement.py on the finalizer manifest with --bootstrap-iterations 1000 before changing decision_status."
+                         "Run scripts/evaluate_arcgis_replacement.py on the finalizer manifest with --bootstrap-iterations 1000 --min-candidate-rows 30 before changing decision_status."
                      ],
     "replacement_claim_supported":  false,
     "required_evidence":  {
@@ -45,6 +46,7 @@
     "recommended_statistical_controls":  {
                                              "paired_delta_bootstrap_unit":  "manifest_row",
                                              "paired_delta_bootstrap_iterations":  1000,
-                                             "confidence_level":  0.95
+                                             "confidence_level":  0.95,
+                                             "minimum_candidate_manifest_rows":  30
                                          }
 }
