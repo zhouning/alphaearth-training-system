@@ -62,6 +62,13 @@ def build_adapter(adapter_kind: str, in_channels: int, out_channels: int = 6):
         return LearnedChannelBridgeAdapter(in_channels=in_channels, out_channels=out_channels)
     raise ValueError(f"unknown adapter: {adapter_kind!r}")
 
+def _segmentation_decoder_kwargs(method_cfg: dict, global_cfg: dict) -> dict:
+    seg_cfg = dict(global_cfg.get("segmentation") or {})
+    seg_cfg.update(method_cfg.get("segmentation") or {})
+    return {
+        "decoder_type": seg_cfg.get("decoder_type", "linear"),
+        "hidden_dim": seg_cfg.get("hidden_dim"),
+    }
 
 def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
                           ckpt_dir=None, ckpt_every=2):
@@ -121,10 +128,12 @@ def run_single_experiment(method_cfg, modality_cfg, global_cfg, seed,
         head = MultiLabelHead(in_dim=backbone_spec.feature_dim, num_classes=num_classes)
     elif task_type == "segmentation":
         from geoadapter.models.heads import SegmentationHead
+        decoder_kwargs = _segmentation_decoder_kwargs(method_cfg, global_cfg)
         head = SegmentationHead(
             in_dim=backbone_spec.feature_dim,
             num_classes=num_classes,
             patch_size=global_cfg.get("backbone", {}).get("patch_size", 16),
+            **decoder_kwargs,
         )
     else:
         head = ClassificationHead(in_dim=backbone_spec.feature_dim, num_classes=num_classes)

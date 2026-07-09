@@ -1,0 +1,69 @@
+experiment:
+  name: landcoverai_decoder_ablation
+  task: segmentation
+  dataset: landcoverai
+  dataset_root: ./data/landcoverai
+  num_classes: 6
+  epochs: 50
+  batch_size: 8
+  seeds: [42, 123, 456]
+  allow_synthetic_fallback: false
+
+modalities:
+  - preset: rgb
+
+segmentation:
+  decoder_type: linear
+  hidden_dim: null
+
+methods:
+  - name: linear_probe_linear_decoder
+    adapter: zero_pad
+    peft: null
+    segmentation:
+      decoder_type: linear
+      hidden_dim: null
+  - name: linear_probe_conv_lite_d128
+    adapter: zero_pad
+    peft: null
+    segmentation:
+      decoder_type: conv_lite
+      hidden_dim: 128
+  - name: lora_r8_linear_decoder
+    adapter: zero_pad
+    peft: lora
+    rank: 8
+    segmentation:
+      decoder_type: linear
+      hidden_dim: null
+  - name: lora_r8_conv_lite_d128
+    adapter: zero_pad
+    peft: lora
+    rank: 8
+    segmentation:
+      decoder_type: conv_lite
+      hidden_dim: 128
+  - name: houlsby_linear_decoder
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+    segmentation:
+      decoder_type: linear
+      hidden_dim: null
+  - name: houlsby_conv_lite_d128
+    adapter: zero_pad
+    peft: houlsby
+    bottleneck_dim: 64
+    segmentation:
+      decoder_type: conv_lite
+      hidden_dim: 128
+
+training:
+  lr: 1.0e-3
+  lr_peft: 1.0e-4
+  scheduler: cosine
+  weight_decay: 0.01
+
+prithvi:
+  pretrained: true
+  checkpoint: null

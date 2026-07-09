@@ -23,12 +23,34 @@ class MultiLabelHead(nn.Module):
 
 
 class SegmentationHead(nn.Module):
-    """Linear decoder: reshape patch tokens -> 1x1 conv -> bilinear upsample."""
+    """Patch-token segmentation decoder with a linear default and optional conv path."""
 
-    def __init__(self, in_dim: int = 768, num_classes: int = 2, patch_size: int = 16):
+    def __init__(
+        self,
+        in_dim: int = 768,
+        num_classes: int = 2,
+        patch_size: int = 16,
+        decoder_type: str = "linear",
+        hidden_dim: int | None = None,
+    ):
         super().__init__()
         self.patch_size = patch_size
-        self.proj = nn.Conv2d(in_dim, num_classes, kernel_size=1)
+        self.decoder_type = decoder_type
+        if decoder_type == "linear":
+            self.proj = nn.Conv2d(in_dim, num_classes, kernel_size=1)
+        elif decoder_type == "conv_lite":
+            hidden_dim = hidden_dim or min(128, in_dim)
+            if hidden_dim <= 0:
+                raise ValueError("hidden_dim must be positive for conv_lite decoder")
+            self.proj = nn.Sequential(
+                nn.Conv2d(in_dim, hidden_dim, kernel_size=1),
+                nn.GELU(),
+                nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1),
+                nn.GELU(),
+                nn.Conv2d(hidden_dim, num_classes, kernel_size=1),
+            )
+        else:
+            raise ValueError(f"unknown segmentation decoder: {decoder_type!r}")
 
     def forward(self, x, spatial_dims=None):
         if x.dim() == 2:
