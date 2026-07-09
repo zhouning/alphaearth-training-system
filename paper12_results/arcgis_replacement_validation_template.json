@@ -28,8 +28,9 @@
     "Sample and manually annotate Linhe validation patches or polygons using the highest-resolution imagery available.",
     "Export ArcGIS or Esri reference predictions for the same samples and class taxonomy.",
     "Run the Paper12 checkpoint-backed Houlsby workflow on the same samples.",
+    "Run scripts/finalize_arcgis_replacement_validation_packet.py to create an evaluator-ready manifest once manual, ArcGIS, and Paper12 masks exist.",
     "Report per-class IoU, overall accuracy, macro F1, and confusion matrices for both systems against the same manual labels.",
-    "Run scripts/evaluate_arcgis_replacement.py on the completed manual, ArcGIS, and Paper12 manifest before changing decision_status."
+    "Run scripts/evaluate_arcgis_replacement.py on the finalizer manifest before changing decision_status."
   ],
   "replacement_claim_supported": false,
   "required_evidence": {

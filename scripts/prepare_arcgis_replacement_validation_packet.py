@@ -316,11 +316,11 @@ masks, and preview PNGs for manual review.
    schema: {', '.join(CLASS_NAMES)}.
 3. Run Paper12 on the same samples and save outputs to
    `paper12_masks/<sample_id>.npy`.
-4. Fill `manual_mask_path` and `paper12_mask_path` in
-   `{manifest_path.name}`.
-5. Run `scripts/evaluate_arcgis_replacement.py --manifest {manifest_path}`.
+4. Run `scripts/finalize_arcgis_replacement_validation_packet.py --packet-dir {output_dir}`
+   to validate evidence paths and write `arcgis_replacement_evaluator_manifest.csv`.
+5. Run `scripts/evaluate_arcgis_replacement.py --manifest {output_dir / "arcgis_replacement_evaluator_manifest.csv"}`.
 
-Do not change the Paper12 ArcGIS replacement status until the filled manifest
+Do not change the Paper12 ArcGIS replacement status until the finalizer manifest
 has been evaluated.
 """
     (output_dir / "annotation_readme.md").write_text(text, encoding="utf-8")
@@ -405,7 +405,8 @@ def build_validation_packet(
         "paper12_outputs_available": False,
         "evaluator_ready": False,
         "next_action": (
-            "Fill manual_mask_path and paper12_mask_path before running "
+            "Save manual and Paper12 masks to the target paths, then run "
+            "scripts/finalize_arcgis_replacement_validation_packet.py before "
             "scripts/evaluate_arcgis_replacement.py."
         ),
         "samples": [

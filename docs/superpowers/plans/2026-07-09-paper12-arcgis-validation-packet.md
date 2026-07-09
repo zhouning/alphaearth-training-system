@@ -1,7 +1,7 @@
 # Paper12 ArcGIS Validation Packet Implementation Plan
 
-**Goal:** Add an offline packet builder that prepares real Linhe samples for
-manual ArcGIS-vs-Paper12 validation without fabricating evidence.
+**Goal:** Add an offline packet builder and finalizer that prepare real Linhe
+samples for manual ArcGIS-vs-Paper12 validation without fabricating evidence.
 
 ## Task 1: Packet Builder Tests
 
@@ -31,9 +31,19 @@ manual ArcGIS-vs-Paper12 validation without fabricating evidence.
   confirm the evaluator remains `not_validated` until manual and Paper12 masks
   are filled.
 
-## Task 5: Verification
+## Task 5: Packet Finalizer
 
-- [ ] Run focused packet and evaluator tests.
-- [ ] Run full pytest.
-- [ ] Run `git diff --check`.
+- [x] Add tests for missing manual/Paper12 masks, ready evaluator manifest output,
+  shape mismatch rejection, and CLI execution.
+- [x] Implement `scripts/finalize_arcgis_replacement_validation_packet.py` to
+  wire existing masks into an evaluator-ready manifest without creating labels
+  or predictions.
+- [x] Update protocol, validation template, and generated packet README to route
+  completed packets through the finalizer before the evaluator.
+
+## Task 6: Verification
+
+- [x] Run focused packet, finalizer, and evaluator tests.
+- [x] Run full pytest.
+- [x] Run `git diff --check`.
 - [ ] Commit and push to `origin/master`.

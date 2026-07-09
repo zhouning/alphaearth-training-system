@@ -2,16 +2,19 @@
 
 ## Goal
 
-Prepare the missing step between the conservative ArcGIS replacement boundary
+Prepare the missing steps between the conservative ArcGIS replacement boundary
 and the evaluator: a reproducible Linhe annotation packet that selects existing
-patches, exports Esri reference masks, and creates a manifest stub for manual
-truth and Paper12 outputs.
+patches, exports Esri reference masks, creates a manifest stub for manual truth
+and Paper12 outputs, and finalizes completed packets only after evidence files
+exist and pass shape checks.
 
 ## Boundary
 
-The packet builder does not create manual labels, run ArcGIS, or run Paper12
-inference. Its output remains `evaluator_ready: false` until the manifest has
-both independent manual masks and checkpoint-backed Paper12 masks.
+The packet builder and finalizer do not create manual labels, run ArcGIS, or run
+Paper12 inference. Builder output remains `evaluator_ready: false`; the
+finalizer only produces an evaluator manifest after independent manual masks and
+checkpoint-backed Paper12 masks exist for every packet sample and match the Esri
+mask shapes.
 
 ## Inputs
 
@@ -25,6 +28,10 @@ The builder also supports `--index auto`, which scans a Linhe patch root for
 `*/p_*.npz` and matching `*/lulc_<year>_p_*.npz` files. This mode avoids the
 local parquet-reader dependency and works with the checked-out Linhe patch tree.
 
+The finalizer reads `arcgis_replacement_annotation_manifest.csv` from a packet
+directory and checks only existing `manual_masks/`, `paper12_masks/`, and
+`arcgis_masks/` files.
+
 ## Outputs
 
 The packet directory contains:
@@ -37,6 +44,12 @@ The packet directory contains:
 - `annotation_readme.md`,
 - `packet_summary.json`.
 
+When completed evidence is present, the finalizer writes:
+
+- `arcgis_replacement_evaluator_manifest.csv` with evaluator-compatible columns,
+- `packet_finalization_summary.json` with missing-evidence and shape-error
+  diagnostics.
+
 ## Sampling
 
 Sampling is deterministic by seed. The builder first tries to cover requested
@@ -47,7 +60,8 @@ fractions, then fills remaining slots by seeded shuffle.
 
 Tests cover CSV input, conservative output status, critical-class coverage,
 preview and manifest creation, CLI execution, filesystem auto-discovery, lazy
-RGB loading, and protocol links to the packet builder. A local smoke run on
-`data/linhe_patches` generated a six-sample packet under `D:\tmp` and the
-evaluator correctly kept it `not_validated` because manual and Paper12 masks
-remain missing.
+RGB loading, finalizer missing-evidence handling, evaluator-manifest creation,
+shape mismatch rejection, and protocol links to the packet builder/finalizer. A
+local smoke run on `data/linhe_patches` generated a six-sample packet under
+`D:\tmp` and the evaluator correctly kept it `not_validated` because manual and
+Paper12 masks remain missing.
