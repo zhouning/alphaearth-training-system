@@ -112,6 +112,20 @@ def test_review_audit_records_model_scope_label_and_decoder_boundaries():
     assert decoder["loveda_head_params"] == 5_383
     assert decoder["linear_probe_params_match_head_only"] is True
     assert decoder["absolute_miou_can_be_decoder_limited"] is True
+    assert decoder["decoder_ablation_completed"] is True
+    assert decoder["decoder_ablation_schema"] == "paper12.landcoverai_decoder_ablation_summary.v1"
+    assert decoder["decoder_ablation_row_count"] == 18
+    assert decoder["best_ablation_method"] == "houlsby_conv_lite_d128"
+    assert decoder["best_ablation_mIoU"] == pytest.approx(0.7245643901552169)
+    assert decoder["linear_probe_conv_lite_minus_linear_mIoU"] == pytest.approx(
+        0.4029824186838918
+    )
+    assert decoder["lora_r8_conv_lite_minus_linear_mIoU"] == pytest.approx(
+        0.4036553139205306
+    )
+    assert decoder["houlsby_conv_lite_minus_linear_mIoU"] == pytest.approx(
+        0.08440151746826352
+    )
 
 
 def test_review_audit_records_arcgis_replacement_boundary():
@@ -172,6 +186,8 @@ def test_write_review_audit_creates_deterministic_json(tmp_path):
         "paper12_results/loveda_full_finetune_summary.json",
         "results/loveda/loveda_u2r_diag.json",
         "paper12_results/landcoverai_segmentation.json",
+        "paper12_results/landcoverai_decoder_ablation.json",
+        "paper12_results/landcoverai_decoder_ablation_summary.json",
         "linhe_results/linhe_lulc_seg.json",
         "paper12_results/arcgis_replacement_validation_template.json",
     ]

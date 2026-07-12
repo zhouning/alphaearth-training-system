@@ -1,0 +1,123 @@
+{
+    "schema":  "paper12.landcoverai_decoder_ablation_summary.v1",
+    "row_count":  18,
+    "expected_row_count":  18,
+    "groups":  [
+                   {
+                       "method":  "houlsby_linear_decoder",
+                       "method_family":  "houlsby",
+                       "decoder":  "linear",
+                       "modality":  "rgb",
+                       "trainable_params":  1194246,
+                       "mIoU_mean":  0.64016287268695338,
+                       "mIoU_std":  0.00215024843059989,
+                       "seeds":  [
+                                     42,
+                                     123,
+                                     456
+                                 ],
+                       "rank_by_mIoU":  4
+                   },
+                   {
+                       "method":  "lora_r8_linear_decoder",
+                       "method_family":  "lora_r8",
+                       "decoder":  "linear",
+                       "modality":  "rgb",
+                       "trainable_params":  152070,
+                       "mIoU_mean":  0.25100624345478734,
+                       "mIoU_std":  9.6805940030392942E-05,
+                       "seeds":  [
+                                     42,
+                                     123,
+                                     456
+                                 ],
+                       "rank_by_mIoU":  5
+                   },
+                   {
+                       "method":  "linear_probe_linear_decoder",
+                       "method_family":  "linear_probe",
+                       "decoder":  "linear",
+                       "modality":  "rgb",
+                       "trainable_params":  4614,
+                       "mIoU_mean":  0.25090954851699104,
+                       "mIoU_std":  0.00034569032780601921,
+                       "seeds":  [
+                                     42,
+                                     123,
+                                     456
+                                 ],
+                       "rank_by_mIoU":  6
+                   },
+                   {
+                       "method":  "houlsby_conv_lite_d128",
+                       "method_family":  "houlsby",
+                       "decoder":  "conv_lite_d128",
+                       "modality":  "rgb",
+                       "trainable_params":  1436422,
+                       "mIoU_mean":  0.7245643901552169,
+                       "mIoU_std":  0.0027582101805107991,
+                       "seeds":  [
+                                     42,
+                                     123,
+                                     456
+                                 ],
+                       "rank_by_mIoU":  1
+                   },
+                   {
+                       "method":  "lora_r8_conv_lite_d128",
+                       "method_family":  "lora_r8",
+                       "decoder":  "conv_lite_d128",
+                       "modality":  "rgb",
+                       "trainable_params":  394246,
+                       "mIoU_mean":  0.654661557375318,
+                       "mIoU_std":  0.0040680043179138359,
+                       "seeds":  [
+                                     42,
+                                     123,
+                                     456
+                                 ],
+                       "rank_by_mIoU":  2
+                   },
+                   {
+                       "method":  "linear_probe_conv_lite_d128",
+                       "method_family":  "linear_probe",
+                       "decoder":  "conv_lite_d128",
+                       "modality":  "rgb",
+                       "trainable_params":  246790,
+                       "mIoU_mean":  0.65389196720088283,
+                       "mIoU_std":  0.002070339537876424,
+                       "seeds":  [
+                                     42,
+                                     123,
+                                     456
+                                 ],
+                       "rank_by_mIoU":  3
+                   }
+               ],
+    "decoder_deltas":  [
+                           {
+                               "method_family":  "linear_probe",
+                               "linear_mIoU_mean":  0.25090954851699104,
+                               "conv_lite_mIoU_mean":  0.65389196720088283,
+                               "conv_lite_minus_linear_mIoU":  0.40298241868389179,
+                               "conv_lite_relative_gain":  1.6060864206473302
+                           },
+                           {
+                               "method_family":  "lora_r8",
+                               "linear_mIoU_mean":  0.25100624345478734,
+                               "conv_lite_mIoU_mean":  0.654661557375318,
+                               "conv_lite_minus_linear_mIoU":  0.40365531392053061,
+                               "conv_lite_relative_gain":  1.6081485000720281
+                           },
+                           {
+                               "method_family":  "houlsby",
+                               "linear_mIoU_mean":  0.64016287268695338,
+                               "conv_lite_mIoU_mean":  0.7245643901552169,
+                               "conv_lite_minus_linear_mIoU":  0.084401517468263521,
+                               "conv_lite_relative_gain":  0.13184381829893591
+                           }
+                       ],
+    "best_method":  "houlsby_conv_lite_d128",
+    "best_decoder":  "conv_lite_d128",
+    "best_mIoU_mean":  0.7245643901552169
+}

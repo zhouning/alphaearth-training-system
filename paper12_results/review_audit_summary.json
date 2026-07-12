@@ -130,14 +130,24 @@
   },
   "segmentation_decoder_audit": {
     "absolute_miou_can_be_decoder_limited": true,
+    "best_ablation_decoder": "conv_lite_d128",
+    "best_ablation_mIoU": 0.7245643901552169,
+    "best_ablation_method": "houlsby_conv_lite_d128",
+    "decoder_ablation_completed": true,
+    "decoder_ablation_raw_row_count": 18,
+    "decoder_ablation_row_count": 18,
+    "decoder_ablation_schema": "paper12.landcoverai_decoder_ablation_summary.v1",
     "decoder_is_lightweight_linear": true,
     "decoder_type": "single_1x1_conv_plus_bilinear_upsample",
+    "houlsby_conv_lite_minus_linear_mIoU": 0.08440151746826352,
     "in_dim": 768,
     "landcoverai_head_params": 4614,
     "landcoverai_num_classes": 6,
+    "linear_probe_conv_lite_minus_linear_mIoU": 0.4029824186838918,
     "linear_probe_params_match_head_only": true,
     "linhe_head_params": 4614,
     "linhe_num_classes": 6,
+    "lora_r8_conv_lite_minus_linear_mIoU": 0.4036553139205306,
     "loveda_head_params": 5383,
     "loveda_num_classes": 7,
     "patch_size": 16
@@ -151,6 +161,8 @@
     "paper12_results/loveda_full_finetune_summary.json",
     "results/loveda/loveda_u2r_diag.json",
     "paper12_results/landcoverai_segmentation.json",
+    "paper12_results/landcoverai_decoder_ablation.json",
+    "paper12_results/landcoverai_decoder_ablation_summary.json",
     "linhe_results/linhe_lulc_seg.json",
     "paper12_results/arcgis_replacement_validation_template.json"
   ]

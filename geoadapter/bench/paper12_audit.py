@@ -20,6 +20,8 @@ SOURCE_FILES = [
     "paper12_results/loveda_full_finetune_summary.json",
     "results/loveda/loveda_u2r_diag.json",
     "paper12_results/landcoverai_segmentation.json",
+    "paper12_results/landcoverai_decoder_ablation.json",
+    "paper12_results/landcoverai_decoder_ablation_summary.json",
     "linhe_results/linhe_lulc_seg.json",
     "paper12_results/arcgis_replacement_validation_template.json",
 ]
@@ -277,6 +279,8 @@ def _linear_probe_params(rows: list[dict[str, Any]], *, method: str = "linear_pr
 
 def _segmentation_decoder_audit(
     landcover_rows: list[dict[str, Any]],
+    decoder_ablation_rows: list[dict[str, Any]],
+    decoder_ablation_summary: dict[str, Any],
     linhe_rows: list[dict[str, Any]],
     loveda_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -292,6 +296,11 @@ def _segmentation_decoder_audit(
     ]
     expected = [landcover_head_params, linhe_head_params, loveda_head_params]
 
+    decoder_deltas = {
+        item["method_family"]: item
+        for item in decoder_ablation_summary["decoder_deltas"]
+    }
+
     return {
         "decoder_type": "single_1x1_conv_plus_bilinear_upsample",
         "decoder_is_lightweight_linear": True,
@@ -305,6 +314,25 @@ def _segmentation_decoder_audit(
         "loveda_head_params": loveda_head_params,
         "linear_probe_params_match_head_only": observed == expected,
         "absolute_miou_can_be_decoder_limited": True,
+        "decoder_ablation_schema": decoder_ablation_summary["schema"],
+        "decoder_ablation_row_count": int(decoder_ablation_summary["row_count"]),
+        "decoder_ablation_raw_row_count": len(decoder_ablation_rows),
+        "decoder_ablation_completed": (
+            int(decoder_ablation_summary["row_count"]) == 18
+            and len(decoder_ablation_rows) == 18
+        ),
+        "best_ablation_method": decoder_ablation_summary["best_method"],
+        "best_ablation_decoder": decoder_ablation_summary["best_decoder"],
+        "best_ablation_mIoU": float(decoder_ablation_summary["best_mIoU_mean"]),
+        "linear_probe_conv_lite_minus_linear_mIoU": float(
+            decoder_deltas["linear_probe"]["conv_lite_minus_linear_mIoU"]
+        ),
+        "lora_r8_conv_lite_minus_linear_mIoU": float(
+            decoder_deltas["lora_r8"]["conv_lite_minus_linear_mIoU"]
+        ),
+        "houlsby_conv_lite_minus_linear_mIoU": float(
+            decoder_deltas["houlsby"]["conv_lite_minus_linear_mIoU"]
+        ),
     }
 
 
@@ -319,8 +347,10 @@ def build_review_audit(repo_root: str | Path) -> dict[str, Any]:
     loveda_full = _read_json(repo_root, SOURCE_FILES[5])
     loveda_diag = _read_json(repo_root, SOURCE_FILES[6])
     landcover_rows = _read_json(repo_root, SOURCE_FILES[7])
-    linhe_rows = _read_json(repo_root, SOURCE_FILES[8])
-    arcgis_replacement_template = _read_json(repo_root, SOURCE_FILES[9])
+    decoder_ablation_rows = _read_json(repo_root, SOURCE_FILES[8])
+    decoder_ablation_summary = _read_json(repo_root, SOURCE_FILES[9])
+    linhe_rows = _read_json(repo_root, SOURCE_FILES[10])
+    arcgis_replacement_template = _read_json(repo_root, SOURCE_FILES[11])
 
     return {
         "audit_schema_version": 2,
@@ -338,7 +368,11 @@ def build_review_audit(repo_root: str | Path) -> dict[str, Any]:
             arcgis_replacement_template
         ),
         "segmentation_decoder_audit": _segmentation_decoder_audit(
-            landcover_rows, linhe_rows, loveda_peft
+            landcover_rows,
+            decoder_ablation_rows,
+            decoder_ablation_summary,
+            linhe_rows,
+            loveda_peft,
         ),
     }
 

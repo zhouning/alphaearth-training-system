@@ -214,6 +214,57 @@ def test_second_backbone_summary_matches_raw_results_and_is_mirrored():
             PAPER12_RESULTS / name
         ).read_text(encoding="utf-8")
 
+def test_landcoverai_decoder_ablation_summary_matches_raw_results_and_is_mirrored():
+    rows = json.loads(
+        (PAPER12_RESULTS / "landcoverai_decoder_ablation.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    summary = json.loads(
+        (PAPER12_RESULTS / "landcoverai_decoder_ablation_summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert len(rows) == 18
+    assert summary["schema"] == "paper12.landcoverai_decoder_ablation_summary.v1"
+    assert summary["row_count"] == 18
+    assert summary["expected_row_count"] == 18
+    assert len(summary["groups"]) == 6
+    assert summary["best_method"] == "houlsby_conv_lite_d128"
+    assert summary["best_decoder"] == "conv_lite_d128"
+    assert summary["best_mIoU_mean"] == pytest.approx(0.7245643901552169)
+
+    for item in summary["groups"]:
+        method_rows = [row for row in rows if row["method"] == item["method"]]
+        assert [row["seed"] for row in method_rows] == [42, 123, 456]
+        assert item["seeds"] == [42, 123, 456]
+        params = {int(row["trainable_params"]) for row in method_rows}
+        assert len(params) == 1
+        assert item["trainable_params"] == params.pop()
+        miou = [float(row["mIoU"]) for row in method_rows]
+        assert item["mIoU_mean"] == pytest.approx(mean(miou))
+        assert item["mIoU_std"] == pytest.approx(stdev(miou))
+
+    deltas = {item["method_family"]: item for item in summary["decoder_deltas"]}
+    assert deltas["linear_probe"]["conv_lite_minus_linear_mIoU"] == pytest.approx(
+        0.4029824186838918
+    )
+    assert deltas["lora_r8"]["conv_lite_minus_linear_mIoU"] == pytest.approx(
+        0.4036553139205306
+    )
+    assert deltas["houlsby"]["conv_lite_minus_linear_mIoU"] == pytest.approx(
+        0.08440151746826352
+    )
+
+    for name in [
+        "landcoverai_decoder_ablation.json",
+        "landcoverai_decoder_ablation_summary.json",
+    ]:
+        assert (SUPPLEMENTARY_RESULTS / name).read_text(encoding="utf-8") == (
+            PAPER12_RESULTS / name
+        ).read_text(encoding="utf-8")
+
 def test_peft_capacity_sweep_summary_matches_raw_results():
     rows = json.loads(
         (PAPER12_RESULTS / "peft_capacity_sweep.json").read_text(encoding="utf-8")
@@ -293,6 +344,8 @@ def test_public_dataset_results_are_mirrored_in_supplementary_package():
         "loveda_full_finetune_u2r.json",
         "loveda_full_finetune_summary.json",
         "review_audit_summary.json",
+        "landcoverai_decoder_ablation.json",
+        "landcoverai_decoder_ablation_summary.json",
         "second_backbone_eurosat.json",
         "second_backbone_eurosat_summary.json",
         "arcgis_replacement_validation_template.json",
@@ -352,6 +405,8 @@ def test_manuscript_bounds_reviewer_sensitive_claims_after_audit_extension():
         "not an independent manual validation set",
         "single-backbone Prithvi-100M setting",
         "lightweight linear segmentation decoder may limit absolute mIoU",
+        "decoder ablation confirms the setup warning",
+        "best observed LandCover.ai result becomes 0.7246",
         "review\\_audit\\_summary.json",
         "model-scope, label-source, and decoder-capacity checks",
         "not a validated ArcGIS replacement",
