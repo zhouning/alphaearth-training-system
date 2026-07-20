@@ -9,6 +9,10 @@ from geoadapter.adapters.learned_channel_bridge import LearnedChannelBridgeAdapt
 from geoadapter.adapters.zero_pad import ZeroPadAdapter
 
 
+def _raise_missing_eurosat(**_kwargs):
+    raise FileNotFoundError("test dataset")
+
+
 @pytest.mark.parametrize(
     ("kind", "expected_type"),
     [
@@ -94,10 +98,11 @@ def test_run_single_experiment_can_require_real_dataset(monkeypatch, tmp_path):
         )
 
 
-def test_run_single_experiment_uses_backbone_metadata(monkeypatch):
+def test_run_single_experiment_uses_backbone_metadata(monkeypatch, tmp_path):
     from dataclasses import dataclass
 
     import geoadapter.bench.run_benchmark as runner
+    import geoadapter.data.datasets as datasets_module
 
     class TinyBackbone(nn.Module):
         def __init__(self):
@@ -130,11 +135,16 @@ def test_run_single_experiment_uses_backbone_metadata(monkeypatch):
             blocks=nn.ModuleList(),
         ),
     )
+    monkeypatch.setattr(
+        datasets_module,
+        "load_eurosat",
+        _raise_missing_eurosat,
+    )
 
     cfg = {
         "experiment": {
             "dataset": "eurosat",
-            "dataset_root": "missing",
+            "dataset_root": str(tmp_path / "missing_dataset"),
             "epochs": 0,
             "batch_size": 8,
             "allow_synthetic_fallback": True,
@@ -154,10 +164,13 @@ def test_run_single_experiment_uses_backbone_metadata(monkeypatch):
     assert result["trainable_params"] == 330
 
 
-def test_run_single_experiment_passes_segmentation_decoder_config(monkeypatch):
+def test_run_single_experiment_passes_segmentation_decoder_config(
+    monkeypatch, tmp_path
+):
     from dataclasses import dataclass
 
     import geoadapter.bench.run_benchmark as runner
+    import geoadapter.data.datasets as datasets_module
     import geoadapter.models.heads as heads_module
 
     class TinyBackbone(nn.Module):
@@ -215,11 +228,16 @@ def test_run_single_experiment_passes_segmentation_decoder_config(monkeypatch):
             blocks=nn.ModuleList(),
         ),
     )
+    monkeypatch.setattr(
+        datasets_module,
+        "load_eurosat",
+        _raise_missing_eurosat,
+    )
 
     cfg = {
         "experiment": {
             "dataset": "eurosat",
-            "dataset_root": "missing",
+            "dataset_root": str(tmp_path / "missing_dataset"),
             "task": "segmentation",
             "num_classes": 5,
             "epochs": 0,
