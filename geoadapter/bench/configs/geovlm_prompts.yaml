@@ -1,0 +1,33 @@
+schema: paper12.geovlm_prompts.v1
+language: en
+classes:
+  building:
+    class_id: 1
+    training:
+      - segment all buildings
+      - find the buildings
+      - map building footprints
+      - show built structures
+    held_out:
+      - extract every building visible in this aerial image
+      - identify roofed structures
+  road:
+    class_id: 4
+    training:
+      - segment all roads
+      - find the roads
+      - map road surfaces
+      - show the road network
+    held_out:
+      - extract the visible transportation routes
+      - identify paved routes
+  water:
+    class_id: 3
+    training:
+      - segment all water bodies
+      - find the water
+      - map surface water
+      - show lakes and rivers
+    held_out:
+      - extract visible aquatic areas
+      - identify open water
