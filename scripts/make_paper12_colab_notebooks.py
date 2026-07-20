@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import textwrap
 from pathlib import Path
 
 
@@ -11,6 +12,7 @@ EURO_OUT = COLAB_DIR / "paper12_eurosat_channel_bridge_colab.ipynb"
 CAPACITY_OUT = COLAB_DIR / "paper12_peft_capacity_sweep_colab.ipynb"
 SECOND_BACKBONE_OUT = COLAB_DIR / "paper12_second_backbone_eurosat_colab.ipynb"
 LANDCOVER_DECODER_OUT = COLAB_DIR / "paper12_landcoverai_decoder_ablation_colab.ipynb"
+GEOVLM_PROMPT_OUT = COLAB_DIR / "paper12_geovlm_prompt_segmentation_colab.ipynb"
 PAPER12_RESULTS_BRANCH = "paper12-results-colab-20260619"
 
 
@@ -32,6 +34,14 @@ def code_cell(source: str) -> dict:
     }
 
 
+def dedented_markdown_cell(source: str) -> dict:
+    return markdown_cell(textwrap.dedent(source))
+
+
+def dedented_code_cell(source: str) -> dict:
+    return code_cell(textwrap.dedent(source))
+
+
 def to_source_lines(source: str) -> list[str]:
     lines = source.strip().splitlines()
     if not lines:
@@ -51,6 +61,22 @@ def notebook(cells: list[dict]) -> dict:
         },
         "cells": cells,
     }
+
+
+def existing_notebook_matches(existing: str, rendered: str) -> bool:
+    return existing.rstrip("\r\n") == rendered.rstrip("\r\n")
+
+
+def has_execution_artifacts(existing: str) -> bool:
+    try:
+        payload = json.loads(existing)
+    except json.JSONDecodeError:
+        return False
+    return any(
+        cell.get("cell_type") == "code"
+        and (cell.get("execution_count") is not None or cell.get("outputs"))
+        for cell in payload.get("cells", [])
+    )
 
 
 def loveda_notebook() -> dict:
@@ -902,9 +928,301 @@ def landcoverai_decoder_ablation_notebook() -> dict:
             ),
         ]
     )
+
+
+def geovlm_prompt_notebook() -> dict:
+    return notebook(
+        [
+            dedented_markdown_cell(
+                """
+                <a href="https://colab.research.google.com/github/zhouning/alphaearth-training-system/blob/master/colab/paper12_geovlm_prompt_segmentation_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+
+                # Paper 12 GeoVLM Prompt Segmentation MVP
+
+                This notebook evaluates a bounded English prompt segmentation MVP for `building`, `road`, and `water` on LandCoverAI. It is not a complete or open-vocabulary ArcGIS GeoVLM and does not support captioning, VQA, Chinese prompts, or arbitrary unseen concepts.
+
+                The seed-42 smoke stage must pass before the optional three-seed prompt/baseline matrix is enabled. Real data, Prithvi weights, and SigLIP weights are mandatory; synthetic fallback is forbidden.
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 1. Mount Drive and prepare resumable result, checkpoint, preview, and cache paths.
+                from google.colab import drive
+                drive.mount("/content/drive")
+
+                import os
+                import shutil
+                from pathlib import Path
+
+                DRIVE_RESULTS_DIR = Path("/content/drive/MyDrive/paper12_results")
+                CHECKPOINT_DIR = Path("/content/drive/MyDrive/paper12_checkpoints/geovlm_prompt_segmentation")
+                PREVIEW_DIR = Path("/content/drive/MyDrive/paper12_previews/geovlm_prompt_segmentation")
+                HF_CACHE_DIR = Path("/content/drive/MyDrive/huggingface_cache/paper12_geovlm")
+                LOCAL_RESULTS_DIR = Path("/content/paper12_geovlm_results")
+                for path in (DRIVE_RESULTS_DIR, CHECKPOINT_DIR, PREVIEW_DIR, HF_CACHE_DIR, LOCAL_RESULTS_DIR):
+                    path.mkdir(parents=True, exist_ok=True)
+
+                RAW_JSON = LOCAL_RESULTS_DIR / "geovlm_prompt_segmentation.json"
+                SUMMARY_JSON = LOCAL_RESULTS_DIR / "geovlm_prompt_segmentation_summary.json"
+                DRIVE_RAW_JSON = DRIVE_RESULTS_DIR / RAW_JSON.name
+                DRIVE_SUMMARY_JSON = DRIVE_RESULTS_DIR / SUMMARY_JSON.name
+                for source, destination in ((DRIVE_RAW_JSON, RAW_JSON), (DRIVE_SUMMARY_JSON, SUMMARY_JSON)):
+                    if source.exists():
+                        shutil.copy2(source, destination)
+                os.environ["HF_HOME"] = str(HF_CACHE_DIR)
+                print("Results:", DRIVE_RESULTS_DIR)
+                print("Checkpoints:", CHECKPOINT_DIR)
+                print("Previews:", PREVIEW_DIR)
+                print("Hugging Face cache:", HF_CACHE_DIR)
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 2. Record GPU, Python, disk, Torch, and CUDA details.
+                !nvidia-smi
+                !python --version
+                !df -h /content /content/drive
+
+                import torch
+                print("torch:", torch.__version__)
+                print("cuda available:", torch.cuda.is_available())
+                print("torch cuda:", torch.version.cuda)
+                if torch.cuda.is_available():
+                    print("device:", torch.cuda.get_device_name(0))
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 3. Clone or fast-forward the latest master branch and record the exact commit.
+                %cd /content
+                !if [ ! -d /content/AlphaEarth-System/.git ]; then git clone --branch master https://github.com/zhouning/alphaearth-training-system.git /content/AlphaEarth-System; fi
+                %cd /content/AlphaEarth-System
+                !git fetch origin master
+                !git checkout master
+                !git pull --ff-only origin master
+                !git rev-parse --abbrev-ref HEAD
+                !git rev-parse HEAD
+                !git log --oneline -3
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 4. Install the GeoVLM optional dependencies and record exact versions.
+                %cd /content/AlphaEarth-System
+                !pip install -q -e '.[geovlm]' torchgeo
+
+                from importlib.metadata import version
+                for package in ("geoadapter", "torch", "torchvision", "torchgeo", "transformers", "huggingface-hub", "rasterio", "numpy"):
+                    try:
+                        print(package, version(package))
+                    except Exception as exc:
+                        print(package, "unavailable", exc)
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 5. Stage and hash the required Prithvi checkpoint.
+                %cd /content/AlphaEarth-System
+                import hashlib
+                from huggingface_hub import hf_hub_download
+
+                DRIVE_PRITHVI = Path("/content/drive/MyDrive/Prithvi_100M.pt")
+                LOCAL_PRITHVI = Path("/content/AlphaEarth-System/data/weights/prithvi/Prithvi_100M.pt")
+                LOCAL_PRITHVI.parent.mkdir(parents=True, exist_ok=True)
+                if DRIVE_PRITHVI.exists():
+                    shutil.copy2(DRIVE_PRITHVI, LOCAL_PRITHVI)
+                    print("Copied Prithvi_100M.pt from Drive")
+                elif not LOCAL_PRITHVI.exists():
+                    downloaded = hf_hub_download(
+                        repo_id="ibm-nasa-geospatial/Prithvi-100M",
+                        filename="Prithvi_100M.pt",
+                    )
+                    shutil.copy2(downloaded, LOCAL_PRITHVI)
+                    print("Downloaded Prithvi_100M.pt from Hugging Face")
+
+                def sha256(path):
+                    digest = hashlib.sha256()
+                    with Path(path).open("rb") as stream:
+                        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                            digest.update(chunk)
+                    return digest.hexdigest()
+
+                assert LOCAL_PRITHVI.is_file(), LOCAL_PRITHVI
+                PRITHVI_SHA256 = sha256(LOCAL_PRITHVI)
+                print("Prithvi path:", LOCAL_PRITHVI)
+                print("Prithvi SHA-256:", PRITHVI_SHA256)
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 6. Pre-cache the frozen SigLIP text tower and record its resolved revision.
+                from huggingface_hub import model_info, snapshot_download
+
+                SIGLIP_MODEL_ID = "google/siglip-base-patch16-224"
+                SIGLIP_REVISION = model_info(SIGLIP_MODEL_ID).sha
+                SIGLIP_CACHE_PATH = snapshot_download(
+                    repo_id=SIGLIP_MODEL_ID,
+                    revision=SIGLIP_REVISION,
+                    cache_dir=str(HF_CACHE_DIR),
+                )
+                print("SigLIP model:", SIGLIP_MODEL_ID)
+                print("SigLIP resolved revision:", SIGLIP_REVISION)
+                print("SigLIP cache:", SIGLIP_CACHE_PATH)
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 7. Download LandCoverAI and verify the official five-class mask contract.
+                %cd /content/AlphaEarth-System
+                from geoadapter.data.datasets import load_landcoverai
+
+                LANDCOVER_ROOT = "/content/AlphaEarth-System/data/landcoverai"
+                ALLOWED_MASK_VALUES = {0, 1, 2, 3, 4}
+                datasets = {}
+                for split in ("train", "val"):
+                    dataset = load_landcoverai(root=LANDCOVER_ROOT, split=split)
+                    observed = set()
+                    for index in range(len(dataset)):
+                        _, mask = dataset[index]
+                        observed.update(int(value) for value in mask.unique().tolist())
+                    assert observed <= ALLOWED_MASK_VALUES, (split, sorted(observed))
+                    datasets[split] = dataset
+                    print(split, "samples=", len(dataset), "mask_values=", sorted(observed))
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 8. Write a Colab-local real-data config with absolute paths and no fallback.
+                import yaml
+
+                CONFIG_SOURCE = Path("/content/AlphaEarth-System/geoadapter/bench/configs/geovlm_prompt_segmentation.yaml")
+                CONFIG_COLAB = Path("/content/AlphaEarth-System/geoadapter/bench/configs/geovlm_prompt_segmentation_colab.yaml")
+                PROMPT_CONFIG = Path("/content/AlphaEarth-System/geoadapter/bench/configs/geovlm_prompts.yaml")
+                config = yaml.safe_load(CONFIG_SOURCE.read_text(encoding="utf-8"))
+                config["experiment"]["dataset_root"] = LANDCOVER_ROOT
+                config["experiment"]["prompt_config"] = str(PROMPT_CONFIG)
+                config["experiment"]["allow_synthetic_fallback"] = False
+                config["prithvi"]["checkpoint"] = str(LOCAL_PRITHVI)
+                config["text_encoder"]["model_id"] = SIGLIP_MODEL_ID
+                config["text_encoder"]["revision"] = SIGLIP_REVISION
+                config["text_encoder"]["local_files_only"] = True
+                CONFIG_COLAB.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+                print(CONFIG_COLAB.read_text(encoding="utf-8"))
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 9. Run focused offline contract tests before real training.
+                %cd /content/AlphaEarth-System
+                !python -m pytest tests/test_prompt_segmentation_data.py tests/test_prithvi_position_embeddings.py tests/test_prompt_segmentation_model.py tests/test_prompt_segmentation_engine.py tests/test_geovlm_prompt_summary.py tests/test_geovlm_prompt_runner.py tests/test_geovlm_prompt_inference.py -v
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 10. Run seed 42, persist diagnostics, and require every smoke check to pass.
+                # Runner stage flag: --stage seed42
+                import json
+                import subprocess
+
+                seed42_command = [
+                    "python", "-m", "geoadapter.bench.run_geovlm_prompt_segmentation",
+                    "--config", str(CONFIG_COLAB),
+                    "--output", str(RAW_JSON),
+                    "--summary-output", str(SUMMARY_JSON),
+                    "--checkpoint-dir", str(CHECKPOINT_DIR),
+                    "--preview-dir", str(PREVIEW_DIR),
+                    "--stage", "seed42",
+                ]
+                try:
+                    subprocess.run(seed42_command, check=True)
+                finally:
+                    for source, destination in ((RAW_JSON, DRIVE_RAW_JSON), (SUMMARY_JSON, DRIVE_SUMMARY_JSON)):
+                        if source.exists():
+                            shutil.copy2(source, destination)
+
+                raw_payload = json.loads(RAW_JSON.read_text(encoding="utf-8"))
+                seed42_smoke = raw_payload["seed42_smoke"]
+                print("seed42 smoke:", json.dumps(seed42_smoke, indent=2))
+                assert seed42_smoke["passed"], seed42_smoke["failed_checks"]
+                seed42_rows = [
+                    row for row in raw_payload["rows"]
+                    if row["method"] == "siglip_film_dense_similarity_houlsby" and row["seed"] == 42
+                ]
+                assert len(seed42_rows) == 3
+                assert all(row["checkpoint_reproduced"] for row in seed42_rows)
+                checkpoint_path = CHECKPOINT_DIR / "siglip_film_dense_similarity_houlsby__seed42.pt"
+                checkpoint_payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+                print("reloaded checkpoint metadata:", json.dumps(checkpoint_payload["metadata"], indent=2))
+                summary = json.loads(SUMMARY_JSON.read_text(encoding="utf-8"))
+                print("mvp_status:", summary["mvp_status"])
+                print("failed gates:", summary["failed_gates"])
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 11. Explicitly opt in to the complete two-method x three-seed matrix.
+                # Runner stage flag: --stage full
+                RUN_FULL_MATRIX = False
+                if RUN_FULL_MATRIX:
+                    full_command = [
+                        "python", "-m", "geoadapter.bench.run_geovlm_prompt_segmentation",
+                        "--config", str(CONFIG_COLAB),
+                        "--output", str(RAW_JSON),
+                        "--summary-output", str(SUMMARY_JSON),
+                        "--checkpoint-dir", str(CHECKPOINT_DIR),
+                        "--preview-dir", str(PREVIEW_DIR),
+                        "--stage", "full",
+                    ]
+                    try:
+                        subprocess.run(full_command, check=True)
+                    finally:
+                        for source, destination in ((RAW_JSON, DRIVE_RAW_JSON), (SUMMARY_JSON, DRIVE_SUMMARY_JSON)):
+                            if source.exists():
+                                shutil.copy2(source, destination)
+                else:
+                    print("Full matrix disabled. Set RUN_FULL_MATRIX = True only after seed42 passes.")
+                """
+            ),
+            dedented_code_cell(
+                """
+                # 12. Validate pair count, rebuild gates with 1,000 bootstraps, and persist artifacts.
+                raw_payload = json.loads(RAW_JSON.read_text(encoding="utf-8"))
+                rows = raw_payload["rows"]
+                method_seed_pairs = sorted({(row["method"], int(row["seed"])) for row in rows})
+                print("expected method/seed pairs = 6")
+                print("observed method/seed pairs:", len(method_seed_pairs), method_seed_pairs)
+                if RUN_FULL_MATRIX:
+                    assert len(method_seed_pairs) == 6, method_seed_pairs
+
+                summary_command = [
+                    "python", "-m", "geoadapter.bench.geovlm_prompt_summary",
+                    "--input", str(RAW_JSON),
+                    "--output", str(SUMMARY_JSON),
+                    "--bootstrap-iterations", "1000",
+                ]
+                subprocess.run(summary_command, check=True)
+                summary = json.loads(SUMMARY_JSON.read_text(encoding="utf-8"))
+                print("mvp_status:", summary["mvp_status"])
+                for gate, passed in summary.get("gates", {}).items():
+                    print(gate, passed)
+                print("failed gates:", summary.get("failed_gates", []))
+                print("incomplete reasons:", summary.get("incomplete_reasons", []))
+                for source, destination in ((RAW_JSON, DRIVE_RAW_JSON), (SUMMARY_JSON, DRIVE_SUMMARY_JSON)):
+                    shutil.copy2(source, destination)
+                print("checkpoints:", sorted(str(path) for path in CHECKPOINT_DIR.glob("*.pt")))
+                print("previews:", sorted(str(path) for path in PREVIEW_DIR.glob("*.png")))
+                print("Drive raw:", DRIVE_RAW_JSON)
+                print("Drive summary:", DRIVE_SUMMARY_JSON)
+                """
+            ),
+        ]
+    )
+
+
 def main() -> None:
     COLAB_DIR.mkdir(parents=True, exist_ok=True)
     outputs = {
+        GEOVLM_PROMPT_OUT: geovlm_prompt_notebook(),
         LANDCOVER_DECODER_OUT: landcoverai_decoder_ablation_notebook(),
         SECOND_BACKBONE_OUT: second_backbone_notebook(),
         CAPACITY_OUT: capacity_sweep_notebook(),
@@ -913,9 +1231,14 @@ def main() -> None:
     }
     for path, payload in outputs.items():
         rendered = json.dumps(payload, indent=1)
-        if path.exists() and path.read_text(encoding="utf-8") == rendered:
-            print(f"[ok] unchanged {path}")
-            continue
+        if path.exists():
+            existing = path.read_text(encoding="utf-8")
+            if existing_notebook_matches(existing, rendered):
+                print(f"[ok] unchanged {path}")
+                continue
+            if has_execution_artifacts(existing):
+                print(f"[ok] preserved executed notebook {path}")
+                continue
         try:
             path.write_text(rendered, encoding="utf-8")
             print(f"[ok] wrote {path}")

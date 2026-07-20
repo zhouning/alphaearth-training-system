@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
 import yaml
+
+from scripts.make_paper12_colab_notebooks import (
+    existing_notebook_matches,
+    has_execution_artifacts,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -180,3 +186,58 @@ def test_paper12_second_backbone_eurosat_colab_notebook_contract():
     assert "python -m geoadapter.bench.run_benchmark" in text
     assert "python -m geoadapter.bench.second_backbone_summary" in text
     assert "expected_rows = 18" in text
+
+
+def test_paper12_geovlm_prompt_segmentation_colab_contract():
+    path = COLAB_DIR / "paper12_geovlm_prompt_segmentation_colab.ipynb"
+    text = read_notebook_text(path)
+
+    assert "blob/master/colab/paper12_geovlm_prompt_segmentation_colab.ipynb" in text
+    assert "pip install -q -e '.[geovlm]' torchgeo" in text
+    assert "google/siglip-base-patch16-224" in text
+    assert "Prithvi_100M.pt" in text
+    assert "geovlm_prompt_segmentation.yaml" in text
+    assert "--stage seed42" in text
+    assert "--stage full" in text
+    assert "geovlm_prompt_segmentation.json" in text
+    assert "geovlm_prompt_segmentation_summary.json" in text
+    assert "mvp_status" in text
+    assert "expected method/seed pairs = 6" in text
+    assert (
+        "/content/drive/MyDrive/paper12_checkpoints/geovlm_prompt_segmentation"
+        in text
+    )
+
+
+def test_notebook_generator_preserves_newlines_and_execution_artifacts():
+    rendered = json.dumps({"cells": []}, indent=1)
+    assert existing_notebook_matches(rendered + "\n", rendered) is True
+    executed = {
+        "cells": [
+            {
+                "cell_type": "code",
+                "execution_count": 1,
+                "outputs": [{"output_type": "stream", "text": ["done\n"]}],
+            }
+        ]
+    }
+    assert has_execution_artifacts(json.dumps(executed)) is True
+
+
+def test_paper12_geovlm_prompt_segmentation_code_cells_are_valid_python():
+    path = COLAB_DIR / "paper12_geovlm_prompt_segmentation_colab.ipynb"
+    notebook = json.loads(path.read_text(encoding="utf-8"))
+    first_markdown = "".join(notebook["cells"][0]["source"])
+    assert "\n# Paper 12 GeoVLM Prompt Segmentation MVP\n" in first_markdown
+    for index, cell in enumerate(notebook["cells"]):
+        if cell["cell_type"] != "code":
+            continue
+        sanitized = []
+        for line in "".join(cell["source"]).splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith(("!", "%")):
+                indentation = line[: len(line) - len(stripped)]
+                sanitized.append(indentation + "pass")
+            else:
+                sanitized.append(line)
+        ast.parse("\n".join(sanitized), filename=f"cell-{index}")
