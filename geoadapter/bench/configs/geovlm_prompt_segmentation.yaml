@@ -1,0 +1,40 @@
+experiment:
+  name: paper12_geovlm_prompt_segmentation
+  dataset: landcoverai
+  dataset_root: ./data/landcoverai
+  source_num_classes: 5
+  target_classes: [building, road, water]
+  epochs: 50
+  batch_size: 8
+  seeds: [42, 123, 456]
+  empty_target_cap: 0.25
+  allow_synthetic_fallback: false
+  prompt_config: geoadapter/bench/configs/geovlm_prompts.yaml
+methods:
+  - siglip_film_dense_similarity_houlsby
+  - no_text_three_binary_heads_houlsby
+prithvi:
+  checkpoint: data/weights/prithvi/Prithvi_100M.pt
+  use_checkpoint_position_embeddings: true
+  input_channels: 6
+  patch_size: 16
+peft:
+  type: houlsby
+  bottleneck_dim: 64
+text_encoder:
+  model_id: google/siglip-base-patch16-224
+  revision: null
+  local_files_only: false
+model:
+  condition_dim: 256
+  decoder_dim: 128
+training:
+  lr: 0.001
+  lr_peft: 0.0001
+  bce_weight: 1.0
+  dice_weight: 1.0
+  positive_weight_clip: [1.0, 20.0]
+evaluation:
+  threshold: 0.5
+  bootstrap_iterations: 1000
+  preview_count: 12

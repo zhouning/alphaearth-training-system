@@ -109,7 +109,7 @@ def load_sen1floods11(root: str, modality: str = "s2_floods", split: str = "trai
 
 
 def load_landcoverai(root: str, split: str = "train", max_samples: int = None):
-    """Load LandCover.ai for 6-class semantic segmentation via torchgeo."""
+    """Load LandCover.ai for 5-class semantic segmentation via torchgeo."""
     try:
         from torchgeo.datasets import LandCoverAI
     except ImportError:
