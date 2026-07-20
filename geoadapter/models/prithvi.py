@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,9 +22,15 @@ class PrithviBackbone(nn.Module):
         num_heads: int = 12,
         in_chans: int = 6,
         patch_size: int = 16,
+        use_checkpoint_position_embeddings: bool = False,
     ):
         super().__init__()
         self.embed_dim = embed_dim
+        self.use_checkpoint_position_embeddings = use_checkpoint_position_embeddings
+        self.register_buffer("checkpoint_cls_position", torch.empty(0), persistent=False)
+        self.register_buffer(
+            "checkpoint_patch_positions", torch.empty(0), persistent=False
+        )
 
         # Patch embedding: Conv3d(6,768,(1,16,16)) squeezed to Conv2d
         self.patch_embed = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
@@ -61,11 +68,46 @@ class PrithviBackbone(nn.Module):
         "patch_embed.proj.bias": "patch_embed.bias",
     }
 
+    def set_checkpoint_position_embedding(self, position: torch.Tensor) -> None:
+        expected_tokens = 1 + 3 * 14 * 14
+        if tuple(position.shape) != (1, expected_tokens, self.embed_dim):
+            raise ValueError(
+                f"expected Prithvi position embedding [1,589,{self.embed_dim}], "
+                f"got {list(position.shape)}"
+            )
+        self.checkpoint_cls_position = position[:, :1].detach().clone()
+        temporal = position[:, 1:].reshape(1, 3, 14, 14, self.embed_dim)
+        self.checkpoint_patch_positions = (
+            temporal.mean(dim=1).permute(0, 3, 1, 2).contiguous()
+        )
+
+    def interpolate_checkpoint_positions(
+        self, spatial_dims: tuple[int, int]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.checkpoint_patch_positions.numel() == 0:
+            raise RuntimeError("checkpoint position embedding was not loaded")
+        patch = F.interpolate(
+            self.checkpoint_patch_positions,
+            size=spatial_dims,
+            mode="bilinear",
+            align_corners=False,
+        )
+        patch = patch.flatten(2).transpose(1, 2)
+        return self.checkpoint_cls_position, patch
+
     def _load_checkpoint(self, path: str):
         """Load Prithvi-100M weights with full key remapping."""
         try:
             ckpt = torch.load(path, map_location="cpu", weights_only=True)
             state = ckpt.get("model", ckpt)
+
+            if self.use_checkpoint_position_embeddings:
+                position = state.get("encoder.pos_embed")
+                if position is None:
+                    raise ValueError(
+                        "Prithvi checkpoint is missing encoder.pos_embed"
+                    )
+                self.set_checkpoint_position_embedding(position)
 
             # Patch embed: Conv3d [768,6,1,16,16] -> Conv2d [768,6,16,16]
             pe_key = "encoder.patch_embed.proj.weight"
@@ -91,6 +133,8 @@ class PrithviBackbone(nn.Module):
             self.load_state_dict(own_state, strict=False)
             logger.info(f"Loaded {loaded}/{len(own_state)} tensors from Prithvi checkpoint")
         except Exception as e:
+            if self.use_checkpoint_position_embeddings:
+                raise
             logger.warning(f"Could not load Prithvi weights: {e}")
 
     def _freeze_all(self):
@@ -105,6 +149,12 @@ class PrithviBackbone(nn.Module):
         x = x.flatten(2).transpose(1, 2)           # [B, N, 768]
         cls = self.cls_token.expand(B, -1, -1)
         x = torch.cat([cls, x], dim=1)             # [B, N+1, 768]
+        if self.use_checkpoint_position_embeddings:
+            cls_position, patch_positions = self.interpolate_checkpoint_positions(
+                (h, w)
+            )
+            positions = torch.cat([cls_position, patch_positions], dim=1)
+            x = x + positions.to(device=x.device, dtype=x.dtype)
         for block in self.blocks:
             x = block(x)
         x = self.norm(x)
