@@ -9,6 +9,8 @@ import numpy as np
 
 
 PROMPT_METHOD = "siglip_film_dense_similarity_houlsby"
+BASELINE_METHOD = "no_text_three_binary_heads_houlsby"
+REQUIRED_METHODS = (PROMPT_METHOD, BASELINE_METHOD)
 REQUIRED_SEEDS = (42, 123, 456)
 REQUIRED_CLASSES = ("building", "road", "water")
 
@@ -55,15 +57,22 @@ def _finite_float(value: Any, label: str) -> float:
     return result
 
 
-def _validate_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+def _validate_rows(
+    rows: Sequence[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     seen_keys: set[tuple[str, int, str]] = set()
+    validated_rows = []
     prompt_rows = []
     for raw in rows:
         if not isinstance(raw, dict):
             raise ValueError("result rows must be mappings")
         if raw.get("synthetic_fallback") is True:
             raise ValueError("synthetic fallback rows are forbidden")
+        if raw.get("missing_weight_substitution") is True:
+            raise ValueError("missing-weight substitution rows are forbidden")
         method = str(raw.get("method", ""))
+        if method not in REQUIRED_METHODS:
+            raise ValueError(f"unsupported method: {method}")
         seed = int(raw.get("seed", -1))
         class_name = str(raw.get("class_name", ""))
         if seed not in REQUIRED_SEEDS:
@@ -74,10 +83,12 @@ def _validate_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         if key in seen_keys:
             raise ValueError(f"duplicate result row: {key}")
         seen_keys.add(key)
+        row = dict(raw)
+        row["checkpoint_reproduced"] = raw.get("checkpoint_reproduced") is True
+        validated_rows.append(row)
         if method != PROMPT_METHOD:
             continue
 
-        row = dict(raw)
         row["seen_iou"] = _finite_float(raw.get("seen_iou"), "seen_iou")
         row["held_out_iou"] = _finite_float(
             raw.get("held_out_iou"), "held_out_iou"
@@ -96,38 +107,38 @@ def _validate_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         if len({array.size for array in arrays}) != 1:
             raise ValueError("per-sample arrays must be aligned")
         prompt_rows.append(row)
-    return prompt_rows
+    return validated_rows, prompt_rows
 
 
 def _incomplete_reasons(rows: Sequence[dict[str, Any]]) -> list[str]:
-    keys = {(int(row["seed"]), str(row["class_name"])) for row in rows}
-    present_seeds = {seed for seed, _ in keys}
-    present_classes = {class_name for _, class_name in keys}
-    reasons = [
-        f"missing_seed:{seed}" for seed in REQUIRED_SEEDS if seed not in present_seeds
-    ]
-    reasons.extend(
-        f"missing_class:{class_name}"
-        for class_name in REQUIRED_CLASSES
-        if class_name not in present_classes
-    )
-    for seed in REQUIRED_SEEDS:
-        for class_name in REQUIRED_CLASSES:
-            if (
-                seed in present_seeds
-                and class_name in present_classes
-                and (seed, class_name) not in keys
-            ):
-                reasons.append(f"missing_row:{seed}:{class_name}")
+    keys = {
+        (str(row["method"]), int(row["seed"]), str(row["class_name"]))
+        for row in rows
+    }
+    reasons = []
+    for method in REQUIRED_METHODS:
+        for seed in REQUIRED_SEEDS:
+            pair_classes = {
+                class_name
+                for row_method, row_seed, class_name in keys
+                if row_method == method and row_seed == seed
+            }
+            if not pair_classes:
+                reasons.append(f"missing_method_seed:{method}:{seed}")
+                continue
+            for class_name in REQUIRED_CLASSES:
+                if class_name not in pair_classes:
+                    reasons.append(f"missing_row:{method}:{seed}:{class_name}")
     return reasons
 
 
 def build_summary(rows, *, bootstrap_iterations=1000, seed=0):
-    prompt_rows = _validate_rows(list(rows))
-    incomplete = _incomplete_reasons(prompt_rows)
+    validated_rows, prompt_rows = _validate_rows(list(rows))
+    incomplete = _incomplete_reasons(validated_rows)
     base = {
         "schema": "paper12.geovlm_prompt_summary.v1",
         "method": PROMPT_METHOD,
+        "required_methods": list(REQUIRED_METHODS),
         "required_seeds": list(REQUIRED_SEEDS),
         "required_classes": list(REQUIRED_CLASSES),
     }
@@ -179,6 +190,9 @@ def build_summary(rows, *, bootstrap_iterations=1000, seed=0):
         "correct_minus_wrong_iou": bootstrap["mean_delta"] >= 0.10,
         "counterfactual_ci_positive": bootstrap["ci95_low"] > 0.0,
         "prompt_probability_change": probability_change >= 0.05,
+        "checkpoint_reproduction": all(
+            row["checkpoint_reproduced"] for row in validated_rows
+        ),
     }
     failed = []
     if not gates["mean_foreground_iou"]:
@@ -194,6 +208,8 @@ def build_summary(rows, *, bootstrap_iterations=1000, seed=0):
         failed.append("counterfactual_ci95_low<=0")
     if not gates["prompt_probability_change"]:
         failed.append("prompt_probability_change<0.05")
+    if not gates["checkpoint_reproduction"]:
+        failed.append("checkpoint_reproduction_failed")
     return {
         **base,
         "mvp_status": "failed" if failed else "passed",

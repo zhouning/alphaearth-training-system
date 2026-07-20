@@ -26,6 +26,15 @@ def _passing_rows():
                         iou - 0.22,
                     ],
                     "prompt_probability_change_by_sample": [0.08, 0.09, 0.07],
+                    "checkpoint_reproduced": True,
+                }
+            )
+            rows.append(
+                {
+                    "method": "no_text_three_binary_heads_houlsby",
+                    "seed": seed,
+                    "class_name": name,
+                    "checkpoint_reproduced": True,
                 }
             )
     return rows
@@ -62,11 +71,44 @@ def test_summary_reports_failed_class_gate():
     assert "class_iou:road<0.25" in summary["failed_gates"]
 
 
+def test_summary_requires_the_baseline_method_seed_matrix():
+    rows = [
+        row
+        for row in _passing_rows()
+        if row["method"] == "siglip_film_dense_similarity_houlsby"
+    ]
+
+    summary = build_summary(rows, bootstrap_iterations=100, seed=7)
+
+    assert summary["mvp_status"] == "incomplete"
+    assert summary["incomplete_reasons"] == [
+        "missing_method_seed:no_text_three_binary_heads_houlsby:42",
+        "missing_method_seed:no_text_three_binary_heads_houlsby:123",
+        "missing_method_seed:no_text_three_binary_heads_houlsby:456",
+    ]
+
+
+def test_summary_fails_when_any_checkpoint_does_not_reproduce():
+    rows = _passing_rows()
+    rows[0]["checkpoint_reproduced"] = False
+
+    summary = build_summary(rows, bootstrap_iterations=100, seed=7)
+
+    assert summary["mvp_status"] == "failed"
+    assert summary["gates"]["checkpoint_reproduction"] is False
+    assert "checkpoint_reproduction_failed" in summary["failed_gates"]
+
+
 def test_summary_marks_single_seed_stage_incomplete():
     rows = [row for row in _passing_rows() if row["seed"] == 42]
     summary = build_summary(rows, bootstrap_iterations=100, seed=7)
     assert summary["mvp_status"] == "incomplete"
-    assert summary["incomplete_reasons"] == ["missing_seed:123", "missing_seed:456"]
+    assert summary["incomplete_reasons"] == [
+        "missing_method_seed:siglip_film_dense_similarity_houlsby:123",
+        "missing_method_seed:siglip_film_dense_similarity_houlsby:456",
+        "missing_method_seed:no_text_three_binary_heads_houlsby:123",
+        "missing_method_seed:no_text_three_binary_heads_houlsby:456",
+    ]
 
 
 def test_summary_rejects_duplicate_and_synthetic_rows():
