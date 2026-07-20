@@ -266,3 +266,67 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
     )
     assert repeated == rows
     assert len(build_calls) == calls_after_first_run
+
+
+def test_runner_resumes_an_incomplete_epoch_checkpoint(monkeypatch, tmp_path):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    prithvi = tmp_path / "prithvi.pt"
+    prithvi.write_bytes(b"tiny-prithvi")
+    config["prithvi"]["checkpoint"] = str(prithvi)
+    config["experiment"]["prompt_config"] = str(
+        Path("geoadapter/bench/configs/geovlm_prompts.yaml").resolve()
+    )
+    config["experiment"]["epochs"] = 2
+    config["experiment"]["batch_size"] = 2
+    config["evaluation"]["preview_count"] = 0
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    checkpoint_path = checkpoint_dir / f"{BASELINE_METHOD}__seed123.pt"
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    trainer = build_trainer(model_builder(config, BASELINE_METHOD, "cpu"), config, "cpu")
+    state = trainer.state_dict(
+        epoch=1,
+        metadata=checkpoint_metadata(config, BASELINE_METHOD, 123),
+    )
+    state["loss_history"] = [2.0]
+    torch.save(state, checkpoint_path)
+    train_calls = []
+
+    def fake_train_one_epoch(
+        _trainer,
+        _loader,
+        _prompt_config,
+        _weights,
+        epoch_seed,
+        _method,
+        *,
+        empty_target_cap,
+    ):
+        train_calls.append((epoch_seed, empty_target_cap))
+        return 1.0
+
+    monkeypatch.setattr(runner, "_train_one_epoch", fake_train_one_epoch)
+    dataset = _TinyPromptDataset()
+
+    rows = runner._run_pair(
+        config,
+        BASELINE_METHOD,
+        123,
+        dataset,
+        dataset,
+        checkpoint_dir,
+        tmp_path / "previews",
+        "cpu",
+        model_builder,
+    )
+
+    resumed = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    assert train_calls == [(124, 0.25)]
+    assert resumed["epoch"] == 2
+    assert resumed["loss_history"] == [2.0, 1.0]
+    assert all(row["loss_history"] == [2.0, 1.0] for row in rows)

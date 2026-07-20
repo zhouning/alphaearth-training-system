@@ -104,3 +104,18 @@ def test_prompt_trainer_reloads_identical_predictions_after_loss_decreases():
     assert epoch == 20
     assert metadata == {"schema": "test"}
     assert torch.allclose(before, after, atol=1e-6)
+
+
+def test_prompt_trainer_rejects_missing_trainable_checkpoint_tensor():
+    trainer = PromptSegmentationTrainer(
+        _build_model(), lr=1e-2, epochs=2, device="cpu"
+    )
+    state = trainer.state_dict(epoch=1, metadata={"schema": "test"})
+    removed_name = next(iter(state["trainable_model"]))
+    del state["trainable_model"][removed_name]
+    clone = PromptSegmentationTrainer(
+        _build_model(), lr=1e-2, epochs=2, device="cpu"
+    )
+
+    with pytest.raises(ValueError, match="missing trainable checkpoint parameters"):
+        clone.load_state_dict(state)

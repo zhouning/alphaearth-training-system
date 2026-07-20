@@ -95,9 +95,20 @@ class PromptSegmentationTrainer:
         }
 
     def load_state_dict(self, state):
-        _, unexpected = self.model.load_state_dict(
+        missing, unexpected = self.model.load_state_dict(
             state["trainable_model"], strict=False
         )
+        trainable_names = {
+            name
+            for name, parameter in self.model.named_parameters()
+            if parameter.requires_grad
+        }
+        missing_trainable = sorted(set(missing) & trainable_names)
+        if missing_trainable:
+            raise ValueError(
+                "missing trainable checkpoint parameters: "
+                + ", ".join(missing_trainable)
+            )
         if unexpected:
             raise ValueError(f"unexpected checkpoint parameters: {unexpected}")
         self.optimizer.load_state_dict(state["optimizer"])

@@ -581,27 +581,32 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
     losses = []
     checkpoint_path = Path(checkpoint_dir) / f"{method}__seed{seed}.pt"
     metadata = checkpoint_metadata(config, method, seed)
+    total_epochs = int(config["experiment"]["epochs"])
+    start_epoch = 0
     if checkpoint_path.exists():
         state = torch.load(checkpoint_path, map_location=device, weights_only=False)
         validate_checkpoint_metadata(state.get("metadata", {}), metadata)
-        trainer.load_state_dict(state)
-        losses = [float(value) for value in state.get("loss_history", [])]
-    else:
-        for epoch in range(int(config["experiment"]["epochs"])):
-            losses.append(
-                _train_one_epoch(
-                    trainer,
-                    loader,
-                    prompt_config,
-                    weights,
-                    seed + epoch,
-                    method,
-                    empty_target_cap=float(
-                        config["experiment"]["empty_target_cap"]
-                    ),
-                )
+        start_epoch, _ = trainer.load_state_dict(state)
+        if not 0 <= start_epoch <= total_epochs:
+            raise ValueError(
+                f"checkpoint epoch {start_epoch} is outside 0..{total_epochs}"
             )
-        state = trainer.state_dict(epoch=int(config["experiment"]["epochs"]), metadata=metadata)
+        losses = [float(value) for value in state.get("loss_history", [])]
+    for epoch in range(start_epoch, total_epochs):
+        losses.append(
+            _train_one_epoch(
+                trainer,
+                loader,
+                prompt_config,
+                weights,
+                seed + epoch,
+                method,
+                empty_target_cap=float(
+                    config["experiment"]["empty_target_cap"]
+                ),
+            )
+        )
+        state = trainer.state_dict(epoch=epoch + 1, metadata=metadata)
         state["loss_history"] = losses
         _save_checkpoint(checkpoint_path, state)
     trainable_params, frozen_params = _parameter_counts(model)
