@@ -19,6 +19,12 @@ dependencies = [
 
 [project.optional-dependencies]
 bench = ["torchgeo>=0.5", "matplotlib", "seaborn", "umap-learn"]
+geovlm = [
+    "transformers>=4.46,<5",
+    "sentencepiece>=0.2",
+    "safetensors>=0.4",
+    "huggingface-hub>=0.26",
+]
 dev = ["pytest>=7.0", "pytest-cov"]
 
 [tool.pytest.ini_options]
