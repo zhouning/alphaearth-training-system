@@ -892,13 +892,24 @@ def _restore_checkpoint_history(
     best_rank = tuple(best_rank_value)
     if not np.isfinite(np.asarray(best_rank, dtype=float)).all():
         raise ValueError("checkpoint best_probe_rank must be finite")
-    if best_rank != probe_rank(probe_history[best_epoch - 1]):
-        raise ValueError("checkpoint best probe rank does not match probe history")
+    expected_best_epoch = None
+    expected_best_rank = None
+    for epoch, probe in enumerate(probe_history, start=1):
+        rank = probe_rank(probe)
+        if expected_best_rank is None or rank > expected_best_rank:
+            expected_best_epoch = epoch
+            expected_best_rank = rank
+    if best_epoch != expected_best_epoch or best_rank != expected_best_rank:
+        raise ValueError("checkpoint best selection mismatch")
     metadata = state.get("metadata", {})
     if metadata.get("best_epoch") != best_epoch:
-        raise ValueError("checkpoint metadata best_epoch mismatch")
+        raise ValueError(
+            "checkpoint best selection mismatch: metadata best_epoch"
+        )
     if metadata.get("best_probe_rank") != list(best_rank):
-        raise ValueError("checkpoint metadata best_probe_rank mismatch")
+        raise ValueError(
+            "checkpoint best selection mismatch: metadata best_probe_rank"
+        )
     return losses, list(probe_history), training_stats, best_epoch, best_rank
 
 
@@ -970,19 +981,31 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
         )
         validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
         best_state_epoch = int(best_state.get("epoch", -1))
-        _, _, _, stored_best_epoch, stored_best_rank = (
-            _restore_checkpoint_history(
-                best_state,
-                checkpoint_epoch=best_state_epoch,
-                total_epochs=total_epochs,
-                probe_indices_by_class=probe_indices_by_class,
-                probe_sha256=split.probe_sha256,
-            )
+        (
+            best_losses,
+            best_probe_history,
+            _,
+            stored_best_epoch,
+            stored_best_rank,
+        ) = _restore_checkpoint_history(
+            best_state,
+            checkpoint_epoch=best_state_epoch,
+            total_epochs=total_epochs,
+            probe_indices_by_class=probe_indices_by_class,
+            probe_sha256=split.probe_sha256,
         )
         if best_state_epoch != best_epoch:
             raise ValueError("best checkpoint epoch does not match last checkpoint")
         if stored_best_epoch != best_epoch or stored_best_rank != best_rank:
             raise ValueError("best checkpoint references do not match last checkpoint")
+        if best_losses != losses[:best_epoch]:
+            raise ValueError(
+                "best checkpoint history mismatch: loss_history"
+            )
+        if best_probe_history != probe_history[:best_epoch]:
+            raise ValueError(
+                "best checkpoint history mismatch: probe_history"
+            )
 
     batch_size = int(config["experiment"]["batch_size"])
     empty_target_cap = float(config["experiment"]["empty_target_cap"])

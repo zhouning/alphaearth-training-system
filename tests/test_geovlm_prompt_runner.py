@@ -1,3 +1,4 @@
+import copy
 import json
 from pathlib import Path
 
@@ -597,6 +598,247 @@ def _fake_evaluation_rows(method, seed):
         {"method": method, "seed": seed, "class_name": class_name}
         for class_name in ("building", "water", "road")
     ]
+
+
+def _resume_state(
+    config,
+    model_builder,
+    *,
+    method,
+    seed,
+    epoch,
+    losses,
+    probes,
+    training_stats,
+    probe_indices,
+    probe_sha256,
+    best_epoch,
+):
+    best_rank = list(probe_rank(probes[best_epoch - 1]))
+    metadata = checkpoint_metadata(config, method, seed)
+    metadata.update(
+        {"best_epoch": best_epoch, "best_probe_rank": best_rank}
+    )
+    trainer = build_trainer(model_builder(config, method, "cpu"), config, "cpu")
+    with torch.no_grad():
+        trainer.model.condition_bias.fill_(float(epoch))
+    state = trainer.state_dict(epoch=epoch, metadata=metadata)
+    state.update(
+        {
+            "loss_history": list(losses),
+            "probe_history": copy.deepcopy(probes),
+            "training_stats": copy.deepcopy(training_stats),
+            "probe_indices_by_class": copy.deepcopy(probe_indices),
+            "probe_sha256": probe_sha256,
+            "best_epoch": best_epoch,
+            "best_probe_rank": best_rank,
+        }
+    )
+    return state
+
+
+def _two_epoch_resume_contract(config, dataset, model_builder, *, best_epoch):
+    split = reserve_training_probe(
+        scan_target_present_pool(dataset), seed=123, positives_per_class=1
+    )
+    probe_indices = {
+        class_name: list(indices)
+        for class_name, indices in split.probe_indices_by_class.items()
+    }
+    probes = [
+        {
+            **_finite_probe(1.0, 2.0),
+            "epoch": 1,
+            "training_loss": 2.0,
+        },
+        {
+            **_finite_probe(0.5, 3.0),
+            "epoch": 2,
+            "training_loss": 3.0,
+        },
+    ]
+    last = _resume_state(
+        config,
+        model_builder,
+        method=BASELINE_METHOD,
+        seed=123,
+        epoch=2,
+        losses=[2.0, 3.0],
+        probes=probes,
+        training_stats={
+            key: value
+            for key, value in _epoch_stats(3.0, sample_count=12).items()
+            if key != "loss"
+        },
+        probe_indices=probe_indices,
+        probe_sha256=split.probe_sha256,
+        best_epoch=best_epoch,
+    )
+    return last, probes, probe_indices, split.probe_sha256
+
+
+def test_runner_recomputes_best_selection_from_last_probe_history(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    dataset = _TinyPromptDataset()
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    last, _, _, _ = _two_epoch_resume_contract(
+        config, dataset, model_builder, best_epoch=2
+    )
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    last_path = base.with_suffix(".last.pt")
+    best_path = base.with_suffix(".best.pt")
+    torch.save(last, last_path)
+    torch.save(copy.deepcopy(last), best_path)
+    before = {path: path.read_bytes() for path in (last_path, best_path)}
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+
+    with pytest.raises(ValueError, match="best selection mismatch"):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            checkpoint_dir,
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
+
+
+def test_runner_rejects_last_metadata_best_selection_mismatch(tmp_path):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    dataset = _TinyPromptDataset()
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    last, probes, _, _ = _two_epoch_resume_contract(
+        config, dataset, model_builder, best_epoch=1
+    )
+    last["metadata"].update(
+        {
+            "best_epoch": 2,
+            "best_probe_rank": list(probe_rank(probes[1])),
+        }
+    )
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    last_path = base.with_suffix(".last.pt")
+    best_path = base.with_suffix(".best.pt")
+    torch.save(last, last_path)
+    torch.save(copy.deepcopy(last), best_path)
+    before = {path: path.read_bytes() for path in (last_path, best_path)}
+
+    with pytest.raises(ValueError, match="best selection mismatch"):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            checkpoint_dir,
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
+
+
+@pytest.mark.parametrize("corrupted_field", ["loss_history", "probe_history"])
+def test_runner_rejects_best_history_that_is_not_last_prefix(
+    monkeypatch, tmp_path, corrupted_field
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    dataset = _TinyPromptDataset()
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    last, probes, probe_indices, probe_sha256 = _two_epoch_resume_contract(
+        config, dataset, model_builder, best_epoch=1
+    )
+    best = _resume_state(
+        config,
+        model_builder,
+        method=BASELINE_METHOD,
+        seed=123,
+        epoch=1,
+        losses=[2.0],
+        probes=probes[:1],
+        training_stats={
+            key: value
+            for key, value in _epoch_stats(2.0).items()
+            if key != "loss"
+        },
+        probe_indices=probe_indices,
+        probe_sha256=probe_sha256,
+        best_epoch=1,
+    )
+    if corrupted_field == "loss_history":
+        best["loss_history"] = [9.0]
+        best["probe_history"][0]["training_loss"] = 9.0
+    else:
+        best["probe_history"][0]["classes"]["building"][
+            "prediction_range"
+        ] = 9.0
+
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    last_path = base.with_suffix(".last.pt")
+    best_path = base.with_suffix(".best.pt")
+    torch.save(last, last_path)
+    torch.save(best, best_path)
+    before = {path: path.read_bytes() for path in (last_path, best_path)}
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=f"best checkpoint history mismatch: {corrupted_field}",
+    ):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            checkpoint_dir,
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
 
 
 def test_runner_rejects_legacy_and_lone_best_checkpoints_before_building(tmp_path):
