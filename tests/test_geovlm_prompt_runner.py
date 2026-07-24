@@ -1176,7 +1176,8 @@ def test_runner_rejects_legacy_and_lone_best_checkpoints_before_building(tmp_pat
     legacy_dir = tmp_path / "legacy-checkpoints"
     legacy_dir.mkdir()
     legacy_path = legacy_dir / f"{BASELINE_METHOD}__seed123.pt"
-    legacy_path.write_bytes(b"legacy")
+    original = b"legacy"
+    legacy_path.write_bytes(original)
     with pytest.raises(ValueError, match="archive it before recovery"):
         runner._run_pair(
             config,
@@ -1189,6 +1190,7 @@ def test_runner_rejects_legacy_and_lone_best_checkpoints_before_building(tmp_pat
             "cpu",
             forbidden_model_builder,
         )
+    assert legacy_path.read_bytes() == original
     assert list(legacy_dir.iterdir()) == [legacy_path]
 
     lone_best_dir = tmp_path / "lone-best-checkpoints"
@@ -1208,6 +1210,132 @@ def test_runner_rejects_legacy_and_lone_best_checkpoints_before_building(tmp_pat
             forbidden_model_builder,
         )
     assert list(lone_best_dir.iterdir()) == [best_path]
+
+
+def test_runner_rejects_old_raw_results_without_modifying_them(tmp_path):
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    output = tmp_path / "failed.json"
+    summary_output = tmp_path / "summary.json"
+    original = b'{"schema":"paper12.geovlm_prompt_results.v1","rows":[]}'
+    output.write_bytes(original)
+    dataset_called = False
+
+    def dataset_builder(_config):
+        nonlocal dataset_called
+        dataset_called = True
+        return _TinyPromptDataset(), _TinyPromptDataset()
+
+    with pytest.raises(ValueError, match="archive.*before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=tmp_path / "checkpoints",
+            preview_dir=tmp_path / "previews",
+            stage="seed42",
+            dataset_builder=dataset_builder,
+        )
+
+    assert output.read_bytes() == original
+    assert dataset_called is False
+    assert not summary_output.exists()
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        pytest.param(b"{not-json", id="invalid-json"),
+        pytest.param(b"[]", id="non-object-payload"),
+        pytest.param(
+            b'{"schema":"paper12.geovlm_prompt_results.v1",'
+            b'"training_contract":"paper12.geovlm_prompt_training.v2",'
+            b'"rows":[]}',
+            id="wrong-schema",
+        ),
+        pytest.param(
+            b'{"schema":"paper12.geovlm_prompt_results.v2",'
+            b'"training_contract":"paper12.geovlm_prompt_training.v2",'
+            b'"rows":{}}',
+            id="non-list-rows",
+        ),
+        pytest.param(
+            b'{"schema":"paper12.geovlm_prompt_results.v2",'
+            b'"training_contract":"paper12.geovlm_prompt_training.v1",'
+            b'"rows":[]}',
+            id="wrong-top-level-contract",
+        ),
+        pytest.param(
+            b'{"schema":"paper12.geovlm_prompt_results.v2",'
+            b'"training_contract":"paper12.geovlm_prompt_training.v2",'
+            b'"rows":[null]}',
+            id="non-object-row",
+        ),
+        pytest.param(
+            b'{"schema":"paper12.geovlm_prompt_results.v2",'
+            b'"training_contract":"paper12.geovlm_prompt_training.v2",'
+            b'"rows":[{"training_contract":"other"}]}',
+            id="wrong-row-contract",
+        ),
+    ],
+)
+def test_runner_rejects_incompatible_raw_results_before_dataset_build(
+    tmp_path, original
+):
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    output = tmp_path / "failed.json"
+    summary_output = tmp_path / "summary.json"
+    output.write_bytes(original)
+    dataset_called = False
+
+    def dataset_builder(_config):
+        nonlocal dataset_called
+        dataset_called = True
+        return _TinyPromptDataset(), _TinyPromptDataset()
+
+    with pytest.raises(ValueError, match="archive.*before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=tmp_path / "checkpoints",
+            preview_dir=tmp_path / "previews",
+            stage="seed42",
+            dataset_builder=dataset_builder,
+        )
+
+    assert output.read_bytes() == original
+    assert dataset_called is False
+    assert not summary_output.exists()
+
+
+def test_runner_rejects_unsupported_training_contract_before_dataset_build(
+    tmp_path,
+):
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    config["experiment"]["training_contract"] = (
+        "paper12.geovlm_prompt_training.v1"
+    )
+    dataset_called = False
+
+    def dataset_builder(_config):
+        nonlocal dataset_called
+        dataset_called = True
+        return _TinyPromptDataset(), _TinyPromptDataset()
+
+    with pytest.raises(ValueError, match="unsupported GeoVLM training contract"):
+        run_experiment(
+            config,
+            output_path=tmp_path / "rows.json",
+            summary_output_path=tmp_path / "summary.json",
+            checkpoint_dir=tmp_path / "checkpoints",
+            preview_dir=tmp_path / "previews",
+            stage="seed42",
+            dataset_builder=dataset_builder,
+        )
+
+    assert dataset_called is False
+    assert not (tmp_path / "rows.json").exists()
+    assert not (tmp_path / "summary.json").exists()
 
 
 def test_runner_evaluates_best_probe_checkpoint_when_later_epoch_degrades(
@@ -1556,7 +1684,8 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(
     assert all(path.is_file() and path.suffix == ".png" for path in preview_paths)
     assert all("seed42" in path.name for path in preview_paths)
     raw = json.loads(output.read_text(encoding="utf-8"))
-    assert raw["schema"] == "paper12.geovlm_prompt_results.v1"
+    assert raw["schema"] == "paper12.geovlm_prompt_results.v2"
+    assert raw["training_contract"] == "paper12.geovlm_prompt_training.v2"
     assert raw["seed42_smoke"]["passed"] is True
     summary = json.loads(summary_output.read_text(encoding="utf-8"))
     assert summary["mvp_status"] == "incomplete"

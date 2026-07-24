@@ -44,6 +44,37 @@ from geoadapter.bench.geovlm_prompt_summary import build_summary, binary_metrics
 
 PROMPT_METHOD = "siglip_film_dense_similarity_houlsby"
 BASELINE_METHOD = "no_text_three_binary_heads_houlsby"
+TRAINING_CONTRACT = "paper12.geovlm_prompt_training.v2"
+
+
+def _require_training_contract(config):
+    actual = config["experiment"].get("training_contract")
+    if actual != TRAINING_CONTRACT:
+        raise ValueError(
+            f"unsupported GeoVLM training contract: {actual!r}; "
+            f"expected {TRAINING_CONTRACT!r}"
+        )
+    return actual
+
+
+def _rows_from_compatible_payload(payload, path, training_contract):
+    rows = payload.get("rows") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "paper12.geovlm_prompt_results.v2"
+        or payload.get("training_contract") != training_contract
+        or not isinstance(rows, list)
+        or any(
+            not isinstance(row, dict)
+            or row.get("training_contract") != training_contract
+            for row in rows
+        )
+    ):
+        raise ValueError(
+            f"incompatible GeoVLM result artifact {path}; "
+            "archive it before recovery"
+        )
+    return rows
 
 
 def sha256_file(path: str | Path) -> str:
@@ -1252,9 +1283,10 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
     return rows
 
 
-def _raw_results_payload(rows):
+def _raw_results_payload(rows, training_contract):
     payload = {
-        "schema": "paper12.geovlm_prompt_results.v1",
+        "schema": "paper12.geovlm_prompt_results.v2",
+        "training_contract": training_contract,
         "rows": rows,
     }
     if any(
@@ -1277,14 +1309,20 @@ def run_experiment(
     dataset_builder=build_datasets,
     model_builder=build_model,
 ):
+    training_contract = _require_training_contract(config)
     if config["experiment"].get("allow_synthetic_fallback") is not False:
         raise ValueError("GeoVLM runner requires allow_synthetic_fallback: false")
     output_path = Path(output_path)
     summary_output_path = Path(summary_output_path)
     rows = []
     if output_path.exists():
-        payload = json.loads(output_path.read_text(encoding="utf-8"))
-        rows = payload.get("rows", []) if isinstance(payload, dict) else payload
+        try:
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            payload = None
+        rows = _rows_from_compatible_payload(
+            payload, output_path, training_contract
+        )
     if stage == "seed42":
         pairs = [(PROMPT_METHOD, 42)]
     elif stage == "full":
@@ -1321,7 +1359,7 @@ def run_experiment(
                 model_builder,
             )
             rows.extend(new_rows)
-            raw_payload = _raw_results_payload(rows)
+            raw_payload = _raw_results_payload(rows, training_contract)
             _atomic_json(output_path, raw_payload)
             _atomic_json(
                 summary_output_path,
