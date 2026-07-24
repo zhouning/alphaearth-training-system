@@ -11,6 +11,7 @@ from torch.utils.data import Dataset
 from geoadapter.bench.run_geovlm_prompt_segmentation import (
     BASELINE_METHOD,
     PROMPT_METHOD,
+    TRAINING_CONTRACT,
     _atomic_json,
     _checkpoint_reproduces,
     _evaluate_probe,
@@ -708,6 +709,18 @@ def _fake_evaluation_rows(method, seed):
     ]
 
 
+def _complete_identity_rows(method=BASELINE_METHOD, seed=42):
+    return [
+        {
+            "training_contract": TRAINING_CONTRACT,
+            "method": method,
+            "seed": seed,
+            "class_name": class_name,
+        }
+        for class_name in ("building", "road", "water")
+    ]
+
+
 def _resume_state(
     config,
     model_builder,
@@ -1212,6 +1225,167 @@ def test_runner_rejects_legacy_and_lone_best_checkpoints_before_building(tmp_pat
     assert list(lone_best_dir.iterdir()) == [best_path]
 
 
+@pytest.mark.parametrize(
+    ("invalid_suffix", "message"),
+    [
+        pytest.param(".pt", "archive.*before recovery", id="legacy"),
+        pytest.param(
+            ".best.pt",
+            "best checkpoint exists without last checkpoint",
+            id="lone-best",
+        ),
+        pytest.param(
+            ".last.pt",
+            "last checkpoint exists without best checkpoint",
+            id="lone-last",
+        ),
+    ],
+)
+def test_runner_preflights_later_full_pair_before_any_mutation(
+    monkeypatch, tmp_path, invalid_suffix, message
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [BASELINE_METHOD, PROMPT_METHOD]
+    config["experiment"]["seeds"] = [42]
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    invalid = checkpoint_dir / f"{PROMPT_METHOD}__seed42{invalid_suffix}"
+    invalid.write_bytes(b"incompatible-checkpoint")
+    before = {path.name: path.read_bytes() for path in checkpoint_dir.iterdir()}
+    output = tmp_path / "rows.json"
+    summary_output = tmp_path / "summary.json"
+    dataset_calls = []
+    model_calls = []
+    real_run_pair = runner._run_pair
+
+    def dataset_builder(_config):
+        dataset_calls.append(True)
+        return _TinyPromptDataset(), _TinyPromptDataset()
+
+    def model_builder(_config, method, _device):
+        model_calls.append(method)
+        raise AssertionError("model must not be built before run-level preflight")
+
+    def simulated_run_pair(
+        pair_config,
+        method,
+        seed,
+        train,
+        validation,
+        pair_checkpoint_dir,
+        preview_dir,
+        device,
+        pair_model_builder,
+    ):
+        if method == PROMPT_METHOD:
+            return real_run_pair(
+                pair_config,
+                method,
+                seed,
+                train,
+                validation,
+                pair_checkpoint_dir,
+                preview_dir,
+                device,
+                pair_model_builder,
+            )
+        base = Path(pair_checkpoint_dir) / f"{method}__seed{seed}"
+        base.with_suffix(".last.pt").write_bytes(b"new-last")
+        base.with_suffix(".best.pt").write_bytes(b"new-best")
+        return [
+            {
+                "method": method,
+                "seed": seed,
+                "class_name": class_name,
+                "training_contract": runner.TRAINING_CONTRACT,
+            }
+            for class_name in ("building", "road", "water")
+        ]
+
+    monkeypatch.setattr(runner, "_run_pair", simulated_run_pair)
+
+    with pytest.raises(ValueError, match=message):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=checkpoint_dir,
+            preview_dir=tmp_path / "previews",
+            stage="full",
+            dataset_builder=dataset_builder,
+            model_builder=model_builder,
+        )
+
+    assert dataset_calls == []
+    assert model_calls == []
+    assert {
+        path.name: path.read_bytes() for path in checkpoint_dir.iterdir()
+    } == before
+    assert not output.exists()
+    assert not summary_output.exists()
+
+
+def test_runner_preflights_checkpoint_for_already_completed_pair(tmp_path):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [BASELINE_METHOD]
+    config["experiment"]["seeds"] = [42]
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    legacy = checkpoint_dir / f"{BASELINE_METHOD}__seed42.pt"
+    legacy.write_bytes(b"completed-pair-legacy")
+    output = tmp_path / "rows.json"
+    output.write_text(
+        json.dumps(
+            {
+                "schema": "paper12.geovlm_prompt_results.v2",
+                "training_contract": runner.TRAINING_CONTRACT,
+                "rows": [
+                    {
+                        "method": BASELINE_METHOD,
+                        "seed": 42,
+                        "class_name": class_name,
+                        "training_contract": runner.TRAINING_CONTRACT,
+                    }
+                    for class_name in ("building", "road", "water")
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = {output: output.read_bytes(), legacy: legacy.read_bytes()}
+    summary_output = tmp_path / "summary.json"
+    dataset_called = False
+
+    def dataset_builder(_config):
+        nonlocal dataset_called
+        dataset_called = True
+        return _TinyPromptDataset(), _TinyPromptDataset()
+
+    def forbidden_model_builder(*_args):
+        raise AssertionError("model must not be built")
+
+    with pytest.raises(ValueError, match="archive.*before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=checkpoint_dir,
+            preview_dir=tmp_path / "previews",
+            stage="full",
+            dataset_builder=dataset_builder,
+            model_builder=forbidden_model_builder,
+        )
+
+    assert dataset_called is False
+    assert {path: path.read_bytes() for path in before} == before
+    assert list(checkpoint_dir.iterdir()) == [legacy]
+    assert not summary_output.exists()
+
+
 def test_runner_rejects_old_raw_results_without_modifying_them(tmp_path):
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     output = tmp_path / "failed.json"
@@ -1306,6 +1480,198 @@ def test_runner_rejects_incompatible_raw_results_before_dataset_build(
     assert output.read_bytes() == original
     assert dataset_called is False
     assert not summary_output.exists()
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        pytest.param(
+            [
+                {
+                    "training_contract": TRAINING_CONTRACT,
+                    "seed": 42,
+                    "class_name": "building",
+                }
+            ],
+            id="missing-method",
+        ),
+        pytest.param(
+            [
+                {
+                    "training_contract": TRAINING_CONTRACT,
+                    "method": BASELINE_METHOD,
+                    "class_name": "building",
+                }
+            ],
+            id="missing-seed",
+        ),
+        pytest.param(
+            [
+                {
+                    "training_contract": TRAINING_CONTRACT,
+                    "method": BASELINE_METHOD,
+                    "seed": 42,
+                }
+            ],
+            id="missing-class",
+        ),
+        pytest.param(
+            _complete_identity_rows(method="unknown-method"),
+            id="invalid-method",
+        ),
+        pytest.param(_complete_identity_rows(seed=999), id="invalid-seed"),
+        pytest.param(_complete_identity_rows(seed=True), id="boolean-seed"),
+        pytest.param(_complete_identity_rows(seed="42"), id="non-integer-seed"),
+        pytest.param(
+            [
+                {
+                    **row,
+                    "class_name": (
+                        "forest"
+                        if row["class_name"] == "water"
+                        else row["class_name"]
+                    ),
+                }
+                for row in _complete_identity_rows()
+            ],
+            id="invalid-class",
+        ),
+        pytest.param(
+            [
+                *_complete_identity_rows(),
+                _complete_identity_rows()[0],
+            ],
+            id="duplicate-row",
+        ),
+        pytest.param(_complete_identity_rows()[:2], id="partial-pair"),
+    ],
+)
+def test_runner_rejects_invalid_raw_row_identity_without_mutation(tmp_path, rows):
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [BASELINE_METHOD]
+    config["experiment"]["seeds"] = [42]
+    output = tmp_path / "rows.json"
+    original = json.dumps(
+        {
+            "schema": "paper12.geovlm_prompt_results.v2",
+            "training_contract": TRAINING_CONTRACT,
+            "rows": rows,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    output.write_bytes(original)
+    summary_output = tmp_path / "summary.json"
+    dataset_called = False
+
+    def dataset_builder(_config):
+        nonlocal dataset_called
+        dataset_called = True
+        raise AssertionError("dataset must not be built for incompatible raw rows")
+
+    with pytest.raises(ValueError, match="archive.*before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=tmp_path / "checkpoints",
+            preview_dir=tmp_path / "previews",
+            stage="full",
+            dataset_builder=dataset_builder,
+        )
+
+    assert output.read_bytes() == original
+    assert dataset_called is False
+    assert not summary_output.exists()
+    assert not (tmp_path / "checkpoints").exists()
+
+
+def test_runner_continues_pending_full_pair_from_compatible_raw_rows(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path, epochs=1)
+    config["methods"] = [PROMPT_METHOD, BASELINE_METHOD]
+    config["experiment"]["seeds"] = [42]
+    existing_rows = _complete_identity_rows(PROMPT_METHOD, 42)
+    for row in existing_rows:
+        row.update(
+            {
+                "seen_iou": 0.5,
+                "held_out_iou": 0.4,
+                "correct_iou_by_sample": [0.5],
+                "wrong_iou_by_sample": [0.1],
+                "prompt_probability_change_by_sample": [0.1],
+                "loss_history": [2.0, 1.0],
+                "prediction_nonconstant": True,
+                "checkpoint_reproduced": True,
+            }
+        )
+    output = tmp_path / "rows.json"
+    output.write_text(
+        json.dumps(
+            {
+                "schema": "paper12.geovlm_prompt_results.v2",
+                "training_contract": TRAINING_CONTRACT,
+                "rows": existing_rows,
+            }
+        ),
+        encoding="utf-8",
+    )
+    dataset_calls = []
+    model_calls = []
+
+    def dataset_builder(_config):
+        dataset_calls.append(True)
+        dataset = _TinyPromptDataset()
+        return dataset, dataset
+
+    def model_builder(_config, method, device):
+        model_calls.append(method)
+        return _TinyConditionalModel().to(device)
+
+    monkeypatch.setattr(
+        runner,
+        "_train_one_epoch",
+        lambda *_args, **_kwargs: _epoch_stats(1.0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_probe",
+        lambda *_args, **_kwargs: _finite_probe(1.0, 1.0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+    monkeypatch.setattr(runner, "_checkpoint_reproduces", lambda *_args: True)
+
+    rows = run_experiment(
+        config,
+        output_path=output,
+        summary_output_path=tmp_path / "summary.json",
+        checkpoint_dir=tmp_path / "checkpoints",
+        preview_dir=tmp_path / "previews",
+        stage="full",
+        dataset_builder=dataset_builder,
+        model_builder=model_builder,
+    )
+
+    assert dataset_calls == [True]
+    assert model_calls == [BASELINE_METHOD]
+    assert len(rows) == 6
+    assert completed_keys(rows) == {
+        (PROMPT_METHOD, 42),
+        (BASELINE_METHOD, 42),
+    }
+    raw = json.loads(output.read_text(encoding="utf-8"))
+    assert raw["schema"] == "paper12.geovlm_prompt_results.v2"
+    assert raw["training_contract"] == TRAINING_CONTRACT
+    assert len(raw["rows"]) == 6
+    assert (tmp_path / "summary.json").exists()
 
 
 def test_runner_rejects_unsupported_training_contract_before_dataset_build(

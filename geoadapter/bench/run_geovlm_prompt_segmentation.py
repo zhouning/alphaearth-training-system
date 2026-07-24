@@ -39,7 +39,13 @@ from geoadapter.models.prompt_segmentation import (
     PromptSegmentationModel,
     ThreeHeadSegmentationBaseline,
 )
-from geoadapter.bench.geovlm_prompt_summary import build_summary, binary_metrics
+from geoadapter.bench.geovlm_prompt_summary import (
+    REQUIRED_CLASSES,
+    REQUIRED_METHODS,
+    REQUIRED_SEEDS,
+    binary_metrics,
+    build_summary,
+)
 
 
 PROMPT_METHOD = "siglip_film_dense_similarity_houlsby"
@@ -57,6 +63,13 @@ def _require_training_contract(config):
     return actual
 
 
+def _incompatible_result_artifact(path):
+    return ValueError(
+        f"incompatible GeoVLM result artifact {path}; "
+        "archive it before recovery"
+    )
+
+
 def _rows_from_compatible_payload(payload, path, training_contract):
     rows = payload.get("rows") if isinstance(payload, dict) else None
     if (
@@ -70,11 +83,49 @@ def _rows_from_compatible_payload(payload, path, training_contract):
             for row in rows
         )
     ):
-        raise ValueError(
-            f"incompatible GeoVLM result artifact {path}; "
-            "archive it before recovery"
-        )
+        raise _incompatible_result_artifact(path)
+    seen = set()
+    classes_by_pair = {}
+    for row in rows:
+        method = row.get("method")
+        seed = row.get("seed")
+        class_name = row.get("class_name")
+        if (
+            method not in REQUIRED_METHODS
+            or isinstance(seed, bool)
+            or not isinstance(seed, int)
+            or seed not in REQUIRED_SEEDS
+            or class_name not in REQUIRED_CLASSES
+        ):
+            raise _incompatible_result_artifact(path)
+        key = (method, seed, class_name)
+        if key in seen:
+            raise _incompatible_result_artifact(path)
+        seen.add(key)
+        classes_by_pair.setdefault((method, seed), set()).add(class_name)
+    if any(
+        classes != set(REQUIRED_CLASSES) for classes in classes_by_pair.values()
+    ):
+        raise _incompatible_result_artifact(path)
     return rows
+
+
+def _preflight_checkpoint_layouts(checkpoint_dir, pairs):
+    checkpoint_dir = Path(checkpoint_dir)
+    for method, seed in pairs:
+        checkpoint_base = checkpoint_dir / f"{method}__seed{seed}"
+        last_checkpoint_path = checkpoint_base.with_suffix(".last.pt")
+        best_checkpoint_path = checkpoint_base.with_suffix(".best.pt")
+        legacy_checkpoint_path = checkpoint_base.with_suffix(".pt")
+        if legacy_checkpoint_path.exists():
+            raise ValueError(
+                f"legacy checkpoint exists at {legacy_checkpoint_path}; "
+                "archive it before recovery"
+            )
+        if best_checkpoint_path.exists() and not last_checkpoint_path.exists():
+            raise ValueError("best checkpoint exists without last checkpoint")
+        if last_checkpoint_path.exists() and not best_checkpoint_path.exists():
+            raise ValueError("last checkpoint exists without best checkpoint")
 
 
 def sha256_file(path: str | Path) -> str:
@@ -1333,6 +1384,7 @@ def run_experiment(
         ]
     else:
         raise ValueError("stage must be seed42 or full")
+    _preflight_checkpoint_layouts(checkpoint_dir, pairs)
     done = completed_keys(rows)
     pending = [(method, seed) for method, seed in pairs if (method, seed) not in done]
     if any(
