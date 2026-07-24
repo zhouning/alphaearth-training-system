@@ -1036,6 +1036,17 @@ def validate_checkpoint_best_selection(state, checkpoint_epoch):
         ) from exc
     if not np.isfinite(best_rank_array).all():
         raise ValueError("checkpoint best_probe_rank must be finite")
+    if not np.equal(best_rank_array[:3], np.trunc(best_rank_array[:3])).all():
+        raise ValueError(
+            "checkpoint best_probe_rank integer positions must be integers"
+        )
+    best_rank = (
+        int(best_rank_array[0]),
+        int(best_rank_array[1]),
+        int(best_rank_array[2]),
+        float(best_rank_array[3]),
+        float(best_rank_array[4]),
+    )
     expected_best_epoch = None
     expected_best_rank = None
     for epoch, probe in enumerate(probe_history, start=1):
@@ -1219,8 +1230,14 @@ def _preflight_existing_checkpoint_contents(
                 split=split,
                 device=device,
             )
-            model = model_builder(config, method, device)
-            trainer = build_trainer(model, config, device)
+        except Exception as exc:
+            raise ValueError(
+                f"incompatible GeoVLM checkpoint pair {method}/seed{seed}; "
+                f"archive it before recovery: {exc}"
+            ) from exc
+        model = model_builder(config, method, device)
+        trainer = build_trainer(model, config, device)
+        try:
             for role in ("last", "best"):
                 state = resume[f"{role}_state"]
                 loaded_epoch, _ = trainer.load_state_dict(state)

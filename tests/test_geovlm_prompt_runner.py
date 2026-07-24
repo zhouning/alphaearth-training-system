@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
@@ -25,6 +26,7 @@ from geoadapter.bench.run_geovlm_prompt_segmentation import (
     run_experiment,
     seed42_smoke_checks,
     sha256_file,
+    validate_checkpoint_best_selection,
     validate_checkpoint_metadata,
 )
 from geoadapter.bench.geovlm_training import (
@@ -821,6 +823,66 @@ def _two_epoch_resume_contract(config, dataset, model_builder, *, best_epoch):
     )
 
 
+def test_checkpoint_best_rank_normalizes_numpy_scalars_for_json():
+    probe = {
+        **_finite_probe(1.0, 2.0),
+        "epoch": 1,
+        "training_loss": 2.0,
+    }
+    native_rank = probe_rank(probe)
+    numpy_rank = [
+        np.int64(native_rank[0]),
+        np.int64(native_rank[1]),
+        np.int64(native_rank[2]),
+        np.float64(native_rank[3]),
+        np.float64(native_rank[4]),
+    ]
+    state = {
+        "loss_history": [2.0],
+        "probe_history": [probe],
+        "best_epoch": 1,
+        "best_probe_rank": numpy_rank,
+        "metadata": {
+            "best_epoch": 1,
+            "best_probe_rank": list(numpy_rank),
+        },
+    }
+
+    _, _, _, normalized_rank = validate_checkpoint_best_selection(state, 1)
+
+    assert tuple(type(value) for value in normalized_rank) == (
+        int,
+        int,
+        int,
+        float,
+        float,
+    )
+    json.dumps(normalized_rank, allow_nan=False)
+
+
+def test_checkpoint_best_rank_rejects_fractional_count_before_casting():
+    probe = {
+        **_finite_probe(1.0, 2.0),
+        "epoch": 1,
+        "training_loss": 2.0,
+    }
+    fractional_rank = list(probe_rank(probe))
+    fractional_rank[1] = 1.5
+    state = {
+        "loss_history": [2.0],
+        "probe_history": [probe],
+        "best_epoch": 1,
+        "best_probe_rank": fractional_rank,
+        "metadata": {
+            "best_epoch": 1,
+            "best_probe_rank": list(fractional_rank),
+        },
+    }
+
+    with pytest.raises(ValueError, match="integer"):
+        validate_checkpoint_best_selection(state, 1)
+
+
 def test_runner_rejects_full_source_positive_weight_drift_before_writing(
     monkeypatch, tmp_path
 ):
@@ -1569,6 +1631,54 @@ def _write_valid_resume_pair(config, dataset, checkpoint_dir, model_builder):
     torch.save(last, paths["last"])
     torch.save(best, paths["best"])
     return paths
+
+
+def test_runner_preserves_model_builder_environment_error_during_preflight(
+    tmp_path,
+):
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [BASELINE_METHOD]
+    config["experiment"]["seeds"] = [123]
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    dataset = _TinyPromptDataset()
+
+    def fixture_model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    paths = _write_valid_resume_pair(
+        config, dataset, checkpoint_dir, fixture_model_builder
+    )
+    before = {path: path.read_bytes() for path in paths.values()}
+    output = tmp_path / "rows.json"
+    summary_output = tmp_path / "summary.json"
+    preview_dir = tmp_path / "previews"
+
+    def dataset_builder(_config):
+        return dataset, dataset
+
+    def missing_weights_model_builder(_config, _method, _device):
+        raise FileNotFoundError("missing local Prithvi weights")
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=checkpoint_dir,
+            preview_dir=preview_dir,
+            stage="full",
+            dataset_builder=dataset_builder,
+            model_builder=missing_weights_model_builder,
+        )
+
+    assert str(exc_info.value) == "missing local Prithvi weights"
+    assert "archive" not in str(exc_info.value)
+    assert {path: path.read_bytes() for path in before} == before
+    assert set(checkpoint_dir.iterdir()) == set(paths.values())
+    assert not output.exists()
+    assert not summary_output.exists()
+    assert not preview_dir.exists()
 
 
 @pytest.mark.parametrize(
