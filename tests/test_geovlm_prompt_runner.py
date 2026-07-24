@@ -125,6 +125,8 @@ def test_checkpoint_metadata_hashes_external_contracts(tmp_path):
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     config["prithvi"]["checkpoint"] = str(prithvi)
     config["experiment"]["prompt_config"] = str(prompts)
+    cache_dir = str(tmp_path / "huggingface-cache")
+    config["text_encoder"]["cache_dir"] = cache_dir
 
     metadata = checkpoint_metadata(config, "prompt", 42)
 
@@ -142,7 +144,7 @@ def test_checkpoint_metadata_hashes_external_contracts(tmp_path):
     assert metadata["class_mapping"] == {"building": 1, "water": 3, "road": 4}
     assert metadata["image_normalization"] == "rgb_float32_divide_255"
     assert "cache_dir" not in metadata
-    assert str(tmp_path) not in json.dumps(metadata)
+    assert cache_dir not in json.dumps(metadata, sort_keys=True)
 
     validate_checkpoint_metadata(metadata, metadata)
     for field in (

@@ -97,7 +97,11 @@ def test_png_inference_writes_mask_probability_preview_and_metadata(tmp_path):
     assert metadata["prompt"] == "segment all buildings"
     assert metadata["validated_semantic_scope"] == ["building", "road", "water"]
     assert metadata["threshold"] == 0.5
-    assert metadata["checkpoint_schema"] == "paper12.geovlm_prompt_checkpoint.v1"
+    assert metadata["checkpoint_schema"] == "paper12.geovlm_prompt_checkpoint.v2"
+    checkpoint_state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert checkpoint_state["metadata"]["training_contract"] == (
+        "paper12.geovlm_prompt_training.v2"
+    )
     assert metadata["prithvi_sha256"]
     assert metadata["prompt_config_sha256"]
     assert metadata["georeferenced"] is False
