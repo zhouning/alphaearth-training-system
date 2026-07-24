@@ -1,5 +1,6 @@
 experiment:
   name: paper12_geovlm_prompt_segmentation
+  training_contract: paper12.geovlm_prompt_training.v2
   dataset: landcoverai
   dataset_root: ./data/landcoverai
   source_num_classes: 5
@@ -8,6 +9,7 @@ experiment:
   batch_size: 8
   seeds: [42, 123, 456]
   empty_target_cap: 0.25
+  probe_positives_per_class: 2
   allow_synthetic_fallback: false
   prompt_config: geoadapter/bench/configs/geovlm_prompts.yaml
 methods:
@@ -24,6 +26,7 @@ peft:
 text_encoder:
   model_id: google/siglip-base-patch16-224
   revision: null
+  cache_dir: null
   local_files_only: false
 model:
   condition_dim: 256

@@ -1,6 +1,7 @@
 import importlib
 import sys
 import types
+from pathlib import Path
 
 import pytest
 import torch
@@ -100,9 +101,12 @@ def test_prompt_model_gradients_reach_conditioning_but_not_frozen_text():
 
 
 def test_siglip_text_encoder_freezes_tower_and_keeps_it_in_eval(monkeypatch):
+    loader_calls = []
+
     class FakeTokenizer:
         @classmethod
         def from_pretrained(cls, *args, **kwargs):
+            loader_calls.append(("tokenizer", args, kwargs))
             return cls()
 
         def __call__(self, prompts, **kwargs):
@@ -111,6 +115,7 @@ def test_siglip_text_encoder_freezes_tower_and_keeps_it_in_eval(monkeypatch):
     class FakeSiglipTextModel(nn.Module):
         @classmethod
         def from_pretrained(cls, *args, **kwargs):
+            loader_calls.append(("model", args, kwargs))
             return cls()
 
         def __init__(self):
@@ -131,8 +136,25 @@ def test_siglip_text_encoder_freezes_tower_and_keeps_it_in_eval(monkeypatch):
         ),
     )
     text_encoder_module = importlib.import_module("geoadapter.models.text_encoder")
-    encoder = text_encoder_module.SiglipTextEncoder(local_files_only=True)
+    model_id = "local/test-siglip"
+    revision = "seed42-recovery"
+    cache_dir = Path("models/huggingface-cache")
+    encoder = text_encoder_module.SiglipTextEncoder(
+        model_id,
+        revision=revision,
+        cache_dir=cache_dir,
+        local_files_only=True,
+    )
 
+    expected_kwargs = {
+        "revision": revision,
+        "cache_dir": cache_dir,
+        "local_files_only": True,
+    }
+    assert loader_calls == [
+        ("tokenizer", (model_id,), expected_kwargs),
+        ("model", (model_id,), expected_kwargs),
+    ]
     assert encoder.output_dim == 4
     assert encoder(["find buildings", "find water"]).shape == (2, 4)
     assert all(not parameter.requires_grad for parameter in encoder.model.parameters())

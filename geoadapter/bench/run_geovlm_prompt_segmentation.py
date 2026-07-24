@@ -86,7 +86,14 @@ def checkpoint_metadata(config: dict[str, Any], method: str, seed: int) -> dict[
     prithvi_path = Path(config["prithvi"]["checkpoint"])
     prompt_path = Path(config["experiment"]["prompt_config"])
     return {
-        "schema": "paper12.geovlm_prompt_checkpoint.v1",
+        "schema": "paper12.geovlm_prompt_checkpoint.v2",
+        "training_contract": config["experiment"]["training_contract"],
+        "target_pool_policy": "supported_target_present_only",
+        "empty_target_cap": float(config["experiment"]["empty_target_cap"]),
+        "probe_positives_per_class": int(
+            config["experiment"]["probe_positives_per_class"]
+        ),
+        "best_checkpoint_policy": "finite_nonconstant_prompt_change_loss_v1",
         "method": method,
         "seed": int(seed),
         "prithvi_sha256": sha256_file(prithvi_path),
@@ -147,6 +154,18 @@ def build_datasets(config: dict[str, Any]):
     return LandCoverAIPromptView(train), LandCoverAIPromptView(validation)
 
 
+def build_text_encoder(config: dict[str, Any]):
+    from geoadapter.models.text_encoder import SiglipTextEncoder
+
+    text_encoder = config["text_encoder"]
+    return SiglipTextEncoder(
+        text_encoder["model_id"],
+        revision=text_encoder.get("revision"),
+        cache_dir=text_encoder.get("cache_dir"),
+        local_files_only=bool(text_encoder.get("local_files_only", False)),
+    )
+
+
 def build_model(config: dict[str, Any], method: str, device: str = "cpu"):
     checkpoint = Path(config["prithvi"]["checkpoint"])
     if not checkpoint.exists():
@@ -168,13 +187,7 @@ def build_model(config: dict[str, Any], method: str, device: str = "cpu"):
             block, bottleneck_dim=int(config["peft"]["bottleneck_dim"])
         )
     if method == PROMPT_METHOD:
-        from geoadapter.models.text_encoder import SiglipTextEncoder
-
-        text_encoder = SiglipTextEncoder(
-            config["text_encoder"]["model_id"],
-            revision=config["text_encoder"].get("revision"),
-            local_files_only=bool(config["text_encoder"].get("local_files_only", False)),
-        )
+        text_encoder = build_text_encoder(config)
         model = PromptSegmentationModel(
             backbone,
             text_encoder,
@@ -250,6 +263,11 @@ def _save_checkpoint(path: Path, state: dict[str, Any]) -> None:
 def validate_checkpoint_metadata(actual: dict[str, Any], expected: dict[str, Any]) -> None:
     fields = (
         "schema",
+        "training_contract",
+        "target_pool_policy",
+        "empty_target_cap",
+        "probe_positives_per_class",
+        "best_checkpoint_policy",
         "method",
         "seed",
         "prithvi_sha256",

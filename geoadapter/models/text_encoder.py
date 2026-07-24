@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 
@@ -10,6 +12,7 @@ class SiglipTextEncoder(nn.Module):
         model_id: str = "google/siglip-base-patch16-224",
         *,
         revision: str | None = None,
+        cache_dir: str | Path | None = None,
         local_files_only: bool = False,
     ):
         super().__init__()
@@ -21,16 +24,13 @@ class SiglipTextEncoder(nn.Module):
             ) from exc
         self.model_id = model_id
         self.revision = revision
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id,
-            revision=revision,
-            local_files_only=local_files_only,
-        )
-        self.model = SiglipTextModel.from_pretrained(
-            model_id,
-            revision=revision,
-            local_files_only=local_files_only,
-        )
+        loader_kwargs = {
+            "revision": revision,
+            "cache_dir": cache_dir,
+            "local_files_only": local_files_only,
+        }
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id, **loader_kwargs)
+        self.model = SiglipTextModel.from_pretrained(model_id, **loader_kwargs)
         self.output_dim = int(self.model.config.hidden_size)
         self.model.requires_grad_(False)
         self.model.eval()

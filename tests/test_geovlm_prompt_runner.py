@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 import torch
 import torch.nn as nn
 import yaml
@@ -16,6 +17,7 @@ from geoadapter.bench.run_geovlm_prompt_segmentation import (
     run_experiment,
     seed42_smoke_checks,
     sha256_file,
+    validate_checkpoint_metadata,
 )
 from geoadapter.data.prompt_segmentation import load_prompt_config
 
@@ -25,17 +27,78 @@ CONFIG_PATH = Path("geoadapter/bench/configs/geovlm_prompt_segmentation.yaml")
 
 def test_geovlm_prompt_config_is_real_data_only():
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    assert config["experiment"]["training_contract"] == (
+        "paper12.geovlm_prompt_training.v2"
+    )
+    assert config["experiment"]["probe_positives_per_class"] == 2
     assert config["experiment"]["dataset"] == "landcoverai"
     assert config["experiment"]["source_num_classes"] == 5
     assert config["experiment"]["target_classes"] == ["building", "road", "water"]
     assert config["experiment"]["seeds"] == [42, 123, 456]
     assert config["experiment"]["allow_synthetic_fallback"] is False
     assert config["text_encoder"]["model_id"] == "google/siglip-base-patch16-224"
+    assert config["text_encoder"]["cache_dir"] is None
     assert config["prithvi"]["use_checkpoint_position_embeddings"] is True
     assert config["methods"] == [
         "siglip_film_dense_similarity_houlsby",
         "no_text_three_binary_heads_houlsby",
     ]
+    assert config["model"] == {"condition_dim": 256, "decoder_dim": 128}
+    assert config["training"] == {
+        "lr": 0.001,
+        "lr_peft": 0.0001,
+        "bce_weight": 1.0,
+        "dice_weight": 1.0,
+        "positive_weight_clip": [1.0, 20.0],
+    }
+    assert config["evaluation"] == {
+        "threshold": 0.5,
+        "bootstrap_iterations": 1000,
+        "preview_count": 12,
+    }
+
+
+def test_runner_build_text_encoder_forwards_explicit_cache(monkeypatch, tmp_path):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+    import geoadapter.models.text_encoder as text_encoder_module
+
+    calls = []
+
+    class FakeSiglipTextEncoder:
+        def __init__(
+            self,
+            model_id,
+            *,
+            revision=None,
+            cache_dir=None,
+            local_files_only=False,
+        ):
+            calls.append(
+                {
+                    "model_id": model_id,
+                    "revision": revision,
+                    "cache_dir": cache_dir,
+                    "local_files_only": local_files_only,
+                }
+            )
+
+    monkeypatch.setattr(
+        text_encoder_module, "SiglipTextEncoder", FakeSiglipTextEncoder
+    )
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    config["text_encoder"].update(
+        {
+            "model_id": "local/test-siglip",
+            "revision": "seed42-recovery",
+            "cache_dir": tmp_path / "huggingface-cache",
+            "local_files_only": True,
+        }
+    )
+
+    encoder = runner.build_text_encoder(config)
+
+    assert isinstance(encoder, FakeSiglipTextEncoder)
+    assert calls == [config["text_encoder"]]
 
 
 def test_completed_keys_are_method_seed_pairs():
@@ -66,11 +129,33 @@ def test_checkpoint_metadata_hashes_external_contracts(tmp_path):
     metadata = checkpoint_metadata(config, "prompt", 42)
 
     assert sha256_file(prithvi) == sha256_file(prithvi)
-    assert metadata["schema"] == "paper12.geovlm_prompt_checkpoint.v1"
+    assert metadata["schema"] == "paper12.geovlm_prompt_checkpoint.v2"
+    assert metadata["training_contract"] == "paper12.geovlm_prompt_training.v2"
+    assert metadata["target_pool_policy"] == "supported_target_present_only"
+    assert metadata["empty_target_cap"] == 0.25
+    assert metadata["probe_positives_per_class"] == 2
+    assert metadata["best_checkpoint_policy"] == (
+        "finite_nonconstant_prompt_change_loss_v1"
+    )
     assert metadata["prithvi_sha256"] == sha256_file(prithvi)
     assert metadata["prompt_config_sha256"] == sha256_file(prompts)
     assert metadata["class_mapping"] == {"building": 1, "water": 3, "road": 4}
     assert metadata["image_normalization"] == "rgb_float32_divide_255"
+    assert "cache_dir" not in metadata
+    assert str(tmp_path) not in json.dumps(metadata)
+
+    validate_checkpoint_metadata(metadata, metadata)
+    for field in (
+        "training_contract",
+        "target_pool_policy",
+        "empty_target_cap",
+        "probe_positives_per_class",
+        "best_checkpoint_policy",
+    ):
+        invalid = dict(metadata)
+        invalid[field] = "mismatch"
+        with pytest.raises(ValueError, match=field):
+            validate_checkpoint_metadata(invalid, metadata)
 
 
 def test_seed42_smoke_checks_report_failed_requirements():
