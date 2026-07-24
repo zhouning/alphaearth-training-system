@@ -24,6 +24,10 @@ from geoadapter.bench.run_geovlm_prompt_segmentation import (
     sha256_file,
     validate_checkpoint_metadata,
 )
+from geoadapter.bench.geovlm_training import (
+    reserve_training_probe,
+    scan_target_present_pool,
+)
 from geoadapter.data.prompt_segmentation import load_prompt_config
 
 
@@ -200,52 +204,79 @@ def test_build_trainer_uses_configured_loss_coefficients():
     assert trainer.criterion.dice_weight == 1.75
 
 
-def test_train_epoch_passes_configured_empty_target_cap():
+def test_train_epoch_uses_scheduled_conditions_and_reports_actual_stats():
     class _RecordingTrainer:
         device = "cpu"
 
         def __init__(self):
             self.conditions = None
-            self.scheduler = type("Scheduler", (), {"step": lambda self: None})()
+            self.scheduler_steps = 0
+            self.scheduler = type(
+                "Scheduler",
+                (),
+                {"step": lambda scheduler: setattr(
+                    self, "scheduler_steps", self.scheduler_steps + 1
+                )},
+            )()
 
         def train_step(self, _images, conditions, _targets, _positive_weights):
             self.conditions = conditions
             return 1.0
 
     trainer = _RecordingTrainer()
-    images = torch.zeros(4, 3, 8, 8)
-    masks = torch.ones(4, 8, 8, dtype=torch.long)
+    images = torch.zeros(3, 3, 8, 8)
+    masks = torch.stack(
+        (
+            torch.ones(8, 8, dtype=torch.long),
+            torch.zeros(8, 8, dtype=torch.long),
+            torch.full((8, 8), 4, dtype=torch.long),
+        )
+    )
     prompt_config = load_prompt_config(
         Path("geoadapter/bench/configs/geovlm_prompts.yaml")
     )
 
-    _train_one_epoch(
+    stats = _train_one_epoch(
         trainer,
-        [(images, masks)],
+        [(images, masks, ("building", "water", "road"))],
         prompt_config,
         {"building": 1.0, "road": 1.0, "water": 1.0},
         42,
         BASELINE_METHOD,
-        empty_target_cap=0.0,
     )
 
-    assert trainer.conditions.tolist() == [1, 1, 1, 1]
+    assert trainer.conditions.tolist() == [1, 3, 4]
+    assert trainer.scheduler_steps == 1
+    assert stats == {
+        "loss": 1.0,
+        "sample_count": 3,
+        "empty_target_count": 1,
+        "prompt_counts": {"building": 1, "water": 1, "road": 1},
+        "nonempty_prompt_counts": {"building": 1, "water": 0, "road": 1},
+    }
 
 
 class _TinyPromptDataset(Dataset):
     def __init__(self):
         self.images = []
         self.masks = []
-        for class_id, location in ((1, (0, 0)), (3, (0, 4)), (4, (4, 0))):
-            mask = torch.zeros(8, 8, dtype=torch.long)
-            row, col = location
-            mask[row : row + 4, col : col + 4] = class_id
-            image = torch.zeros(3, 8, 8)
-            image[0] = mask.eq(1)
-            image[1] = mask.eq(3)
-            image[2] = mask.eq(4)
-            self.images.append(image)
-            self.masks.append(mask)
+        for _ in range(3):
+            for class_id, location in (
+                (1, (0, 0)),
+                (3, (0, 4)),
+                (4, (4, 0)),
+            ):
+                mask = torch.zeros(8, 8, dtype=torch.long)
+                row, col = location
+                mask[row : row + 4, col : col + 4] = class_id
+                image = torch.zeros(3, 8, 8)
+                image[0] = mask.eq(1)
+                image[1] = mask.eq(3)
+                image[2] = mask.eq(4)
+                self.images.append(image)
+                self.masks.append(mask)
+        self.images.append(torch.zeros(3, 8, 8))
+        self.masks.append(torch.full((8, 8), 2, dtype=torch.long))
 
     def __len__(self):
         return len(self.images)
@@ -258,7 +289,7 @@ class _TinyConditionalModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv = nn.Conv2d(3, 1, 1)
-        self.condition_bias = nn.Parameter(torch.zeros(3))
+        self.condition_bias = nn.Parameter(torch.tensor([0.0, 0.25, 0.5]))
         with torch.no_grad():
             self.conv.weight.fill_(4.0)
             self.conv.bias.fill_(-2.0)
@@ -505,7 +536,7 @@ def test_probe_requires_all_nonempty_class_indices(probe_indices, message):
         )
 
 
-def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
+def _runner_test_config(tmp_path, *, epochs=2, probe_positives_per_class=1):
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     prithvi = tmp_path / "prithvi.pt"
     prithvi.write_bytes(b"tiny-prithvi")
@@ -513,8 +544,294 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
     config["experiment"]["prompt_config"] = str(
         Path("geoadapter/bench/configs/geovlm_prompts.yaml").resolve()
     )
-    config["experiment"]["epochs"] = 2
+    config["experiment"]["epochs"] = epochs
     config["experiment"]["batch_size"] = 2
+    config["experiment"]["probe_positives_per_class"] = (
+        probe_positives_per_class
+    )
+    config["evaluation"]["preview_count"] = 0
+    return config
+
+
+def _finite_probe(change, loss):
+    classes = {
+        class_name: {
+            "prediction_range": 1.0,
+            "prediction_nonconstant": True,
+            "mean_prompt_probability_change": float(change),
+            "prompt_map_changed": True,
+        }
+        for class_name in ("building", "water", "road")
+    }
+    return {
+        "finite": True,
+        "mean_loss": float(loss),
+        "nonconstant_class_count": 3,
+        "prompt_map_changed_class_count": 3,
+        "mean_prompt_probability_change": float(change),
+        "classes": classes,
+    }
+
+
+def _epoch_stats(loss, *, sample_count=6):
+    per_class = sample_count // 3
+    return {
+        "loss": float(loss),
+        "sample_count": sample_count,
+        "empty_target_count": 0,
+        "prompt_counts": {
+            "building": per_class,
+            "water": per_class,
+            "road": per_class,
+        },
+        "nonempty_prompt_counts": {
+            "building": per_class,
+            "water": per_class,
+            "road": per_class,
+        },
+    }
+
+
+def _fake_evaluation_rows(method, seed):
+    return [
+        {"method": method, "seed": seed, "class_name": class_name}
+        for class_name in ("building", "water", "road")
+    ]
+
+
+def test_runner_rejects_legacy_and_lone_best_checkpoints_before_building(tmp_path):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    dataset = _TinyPromptDataset()
+
+    def forbidden_model_builder(*_args):
+        raise AssertionError("model must not be built for invalid checkpoint layout")
+
+    legacy_dir = tmp_path / "legacy-checkpoints"
+    legacy_dir.mkdir()
+    legacy_path = legacy_dir / f"{BASELINE_METHOD}__seed123.pt"
+    legacy_path.write_bytes(b"legacy")
+    with pytest.raises(ValueError, match="archive it before recovery"):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            legacy_dir,
+            tmp_path / "previews",
+            "cpu",
+            forbidden_model_builder,
+        )
+    assert list(legacy_dir.iterdir()) == [legacy_path]
+
+    lone_best_dir = tmp_path / "lone-best-checkpoints"
+    lone_best_dir.mkdir()
+    best_path = lone_best_dir / f"{BASELINE_METHOD}__seed123.best.pt"
+    best_path.write_bytes(b"best")
+    with pytest.raises(ValueError, match="best checkpoint exists without last"):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            lone_best_dir,
+            tmp_path / "previews",
+            "cpu",
+            forbidden_model_builder,
+        )
+    assert list(lone_best_dir.iterdir()) == [best_path]
+
+
+def test_runner_evaluates_best_probe_checkpoint_when_later_epoch_degrades(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    checkpoint_dir = tmp_path / "checkpoints"
+    dataset = _TinyPromptDataset()
+    train_calls = []
+    evaluation_calls = []
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    def fake_train_one_epoch(
+        trainer, loader, _prompt_config, _weights, epoch_seed, _method
+    ):
+        epoch = len(train_calls) + 1
+        train_calls.append((epoch_seed, len(loader.dataset)))
+        with torch.no_grad():
+            trainer.model.condition_bias.fill_(float(epoch))
+        return _epoch_stats(epoch)
+
+    def fake_probe(trainer, *_args):
+        bias = float(trainer.model.condition_bias[0].detach())
+        return _finite_probe(1.0 if bias == 1.0 else 0.5, bias)
+
+    def fake_evaluate(trainer, validation, _prompt_config, method, seed, *_args):
+        evaluation_calls.append(
+            (len(validation), trainer.model.condition_bias.detach().tolist())
+        )
+        return _fake_evaluation_rows(method, seed)
+
+    monkeypatch.setattr(runner, "_train_one_epoch", fake_train_one_epoch)
+    monkeypatch.setattr(runner, "_evaluate_probe", fake_probe)
+    monkeypatch.setattr(runner, "_evaluate_method", fake_evaluate)
+
+    rows = runner._run_pair(
+        config,
+        BASELINE_METHOD,
+        123,
+        dataset,
+        dataset,
+        checkpoint_dir,
+        tmp_path / "previews",
+        "cpu",
+        model_builder,
+    )
+
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    last = torch.load(
+        base.with_suffix(".last.pt"), map_location="cpu", weights_only=False
+    )
+    best = torch.load(
+        base.with_suffix(".best.pt"), map_location="cpu", weights_only=False
+    )
+    expected_rank = list(probe_rank(_finite_probe(1.0, 1.0)))
+    assert train_calls == [(123, 6), (124, 6)]
+    assert last["epoch"] == 2
+    assert last["trainable_model"]["condition_bias"].tolist() == [2.0] * 3
+    assert best["epoch"] == 1
+    assert best["trainable_model"]["condition_bias"].tolist() == [1.0] * 3
+    assert evaluation_calls == [(10, [1.0, 1.0, 1.0])]
+    assert last["best_epoch"] == best["best_epoch"] == 1
+    assert last["best_probe_rank"] == best["best_probe_rank"] == expected_rank
+    assert last["metadata"]["best_epoch"] == best["metadata"]["best_epoch"] == 1
+    assert (
+        last["metadata"]["best_probe_rank"]
+        == best["metadata"]["best_probe_rank"]
+        == expected_rank
+    )
+    assert all(row["checkpoint_reproduced"] is True for row in rows)
+    assert all(row["best_epoch"] == 1 for row in rows)
+    assert all(row["full_loss_history"] == [1.0, 2.0] for row in rows)
+    assert all(row["loss_history"] == [1.0] for row in rows)
+
+
+def test_runner_resumes_last_checkpoint_without_replacing_better_epoch_one(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    dataset = _TinyPromptDataset()
+    pool = scan_target_present_pool(dataset)
+    split = reserve_training_probe(pool, seed=123, positives_per_class=1)
+    probe_indices = {
+        class_name: list(indices)
+        for class_name, indices in split.probe_indices_by_class.items()
+    }
+    first_probe = {
+        **_finite_probe(1.0, 2.0),
+        "epoch": 1,
+        "training_loss": 2.0,
+    }
+    best_rank = list(probe_rank(first_probe))
+    metadata = checkpoint_metadata(config, BASELINE_METHOD, 123)
+    metadata.update({"best_epoch": 1, "best_probe_rank": best_rank})
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    trainer = build_trainer(
+        model_builder(config, BASELINE_METHOD, "cpu"), config, "cpu"
+    )
+    with torch.no_grad():
+        trainer.model.condition_bias.fill_(1.0)
+    state = trainer.state_dict(epoch=1, metadata=metadata)
+    state.update(
+        {
+            "loss_history": [2.0],
+            "probe_history": [first_probe],
+            "training_stats": {
+                key: value
+                for key, value in _epoch_stats(2.0).items()
+                if key != "loss"
+            },
+            "probe_indices_by_class": probe_indices,
+            "probe_sha256": split.probe_sha256,
+            "best_epoch": 1,
+            "best_probe_rank": best_rank,
+        }
+    )
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    torch.save(state, base.with_suffix(".last.pt"))
+    torch.save(state, base.with_suffix(".best.pt"))
+    train_calls = []
+
+    def fake_train_one_epoch(
+        resumed_trainer, loader, _prompt_config, _weights, epoch_seed, _method
+    ):
+        train_calls.append((epoch_seed, len(loader.dataset)))
+        with torch.no_grad():
+            resumed_trainer.model.condition_bias.fill_(2.0)
+        return _epoch_stats(3.0)
+
+    def fake_probe(_trainer, *_args):
+        return _finite_probe(0.5, 3.0)
+
+    def fake_evaluate(_trainer, _validation, _prompt_config, method, seed, *_args):
+        return _fake_evaluation_rows(method, seed)
+
+    monkeypatch.setattr(runner, "_train_one_epoch", fake_train_one_epoch)
+    monkeypatch.setattr(runner, "_evaluate_probe", fake_probe)
+    monkeypatch.setattr(runner, "_evaluate_method", fake_evaluate)
+
+    rows = runner._run_pair(
+        config,
+        BASELINE_METHOD,
+        123,
+        dataset,
+        dataset,
+        checkpoint_dir,
+        tmp_path / "previews",
+        "cpu",
+        model_builder,
+    )
+
+    resumed = torch.load(
+        base.with_suffix(".last.pt"), map_location="cpu", weights_only=False
+    )
+    selected = torch.load(
+        base.with_suffix(".best.pt"), map_location="cpu", weights_only=False
+    )
+    assert train_calls == [(124, 6)]
+    assert resumed["epoch"] == 2
+    assert resumed["loss_history"] == [2.0, 3.0]
+    assert resumed["best_epoch"] == 1
+    assert resumed["training_stats"]["sample_count"] == 12
+    assert selected["epoch"] == 1
+    assert selected["loss_history"] == [2.0]
+    assert selected["trainable_model"]["condition_bias"].tolist() == [1.0] * 3
+    assert all(row["best_epoch"] == 1 for row in rows)
+    assert all(row["full_loss_history"] == [2.0, 3.0] for row in rows)
+    assert all(row["loss_history"] == [2.0] for row in rows)
+
+
+def test_runner_appends_skips_and_reloads_with_injected_builders(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(
+        tmp_path, epochs=2, probe_positives_per_class=2
+    )
     config["experiment"]["seeds"] = [42]
     config["evaluation"]["preview_count"] = 4
     output = tmp_path / "rows.json"
@@ -522,6 +839,10 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
     checkpoint_dir = tmp_path / "checkpoints"
     preview_dir = tmp_path / "previews"
     build_calls = []
+    train_calls = []
+    probe_calls = []
+    real_train_one_epoch = runner._train_one_epoch
+    real_evaluate_probe = runner._evaluate_probe
 
     def dataset_builder(_config):
         dataset = _TinyPromptDataset()
@@ -530,6 +851,23 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
     def model_builder(_config, method, device):
         build_calls.append(method)
         return _TinyConditionalModel().to(device)
+
+    def deterministic_train(*args, **kwargs):
+        stats = real_train_one_epoch(*args, **kwargs)
+        stats["loss"] = (2.0, 1.0)[len(train_calls) % 2]
+        train_calls.append(stats["loss"])
+        return stats
+
+    def deterministic_probe(*args, **kwargs):
+        probe = real_evaluate_probe(*args, **kwargs)
+        probe["mean_prompt_probability_change"] = (0.1, 0.2)[
+            len(probe_calls) % 2
+        ]
+        probe_calls.append(probe["mean_prompt_probability_change"])
+        return probe
+
+    monkeypatch.setattr(runner, "_train_one_epoch", deterministic_train)
+    monkeypatch.setattr(runner, "_evaluate_probe", deterministic_probe)
 
     rows = run_experiment(
         config,
@@ -544,13 +882,44 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
     )
 
     assert len(rows) == 6
-    assert len(list(checkpoint_dir.glob("*.pt"))) == 2
+    assert len(list(checkpoint_dir.glob("*.pt"))) == 4
     assert all(row.get("synthetic_fallback") is not True for row in rows)
     prompt_rows = [row for row in rows if row["method"].startswith("siglip")]
     baseline_rows = [row for row in rows if row["method"].startswith("no_text")]
     assert all("correct_iou_by_sample" in row for row in prompt_rows)
     assert all("correct_iou_by_sample" not in row for row in baseline_rows)
     assert all(row["checkpoint_reproduced"] is True for row in rows)
+    assert all(
+        row["training_contract"] == "paper12.geovlm_prompt_training.v2"
+        for row in rows
+    )
+    assert all(row["source_training_size"] == 10 for row in rows)
+    assert all(row["target_present_pool_size"] == 9 for row in rows)
+    assert all(row["excluded_no_target_count"] == 1 for row in rows)
+    assert all(row["excluded_no_target_share"] == 0.1 for row in rows)
+    assert all(
+        set(row["probe_indices_by_class"]) == {"building", "water", "road"}
+        for row in rows
+    )
+    assert all(len(row["probe_sha256"]) == 64 for row in rows)
+    assert all(
+        set(row["per_class_prompt_counts"]) == {"building", "water", "road"}
+        for row in rows
+    )
+    assert all(
+        set(row["per_class_nonempty_prompt_counts"])
+        == {"building", "water", "road"}
+        for row in rows
+    )
+    assert all(row["observed_training_sample_count"] > 0 for row in rows)
+    assert all(row["observed_empty_target_count"] >= 0 for row in rows)
+    assert all(row["observed_empty_target_share"] <= 0.25 for row in rows)
+    assert all(len(row["full_loss_history"]) == 2 for row in rows)
+    assert all(row["best_epoch"] == 2 for row in rows)
+    assert all(len(row["loss_history"]) == row["best_epoch"] for row in rows)
+    assert all(row["best_probe"]["epoch"] == 2 for row in rows)
+    assert all(row["best_probe"]["training_loss"] == 1.0 for row in rows)
+    assert all(len(row["best_probe_rank"]) == 5 for row in rows)
     preview_paths = [
         Path(path)
         for row in rows
@@ -579,67 +948,3 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
     )
     assert repeated == rows
     assert len(build_calls) == calls_after_first_run
-
-
-def test_runner_resumes_an_incomplete_epoch_checkpoint(monkeypatch, tmp_path):
-    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
-
-    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
-    prithvi = tmp_path / "prithvi.pt"
-    prithvi.write_bytes(b"tiny-prithvi")
-    config["prithvi"]["checkpoint"] = str(prithvi)
-    config["experiment"]["prompt_config"] = str(
-        Path("geoadapter/bench/configs/geovlm_prompts.yaml").resolve()
-    )
-    config["experiment"]["epochs"] = 2
-    config["experiment"]["batch_size"] = 2
-    config["evaluation"]["preview_count"] = 0
-    checkpoint_dir = tmp_path / "checkpoints"
-    checkpoint_dir.mkdir()
-    checkpoint_path = checkpoint_dir / f"{BASELINE_METHOD}__seed123.pt"
-
-    def model_builder(_config, _method, device):
-        return _TinyConditionalModel().to(device)
-
-    trainer = build_trainer(model_builder(config, BASELINE_METHOD, "cpu"), config, "cpu")
-    state = trainer.state_dict(
-        epoch=1,
-        metadata=checkpoint_metadata(config, BASELINE_METHOD, 123),
-    )
-    state["loss_history"] = [2.0]
-    torch.save(state, checkpoint_path)
-    train_calls = []
-
-    def fake_train_one_epoch(
-        _trainer,
-        _loader,
-        _prompt_config,
-        _weights,
-        epoch_seed,
-        _method,
-        *,
-        empty_target_cap,
-    ):
-        train_calls.append((epoch_seed, empty_target_cap))
-        return 1.0
-
-    monkeypatch.setattr(runner, "_train_one_epoch", fake_train_one_epoch)
-    dataset = _TinyPromptDataset()
-
-    rows = runner._run_pair(
-        config,
-        BASELINE_METHOD,
-        123,
-        dataset,
-        dataset,
-        checkpoint_dir,
-        tmp_path / "previews",
-        "cpu",
-        model_builder,
-    )
-
-    resumed = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    assert train_calls == [(124, 0.25)]
-    assert resumed["epoch"] == 2
-    assert resumed["loss_history"] == [2.0, 1.0]
-    assert all(row["loss_history"] == [2.0, 1.0] for row in rows)

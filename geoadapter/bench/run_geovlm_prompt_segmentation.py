@@ -21,8 +21,14 @@ from geoadapter.data.prompt_segmentation import (
     load_prompt_config,
     multiclass_to_binary,
     normalize_landcoverai_image,
-    sample_prompt_batch,
+    prompt_batch_from_class_names,
     validate_landcoverai_mask,
+)
+from geoadapter.bench.geovlm_training import (
+    AssignedPromptDataset,
+    build_epoch_assignments,
+    reserve_training_probe,
+    scan_target_present_pool,
 )
 from geoadapter.engine.prompt_segmentation import (
     PromptSegmentationLoss,
@@ -350,23 +356,53 @@ def _train_one_epoch(
     weights: dict[str, float],
     seed: int,
     method: str,
-    *,
-    empty_target_cap: float = 0.25,
 ):
     generator = torch.Generator().manual_seed(seed)
     losses = []
-    for images, masks in loader:
-        batch = sample_prompt_batch(
+    stats = {
+        "sample_count": 0,
+        "empty_target_count": 0,
+        "prompt_counts": {name: 0 for name in PROMPT_TARGET_CLASS_IDS},
+        "nonempty_prompt_counts": {
+            name: 0 for name in PROMPT_TARGET_CLASS_IDS
+        },
+    }
+    for images, masks, class_names in loader:
+        batch = prompt_batch_from_class_names(
             masks,
+            class_names,
             prompt_config,
             generator=generator,
-            empty_cap=empty_target_cap,
         )
         conditions = batch.prompts if method == PROMPT_METHOD else batch.class_ids
         positive_weights = _positive_weights_for_batch(batch.class_names, weights, trainer.device)
         losses.append(trainer.train_step(images, conditions, batch.targets, positive_weights))
+        stats["sample_count"] += len(batch.class_names)
+        stats["empty_target_count"] += batch.empty_count
+        nonempty = batch.targets.flatten(1).sum(dim=1).ne(0).tolist()
+        for class_name, target_is_nonempty in zip(batch.class_names, nonempty):
+            stats["prompt_counts"][class_name] += 1
+            stats["nonempty_prompt_counts"][class_name] += int(
+                target_is_nonempty
+            )
     trainer.scheduler.step()
-    return float(sum(losses) / max(1, len(losses)))
+    return {
+        "loss": float(sum(losses) / max(1, len(losses))),
+        **stats,
+    }
+
+
+def _merge_training_stats(total, epoch):
+    total["sample_count"] += int(epoch["sample_count"])
+    total["empty_target_count"] += int(epoch["empty_target_count"])
+    for class_name in PROMPT_TARGET_CLASS_IDS:
+        total["prompt_counts"][class_name] += int(
+            epoch["prompt_counts"][class_name]
+        )
+        total["nonempty_prompt_counts"][class_name] += int(
+            epoch["nonempty_prompt_counts"][class_name]
+        )
+    return total
 
 
 def _probe_condition(
@@ -713,55 +749,356 @@ def _checkpoint_reproduces(
     return bool(torch.allclose(before, after, atol=1e-6))
 
 
+def _empty_training_stats():
+    return {
+        "sample_count": 0,
+        "empty_target_count": 0,
+        "prompt_counts": {name: 0 for name in PROMPT_TARGET_CLASS_IDS},
+        "nonempty_prompt_counts": {
+            name: 0 for name in PROMPT_TARGET_CLASS_IDS
+        },
+    }
+
+
+def _normalize_training_stats(stats):
+    if not isinstance(stats, dict):
+        raise ValueError("checkpoint training_stats must be a dictionary")
+
+    def count_value(value, field):
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+            raise ValueError(f"checkpoint {field} must be a nonnegative integer")
+        value = int(value)
+        if value < 0:
+            raise ValueError(f"checkpoint {field} must be a nonnegative integer")
+        return value
+
+    normalized = {
+        "sample_count": count_value(
+            stats.get("sample_count"), "training_stats.sample_count"
+        ),
+        "empty_target_count": count_value(
+            stats.get("empty_target_count"),
+            "training_stats.empty_target_count",
+        ),
+    }
+    expected_classes = set(PROMPT_TARGET_CLASS_IDS)
+    for field in ("prompt_counts", "nonempty_prompt_counts"):
+        values = stats.get(field)
+        if not isinstance(values, dict) or set(values) != expected_classes:
+            raise ValueError(
+                f"checkpoint training_stats.{field} must contain exactly "
+                f"{list(PROMPT_TARGET_CLASS_IDS)}"
+            )
+        normalized[field] = {
+            class_name: count_value(
+                values[class_name], f"training_stats.{field}.{class_name}"
+            )
+            for class_name in PROMPT_TARGET_CLASS_IDS
+        }
+
+    if normalized["empty_target_count"] > normalized["sample_count"]:
+        raise ValueError("checkpoint empty target count exceeds sample count")
+    if sum(normalized["prompt_counts"].values()) != normalized["sample_count"]:
+        raise ValueError("checkpoint prompt counts do not sum to sample count")
+    if sum(normalized["nonempty_prompt_counts"].values()) != (
+        normalized["sample_count"] - normalized["empty_target_count"]
+    ):
+        raise ValueError(
+            "checkpoint nonempty prompt counts do not match empty target count"
+        )
+    return normalized
+
+
+def _plain_probe_indices(probe_indices_by_class):
+    return {
+        class_name: [int(index) for index in probe_indices_by_class[class_name]]
+        for class_name in PROMPT_TARGET_CLASS_IDS
+    }
+
+
+def _normalize_checkpoint_probe_indices(value):
+    if not isinstance(value, dict) or set(value) != set(PROMPT_TARGET_CLASS_IDS):
+        raise ValueError(
+            "checkpoint probe_indices_by_class must contain exactly "
+            f"{list(PROMPT_TARGET_CLASS_IDS)}"
+        )
+    normalized = {}
+    for class_name in PROMPT_TARGET_CLASS_IDS:
+        indices = value[class_name]
+        if not isinstance(indices, (list, tuple)) or not indices:
+            raise ValueError(
+                f"checkpoint probe indices for {class_name} must be a non-empty list"
+            )
+        if any(
+            isinstance(index, bool)
+            or not isinstance(index, (int, np.integer))
+            for index in indices
+        ):
+            raise ValueError("checkpoint probe indices must be integers")
+        normalized[class_name] = [int(index) for index in indices]
+    return normalized
+
+
+def _restore_checkpoint_history(
+    state,
+    *,
+    checkpoint_epoch,
+    total_epochs,
+    probe_indices_by_class,
+    probe_sha256,
+):
+    if not 1 <= checkpoint_epoch <= total_epochs:
+        raise ValueError(
+            f"checkpoint epoch {checkpoint_epoch} is outside 1..{total_epochs}"
+        )
+    losses = [float(value) for value in state.get("loss_history", [])]
+    probe_history = state.get("probe_history", [])
+    if len(losses) != checkpoint_epoch:
+        raise ValueError("checkpoint loss_history length must equal checkpoint epoch")
+    if len(probe_history) != checkpoint_epoch or not all(
+        isinstance(probe, dict) for probe in probe_history
+    ):
+        raise ValueError("checkpoint probe_history length must equal checkpoint epoch")
+    if not np.isfinite(np.asarray(losses, dtype=float)).all():
+        raise ValueError("checkpoint loss_history must be finite")
+    for index, (loss, probe) in enumerate(zip(losses, probe_history), start=1):
+        if probe.get("epoch") != index:
+            raise ValueError("checkpoint probe_history epochs must be consecutive")
+        if float(probe.get("training_loss", float("nan"))) != loss:
+            raise ValueError(
+                "checkpoint probe training loss must match loss_history"
+            )
+
+    stored_probe_indices = _normalize_checkpoint_probe_indices(
+        state.get("probe_indices_by_class")
+    )
+    if stored_probe_indices != probe_indices_by_class:
+        raise ValueError("checkpoint probe split does not match current dataset")
+    if state.get("probe_sha256") != probe_sha256:
+        raise ValueError("checkpoint probe_sha256 does not match current split")
+
+    training_stats = _normalize_training_stats(state.get("training_stats"))
+    best_epoch = state.get("best_epoch")
+    if isinstance(best_epoch, bool) or not isinstance(
+        best_epoch, (int, np.integer)
+    ):
+        raise ValueError("checkpoint best_epoch must be an integer")
+    best_epoch = int(best_epoch)
+    if not 1 <= best_epoch <= checkpoint_epoch:
+        raise ValueError("checkpoint best_epoch is outside completed history")
+    best_rank_value = state.get("best_probe_rank")
+    if not isinstance(best_rank_value, (list, tuple)) or len(best_rank_value) != 5:
+        raise ValueError("checkpoint best_probe_rank must contain five values")
+    best_rank = tuple(best_rank_value)
+    if not np.isfinite(np.asarray(best_rank, dtype=float)).all():
+        raise ValueError("checkpoint best_probe_rank must be finite")
+    if best_rank != probe_rank(probe_history[best_epoch - 1]):
+        raise ValueError("checkpoint best probe rank does not match probe history")
+    metadata = state.get("metadata", {})
+    if metadata.get("best_epoch") != best_epoch:
+        raise ValueError("checkpoint metadata best_epoch mismatch")
+    if metadata.get("best_probe_rank") != list(best_rank):
+        raise ValueError("checkpoint metadata best_probe_rank mismatch")
+    return losses, list(probe_history), training_stats, best_epoch, best_rank
+
+
 def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_dir, device, model_builder):
+    checkpoint_base = Path(checkpoint_dir) / f"{method}__seed{seed}"
+    last_checkpoint_path = checkpoint_base.with_suffix(".last.pt")
+    best_checkpoint_path = checkpoint_base.with_suffix(".best.pt")
+    legacy_checkpoint_path = checkpoint_base.with_suffix(".pt")
+    if legacy_checkpoint_path.exists():
+        raise ValueError(
+            f"legacy checkpoint exists at {legacy_checkpoint_path}; "
+            "archive it before recovery"
+        )
+    if best_checkpoint_path.exists() and not last_checkpoint_path.exists():
+        raise ValueError("best checkpoint exists without last checkpoint")
+    if last_checkpoint_path.exists() and not best_checkpoint_path.exists():
+        raise ValueError("last checkpoint exists without best checkpoint")
+
+    total_epochs = int(config["experiment"]["epochs"])
+    if total_epochs <= 0:
+        raise ValueError("GeoVLM training epochs must be positive")
     torch.manual_seed(seed)
     prompt_config = load_prompt_config(config["experiment"]["prompt_config"])
     weights = estimate_positive_weights(
         (train[index][1] for index in range(len(train))),
         clip=tuple(config["training"]["positive_weight_clip"]),
     )
+    pool = scan_target_present_pool(train)
+    split = reserve_training_probe(
+        pool,
+        seed=seed,
+        positives_per_class=int(
+            config["experiment"]["probe_positives_per_class"]
+        ),
+    )
+    probe_indices_by_class = _plain_probe_indices(
+        split.probe_indices_by_class
+    )
     model = model_builder(config, method, device)
     trainer = build_trainer(model, config, device)
-    loader = DataLoader(
-        train,
-        batch_size=int(config["experiment"]["batch_size"]),
-        shuffle=True,
-        generator=torch.Generator().manual_seed(seed),
-    )
     losses = []
-    checkpoint_path = Path(checkpoint_dir) / f"{method}__seed{seed}.pt"
+    probe_history = []
+    training_stats = _empty_training_stats()
+    best_rank = None
+    best_epoch = None
     metadata = checkpoint_metadata(config, method, seed)
-    total_epochs = int(config["experiment"]["epochs"])
     start_epoch = 0
-    if checkpoint_path.exists():
-        state = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    if last_checkpoint_path.exists():
+        state = torch.load(
+            last_checkpoint_path, map_location=device, weights_only=False
+        )
         validate_checkpoint_metadata(state.get("metadata", {}), metadata)
         start_epoch, _ = trainer.load_state_dict(state)
-        if not 0 <= start_epoch <= total_epochs:
-            raise ValueError(
-                f"checkpoint epoch {start_epoch} is outside 0..{total_epochs}"
-            )
-        losses = [float(value) for value in state.get("loss_history", [])]
-    for epoch in range(start_epoch, total_epochs):
-        losses.append(
-            _train_one_epoch(
-                trainer,
-                loader,
-                prompt_config,
-                weights,
-                seed + epoch,
-                method,
-                empty_target_cap=float(
-                    config["experiment"]["empty_target_cap"]
-                ),
+        (
+            losses,
+            probe_history,
+            training_stats,
+            best_epoch,
+            best_rank,
+        ) = _restore_checkpoint_history(
+            state,
+            checkpoint_epoch=start_epoch,
+            total_epochs=total_epochs,
+            probe_indices_by_class=probe_indices_by_class,
+            probe_sha256=split.probe_sha256,
+        )
+        best_state = torch.load(
+            best_checkpoint_path, map_location=device, weights_only=False
+        )
+        validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
+        best_state_epoch = int(best_state.get("epoch", -1))
+        _, _, _, stored_best_epoch, stored_best_rank = (
+            _restore_checkpoint_history(
+                best_state,
+                checkpoint_epoch=best_state_epoch,
+                total_epochs=total_epochs,
+                probe_indices_by_class=probe_indices_by_class,
+                probe_sha256=split.probe_sha256,
             )
         )
-        state = trainer.state_dict(epoch=epoch + 1, metadata=metadata)
-        state["loss_history"] = losses
-        _save_checkpoint(checkpoint_path, state)
+        if best_state_epoch != best_epoch:
+            raise ValueError("best checkpoint epoch does not match last checkpoint")
+        if stored_best_epoch != best_epoch or stored_best_rank != best_rank:
+            raise ValueError("best checkpoint references do not match last checkpoint")
+
+    batch_size = int(config["experiment"]["batch_size"])
+    empty_target_cap = float(config["experiment"]["empty_target_cap"])
+    for epoch in range(start_epoch, total_epochs):
+        assignments = build_epoch_assignments(
+            split,
+            batch_size=batch_size,
+            empty_target_cap=empty_target_cap,
+            seed=seed + epoch,
+        )
+        loader = DataLoader(
+            AssignedPromptDataset(train, assignments),
+            batch_size=batch_size,
+            shuffle=False,
+        )
+        epoch_stats = _train_one_epoch(
+            trainer,
+            loader,
+            prompt_config,
+            weights,
+            seed + epoch,
+            method,
+        )
+        loss = float(epoch_stats["loss"])
+        if not np.isfinite(loss):
+            raise ValueError("training loss must be finite")
+        losses.append(loss)
+        epoch_counts = _normalize_training_stats(
+            {
+                key: epoch_stats[key]
+                for key in (
+                    "sample_count",
+                    "empty_target_count",
+                    "prompt_counts",
+                    "nonempty_prompt_counts",
+                )
+            }
+        )
+        _merge_training_stats(training_stats, epoch_counts)
+        probe = _evaluate_probe(
+            trainer,
+            train,
+            probe_indices_by_class,
+            prompt_config,
+            weights,
+            method,
+        )
+        probe = {
+            **probe,
+            "epoch": epoch + 1,
+            "training_loss": loss,
+        }
+        probe_history.append(probe)
+        current_rank = probe_rank(probe)
+        is_best = best_rank is None or current_rank > best_rank
+        if is_best:
+            best_rank = current_rank
+            best_epoch = epoch + 1
+        checkpoint_metadata_with_best = {
+            **metadata,
+            "best_epoch": best_epoch,
+            "best_probe_rank": list(best_rank),
+        }
+        state = trainer.state_dict(
+            epoch=epoch + 1,
+            metadata=checkpoint_metadata_with_best,
+        )
+        state.update(
+            {
+                "loss_history": list(losses),
+                "probe_history": list(probe_history),
+                "training_stats": {
+                    "sample_count": training_stats["sample_count"],
+                    "empty_target_count": training_stats[
+                        "empty_target_count"
+                    ],
+                    "prompt_counts": dict(training_stats["prompt_counts"]),
+                    "nonempty_prompt_counts": dict(
+                        training_stats["nonempty_prompt_counts"]
+                    ),
+                },
+                "probe_indices_by_class": {
+                    name: list(indices)
+                    for name, indices in probe_indices_by_class.items()
+                },
+                "probe_sha256": split.probe_sha256,
+                "best_epoch": best_epoch,
+                "best_probe_rank": list(best_rank),
+            }
+        )
+        if is_best:
+            _save_checkpoint(best_checkpoint_path, state)
+        _save_checkpoint(last_checkpoint_path, state)
+
+    if best_epoch is None or best_rank is None or not best_checkpoint_path.exists():
+        raise RuntimeError("GeoVLM training did not produce a best checkpoint")
+    best_state = torch.load(
+        best_checkpoint_path, map_location=device, weights_only=False
+    )
+    validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
+    if best_state.get("probe_sha256") != split.probe_sha256:
+        raise ValueError("best checkpoint probe_sha256 does not match current split")
+    if int(best_state.get("epoch", -1)) != best_epoch:
+        raise ValueError("best checkpoint epoch does not match selected epoch")
+    trainer.load_state_dict(best_state)
     trainable_params, frozen_params = _parameter_counts(model)
     reproduced = _checkpoint_reproduces(
-        config, method, seed, checkpoint_path, trainer, model_builder, validation, prompt_config, device
+        config,
+        method,
+        seed,
+        best_checkpoint_path,
+        trainer,
+        model_builder,
+        validation,
+        prompt_config,
+        device,
     )
     existing_previews = len(list(Path(preview_dir).glob(f"seed{seed}__*.png")))
     preview_count = max(
@@ -779,11 +1116,50 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
         preview_dir,
         preview_count,
     )
+    observed_sample_count = training_stats["sample_count"]
+    if observed_sample_count <= 0:
+        raise ValueError("observed training sample count must be positive")
+    selected_losses = losses[:best_epoch]
+    best_probe = probe_history[best_epoch - 1]
     for row in rows:
-        row["checkpoint_reproduced"] = reproduced
-        row["loss_history"] = losses
-        row["loss_first"] = losses[0] if losses else None
-        row["loss_last"] = losses[-1] if losses else None
+        row.update(
+            {
+                "training_contract": metadata["training_contract"],
+                "checkpoint_reproduced": reproduced,
+                "source_training_size": pool.source_size,
+                "target_present_pool_size": len(pool.samples),
+                "excluded_no_target_count": pool.excluded_no_target_count,
+                "excluded_no_target_share": float(
+                    pool.excluded_no_target_share
+                ),
+                "probe_indices_by_class": {
+                    name: list(indices)
+                    for name, indices in probe_indices_by_class.items()
+                },
+                "probe_sha256": split.probe_sha256,
+                "per_class_prompt_counts": dict(
+                    training_stats["prompt_counts"]
+                ),
+                "per_class_nonempty_prompt_counts": dict(
+                    training_stats["nonempty_prompt_counts"]
+                ),
+                "observed_empty_target_count": training_stats[
+                    "empty_target_count"
+                ],
+                "observed_training_sample_count": observed_sample_count,
+                "observed_empty_target_share": float(
+                    training_stats["empty_target_count"]
+                    / observed_sample_count
+                ),
+                "best_epoch": best_epoch,
+                "best_probe_rank": list(best_rank),
+                "best_probe": dict(best_probe),
+                "full_loss_history": list(losses),
+                "loss_history": list(selected_losses),
+                "loss_first": selected_losses[0],
+                "loss_last": selected_losses[-1],
+            }
+        )
     return rows
 
 
