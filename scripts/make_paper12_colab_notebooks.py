@@ -966,14 +966,51 @@ def geovlm_prompt_notebook() -> dict:
                 SUMMARY_JSON = LOCAL_RESULTS_DIR / "geovlm_prompt_segmentation_summary.json"
                 DRIVE_RAW_JSON = DRIVE_RESULTS_DIR / RAW_JSON.name
                 DRIVE_SUMMARY_JSON = DRIVE_RESULTS_DIR / SUMMARY_JSON.name
-                for source, destination in ((DRIVE_RAW_JSON, RAW_JSON), (DRIVE_SUMMARY_JSON, SUMMARY_JSON)):
-                    if source.exists():
-                        shutil.copy2(source, destination)
                 os.environ["HF_HOME"] = str(HF_CACHE_DIR)
                 print("Results:", DRIVE_RESULTS_DIR)
                 print("Checkpoints:", CHECKPOINT_DIR)
                 print("Previews:", PREVIEW_DIR)
                 print("Hugging Face cache:", HF_CACHE_DIR)
+                """
+            ),
+            dedented_code_cell(
+                """
+                # Archive the failed seed-42 artifacts once before running the v2 recovery.
+                ARCHIVE_FAILED_RUN = False
+                FAILED_ARCHIVE_DIR = DRIVE_RESULTS_DIR / "failed_seed42_20260724"
+                FAILED_RAW_JSON = DRIVE_RAW_JSON
+                FAILED_SUMMARY_JSON = DRIVE_SUMMARY_JSON
+                FAILED_CHECKPOINT = (
+                    CHECKPOINT_DIR / "siglip_film_dense_similarity_houlsby__seed42.pt"
+                )
+                FAILED_PREVIEWS = sorted(PREVIEW_DIR.glob("seed42__*.png"))
+                failed_artifacts = [
+                    path
+                    for path in (
+                        FAILED_RAW_JSON,
+                        FAILED_SUMMARY_JSON,
+                        FAILED_CHECKPOINT,
+                    )
+                    if path.exists()
+                ] + FAILED_PREVIEWS
+                if failed_artifacts and not ARCHIVE_FAILED_RUN:
+                    raise RuntimeError(
+                        "Failed seed-42 artifacts still exist; set ARCHIVE_FAILED_RUN = True "
+                        "once to archive it before recovery: "
+                        + ", ".join(str(path) for path in failed_artifacts)
+                    )
+                if failed_artifacts:
+                    FAILED_ARCHIVE_DIR.mkdir(parents=True, exist_ok=False)
+                    for source in failed_artifacts:
+                        destination = FAILED_ARCHIVE_DIR / source.name
+                        shutil.move(str(source), str(destination))
+                        print("Archived", source, "to", destination)
+                for source, destination in (
+                    (DRIVE_RAW_JSON, RAW_JSON),
+                    (DRIVE_SUMMARY_JSON, SUMMARY_JSON),
+                ):
+                    if source.exists():
+                        shutil.copy2(source, destination)
                 """
             ),
             dedented_code_cell(
@@ -1102,10 +1139,12 @@ def geovlm_prompt_notebook() -> dict:
                 config["experiment"]["dataset_root"] = LANDCOVER_ROOT
                 config["experiment"]["prompt_config"] = str(PROMPT_CONFIG)
                 config["experiment"]["allow_synthetic_fallback"] = False
+                config["experiment"]["training_contract"] = "paper12.geovlm_prompt_training.v2"
                 config["prithvi"]["checkpoint"] = str(LOCAL_PRITHVI)
                 config["text_encoder"]["model_id"] = SIGLIP_MODEL_ID
                 config["text_encoder"]["revision"] = SIGLIP_REVISION
                 config["text_encoder"]["local_files_only"] = True
+                config["text_encoder"]["cache_dir"] = str(HF_CACHE_DIR)
                 CONFIG_COLAB.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
                 print(CONFIG_COLAB.read_text(encoding="utf-8"))
                 """
@@ -1150,8 +1189,22 @@ def geovlm_prompt_notebook() -> dict:
                 ]
                 assert len(seed42_rows) == 3
                 assert all(row["checkpoint_reproduced"] for row in seed42_rows)
-                checkpoint_path = CHECKPOINT_DIR / "siglip_film_dense_similarity_houlsby__seed42.pt"
-                checkpoint_payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+                checkpoint_path = (
+                    CHECKPOINT_DIR
+                    / "siglip_film_dense_similarity_houlsby__seed42.best.pt"
+                )
+                checkpoint_payload = torch.load(
+                    checkpoint_path, map_location="cpu", weights_only=False
+                )
+                assert checkpoint_payload["metadata"]["training_contract"] == (
+                    "paper12.geovlm_prompt_training.v2"
+                )
+                print(
+                    "selected epoch:",
+                    checkpoint_payload["best_epoch"],
+                    "rank:",
+                    checkpoint_payload["best_probe_rank"],
+                )
                 print("reloaded checkpoint metadata:", json.dumps(checkpoint_payload["metadata"], indent=2))
                 summary = json.loads(SUMMARY_JSON.read_text(encoding="utf-8"))
                 print("mvp_status:", summary["mvp_status"])

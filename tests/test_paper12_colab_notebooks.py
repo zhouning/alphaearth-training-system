@@ -207,6 +207,13 @@ def test_paper12_geovlm_prompt_segmentation_colab_contract():
         "/content/drive/MyDrive/paper12_checkpoints/geovlm_prompt_segmentation"
         in text
     )
+    assert 'config["text_encoder"]["cache_dir"] = str(HF_CACHE_DIR)' in text
+    assert "paper12.geovlm_prompt_training.v2" in text
+    assert "ARCHIVE_FAILED_RUN = False" in text
+    assert "failed_seed42_20260724" in text
+    assert "archive it before recovery" in text
+    assert "siglip_film_dense_similarity_houlsby__seed42.best.pt" in text
+    assert "siglip_film_dense_similarity_houlsby__seed42.pt" in text
 
 
 def test_notebook_generator_preserves_newlines_and_execution_artifacts():

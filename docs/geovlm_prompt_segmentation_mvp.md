@@ -2,14 +2,16 @@
 
 ## Status
 
-The implementation and offline tests are complete. Real model evidence is not.
-The project must report `mvp_status: incomplete` until real LandCoverAI runs
-produce all required prompt and baseline rows. Synthetic fixtures validate only
-software plumbing and cannot be cited as model performance.
+The implementation and offline tests are complete. The first real seed-42 run
+failed three smoke checks and is failure evidence only; it authorizes no
+performance claim. The project must report `mvp_status: incomplete` until real
+LandCoverAI runs produce all required prompt and baseline rows. Synthetic
+fixtures validate only software plumbing and cannot be cited as model
+performance.
 
 No GeoVLM result is currently incorporated into the Paper12 manuscript. This
 work does not change the backend, frontend, ArcGIS packaging, or existing result
-JSON files.
+JSON files. Do not add any GeoVLM result number to Paper12 during recovery.
 
 ## Validated scope
 
@@ -109,6 +111,25 @@ Drive locations:
 /content/drive/MyDrive/paper12_previews/geovlm_prompt_segmentation
 /content/drive/MyDrive/huggingface_cache/paper12_geovlm
 ```
+
+## Seed-42 recovery
+
+1. Set `ARCHIVE_FAILED_RUN = True` once and run the archive cell.
+2. Confirm the failed JSON, summary, legacy checkpoint, and previews are under
+   `failed_seed42_20260724`.
+3. Reset `ARCHIVE_FAILED_RUN = False`.
+4. Run the notebook through the seed-42 cell under
+   `paper12.geovlm_prompt_training.v2`.
+5. Inspect source/pool/excluded counts, probe history, observed empty-target
+   share, best epoch, full loss history, and selected loss prefix.
+6. Keep `RUN_FULL_MATRIX = False` unless all four unchanged smoke checks pass.
+
+The `.last.pt` checkpoint is the only resume source. The `.best.pt` checkpoint
+is the only evaluation or inference source. Official validation remains
+complete; recovery must not truncate or subsample it. If seed 42 fails again,
+stop the recovery and prepare a separately approved optimizer-stabilization
+design before changing training behavior. Do not write any recovery result
+number into Paper12.
 
 ## Runner commands
 
