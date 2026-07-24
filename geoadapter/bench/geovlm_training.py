@@ -215,6 +215,11 @@ def _draw_source(
     return candidates[index]
 
 
+def _floor_binary_float_product(size: int, cap: float) -> int:
+    numerator, denominator = float(cap).as_integer_ratio()
+    return (size * numerator) // denominator
+
+
 def build_epoch_assignments(
     split: TrainingProbeSplit,
     *,
@@ -270,7 +275,9 @@ def build_epoch_assignments(
         for offset in range(0, epoch_size, batch_size)
     ]
     empty_counts = [
-        int(size * empty_target_cap) if negative_names else 0
+        _floor_binary_float_product(size, empty_target_cap)
+        if negative_names
+        else 0
         for size in batch_sizes
     ]
     total_empty_count = sum(empty_counts)

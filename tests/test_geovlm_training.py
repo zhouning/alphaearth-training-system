@@ -276,3 +276,26 @@ def test_build_epoch_assignments_has_no_empty_targets_without_negatives():
 
     assert len(assignments) == len(split.training_samples)
     assert not any(assignment.empty_target for assignment in assignments)
+
+
+def test_build_epoch_assignments_enforces_binary_float_cap_exactly():
+    cap = 0.8333333333333333
+    dataset = [
+        _sample(class_id)
+        for class_id in PROMPT_CLASS_IDS
+        for _ in range(8)
+    ]
+    split = reserve_training_probe(scan_target_present_pool(dataset), seed=42)
+
+    assignments = build_epoch_assignments(
+        split,
+        batch_size=6,
+        empty_target_cap=cap,
+        seed=42,
+    )
+
+    for offset in range(0, len(assignments), 6):
+        batch = assignments[offset : offset + 6]
+        empty_count = sum(assignment.empty_target for assignment in batch)
+        assert empty_count <= 4
+        assert empty_count / len(batch) <= cap
