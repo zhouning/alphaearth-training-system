@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 from geoadapter.bench.run_geovlm_prompt_segmentation import (
     BASELINE_METHOD,
     PROMPT_METHOD,
+    _atomic_json,
     _evaluate_probe,
     _probe_condition,
     _train_one_epoch,
@@ -283,6 +284,40 @@ class _TinyConditionalModel(nn.Module):
         return logits + self.condition_bias[indices, None, None]
 
 
+class _NonFiniteConditionalModel(_TinyConditionalModel):
+    def forward(self, images, conditions):
+        return super().forward(images, conditions) * float("nan")
+
+
+class _SpatiallyConstantDataset(Dataset):
+    def __init__(self):
+        self.samples = []
+        for index, class_id in enumerate((1, 1, 3, 3, 4, 4), start=1):
+            image = torch.full((3, 8, 8), float(index))
+            mask = torch.full((8, 8), class_id, dtype=torch.long)
+            self.samples.append((image, mask))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, index):
+        return self.samples[index]
+
+
+class _SpatiallyConstantBaselineModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.scale = nn.Parameter(torch.tensor(1.0))
+        self.condition_dtypes = []
+
+    def forward(self, images, conditions):
+        if not torch.is_tensor(conditions):
+            raise TypeError("baseline probe conditions must be tensors")
+        self.condition_dtypes.append(conditions.dtype)
+        levels = images[:, 0].mean(dim=(1, 2)) * self.scale
+        return levels[:, None, None].expand(-1, images.shape[-2], images.shape[-1])
+
+
 def test_training_probe_is_finite_nonconstant_and_prompt_dependent():
     class RecordingDataset(_TinyPromptDataset):
         def __init__(self):
@@ -353,7 +388,121 @@ def test_probe_rank_uses_lexicographic_checkpoint_policy():
             "mean_prompt_probability_change": float("nan"),
             "mean_loss": float("nan"),
         }
-    ) == (0, 0, 0, float("-inf"), float("-inf"))
+    ) == (0, 0, 0, 0.0, 0.0)
+
+
+def test_nonfinite_probe_is_strict_json_and_gets_finite_rank_sentinel():
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    prompt_config = load_prompt_config(
+        Path("geoadapter/bench/configs/geovlm_prompts.yaml")
+    )
+    trainer = build_trainer(_NonFiniteConditionalModel(), config, "cpu")
+
+    probe = _evaluate_probe(
+        trainer,
+        _TinyPromptDataset(),
+        {"building": [0], "water": [1], "road": [2]},
+        prompt_config,
+        {"building": 1.0, "water": 1.0, "road": 1.0},
+        PROMPT_METHOD,
+    )
+
+    assert probe["finite"] is False
+    assert probe["mean_loss"] is None
+    assert probe["mean_prompt_probability_change"] is None
+    assert all(
+        diagnostics == {
+            "prediction_range": None,
+            "prediction_nonconstant": False,
+            "mean_prompt_probability_change": None,
+            "prompt_map_changed": False,
+        }
+        for diagnostics in probe["classes"].values()
+    )
+    json.dumps(probe, allow_nan=False)
+    assert probe_rank(probe) == (0, 0, 0, 0.0, 0.0)
+
+
+def test_atomic_json_rejects_nonfinite_payload_without_writing_target(tmp_path):
+    output = tmp_path / "probe.json"
+
+    with pytest.raises(ValueError, match="Out of range float values"):
+        _atomic_json(output, {"mean_loss": float("nan")})
+
+    assert not output.exists()
+
+
+def test_baseline_probe_uses_spatial_range_and_restores_model_mode():
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    prompt_config = load_prompt_config(
+        Path("geoadapter/bench/configs/geovlm_prompts.yaml")
+    )
+    trainer = build_trainer(_SpatiallyConstantBaselineModel(), config, "cpu")
+    probe_indices = {"building": [0, 1], "water": [2, 3], "road": [4, 5]}
+    weights = {"building": 1.0, "water": 1.0, "road": 1.0}
+    dataset = _SpatiallyConstantDataset()
+
+    trainer.model.train()
+    training_probe = _evaluate_probe(
+        trainer,
+        dataset,
+        probe_indices,
+        prompt_config,
+        weights,
+        BASELINE_METHOD,
+    )
+    assert trainer.model.training is True
+
+    trainer.model.eval()
+    evaluation_probe = _evaluate_probe(
+        trainer,
+        dataset,
+        probe_indices,
+        prompt_config,
+        weights,
+        BASELINE_METHOD,
+    )
+
+    assert trainer.model.training is False
+    assert training_probe == evaluation_probe
+    assert all(dtype == torch.long for dtype in trainer.model.condition_dtypes)
+    assert training_probe["nonconstant_class_count"] == 0
+    assert all(
+        diagnostics["prediction_range"] == 0.0
+        and diagnostics["prediction_nonconstant"] is False
+        for diagnostics in training_probe["classes"].values()
+    )
+
+
+@pytest.mark.parametrize(
+    ("probe_indices", "message"),
+    [
+        (
+            {"building": [0], "water": [1]},
+            "probe_indices_by_class must contain exactly",
+        ),
+        (
+            {"building": [0], "water": [], "road": [2]},
+            "probe indices for water must be non-empty",
+        ),
+    ],
+)
+def test_probe_requires_all_nonempty_class_indices(probe_indices, message):
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    prompt_config = load_prompt_config(
+        Path("geoadapter/bench/configs/geovlm_prompts.yaml")
+    )
+    trainer = build_trainer(_TinyConditionalModel(), config, "cpu")
+
+    with pytest.raises(ValueError, match=message):
+        _evaluate_probe(
+            trainer,
+            _TinyPromptDataset(),
+            probe_indices,
+            prompt_config,
+            {"building": 1.0, "water": 1.0, "road": 1.0},
+            PROMPT_METHOD,
+        )
 
 
 def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):

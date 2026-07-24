@@ -247,9 +247,10 @@ def _positive_weights_for_batch(class_names, weights, device):
 
 
 def _atomic_json(path: Path, payload: Any) -> None:
+    serialized = json.dumps(payload, indent=2, allow_nan=False)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    temporary.write_text(serialized, encoding="utf-8")
     temporary.replace(path)
 
 
@@ -389,83 +390,99 @@ def _evaluate_probe(
     method: str,
 ) -> dict[str, Any]:
     class_names = tuple(PROMPT_TARGET_CLASS_IDS)
+    actual_names = set(probe_indices_by_class)
+    expected_names = set(class_names)
+    if actual_names != expected_names:
+        missing = sorted(expected_names - actual_names)
+        unexpected = sorted(actual_names - expected_names)
+        raise ValueError(
+            "probe_indices_by_class must contain exactly "
+            f"{list(class_names)}; missing={missing}; unexpected={unexpected}"
+        )
+    for class_name in class_names:
+        if not probe_indices_by_class[class_name]:
+            raise ValueError(f"probe indices for {class_name} must be non-empty")
+
     classes = {}
     losses = []
     class_changes = []
     finite = True
-    for class_index, class_name in enumerate(class_names):
-        wrong_name = class_names[(class_index + 1) % len(class_names)]
-        correct_condition = _probe_condition(method, class_name, prompt_config)
-        wrong_condition = _probe_condition(method, wrong_name, prompt_config)
-        probability_min = None
-        probability_max = None
-        probability_changes = []
-        for source_index in probe_indices_by_class[class_name]:
-            image, mask = train[source_index]
-            target = multiclass_to_binary(
-                mask, PROMPT_TARGET_CLASS_IDS[class_name]
-            ).unsqueeze(0)
-            correct = trainer.predict(image.unsqueeze(0), correct_condition)
-            wrong = trainer.predict(image.unsqueeze(0), wrong_condition)
-            loss = trainer.criterion(
-                correct,
-                target.to(trainer.device),
-                torch.tensor(
-                    [weights[class_name]],
-                    dtype=torch.float32,
-                    device=trainer.device,
-                ),
-            )
-            correct_probability = correct.sigmoid().detach().cpu()
-            wrong_probability = wrong.sigmoid().detach().cpu()
-            change = (correct_probability - wrong_probability).abs().mean()
-            finite = bool(
-                finite
-                and torch.isfinite(correct).all()
-                and torch.isfinite(wrong).all()
-                and torch.isfinite(loss).all()
-                and torch.isfinite(change).all()
-            )
-            losses.append(float(loss.detach().cpu()))
-            probability_changes.append(float(change))
-            sample_min = float(correct_probability.min())
-            sample_max = float(correct_probability.max())
-            probability_min = (
-                sample_min if probability_min is None else min(probability_min, sample_min)
-            )
-            probability_max = (
-                sample_max if probability_max is None else max(probability_max, sample_max)
-            )
+    was_training = trainer.model.training
+    try:
+        for class_index, class_name in enumerate(class_names):
+            wrong_name = class_names[(class_index + 1) % len(class_names)]
+            correct_condition = _probe_condition(method, class_name, prompt_config)
+            wrong_condition = _probe_condition(method, wrong_name, prompt_config)
+            spatial_ranges = []
+            probability_changes = []
+            class_finite = True
+            for source_index in probe_indices_by_class[class_name]:
+                image, mask = train[source_index]
+                target = multiclass_to_binary(
+                    mask, PROMPT_TARGET_CLASS_IDS[class_name]
+                ).unsqueeze(0)
+                correct = trainer.predict(image.unsqueeze(0), correct_condition)
+                wrong = trainer.predict(image.unsqueeze(0), wrong_condition)
+                loss = trainer.criterion(
+                    correct,
+                    target.to(trainer.device),
+                    torch.tensor(
+                        [weights[class_name]],
+                        dtype=torch.float32,
+                        device=trainer.device,
+                    ),
+                )
+                correct_probability = correct.sigmoid().detach().cpu()
+                wrong_probability = wrong.sigmoid().detach().cpu()
+                change = (correct_probability - wrong_probability).abs().mean()
+                sample_finite = bool(
+                    torch.isfinite(correct).all()
+                    and torch.isfinite(wrong).all()
+                    and torch.isfinite(loss).all()
+                    and torch.isfinite(change).all()
+                )
+                if not sample_finite:
+                    finite = False
+                    class_finite = False
+                    continue
 
-        prediction_range = (
-            0.0
-            if probability_min is None or probability_max is None
-            else probability_max - probability_min
-        )
-        mean_change = (
-            sum(probability_changes) / len(probability_changes)
-            if probability_changes
-            else 0.0
-        )
-        class_changes.append(mean_change)
-        classes[class_name] = {
-            "prediction_range": float(prediction_range),
-            "prediction_nonconstant": bool(prediction_range > 0.0),
-            "mean_prompt_probability_change": float(mean_change),
-            "prompt_map_changed": bool(mean_change > 0.0),
-        }
+                losses.append(float(loss.detach().cpu()))
+                probability_changes.append(float(change))
+                spatial_ranges.append(
+                    float(correct_probability.max() - correct_probability.min())
+                )
+
+            if class_finite:
+                prediction_range = max(spatial_ranges)
+                mean_change = sum(probability_changes) / len(probability_changes)
+                class_changes.append(mean_change)
+                classes[class_name] = {
+                    "prediction_range": float(prediction_range),
+                    "prediction_nonconstant": bool(prediction_range > 0.0),
+                    "mean_prompt_probability_change": float(mean_change),
+                    "prompt_map_changed": bool(mean_change > 0.0),
+                }
+            else:
+                classes[class_name] = {
+                    "prediction_range": None,
+                    "prediction_nonconstant": False,
+                    "mean_prompt_probability_change": None,
+                    "prompt_map_changed": False,
+                }
+    finally:
+        trainer.model.train(was_training)
 
     return {
         "finite": bool(finite),
-        "mean_loss": float(sum(losses) / len(losses)) if losses else 0.0,
+        "mean_loss": float(sum(losses) / len(losses)) if finite else None,
         "nonconstant_class_count": int(
             sum(value["prediction_nonconstant"] for value in classes.values())
         ),
         "prompt_map_changed_class_count": int(
             sum(value["prompt_map_changed"] for value in classes.values())
         ),
-        "mean_prompt_probability_change": float(
-            sum(class_changes) / len(class_changes)
+        "mean_prompt_probability_change": (
+            float(sum(class_changes) / len(class_changes)) if finite else None
         ),
         "classes": classes,
     }
@@ -473,7 +490,7 @@ def _evaluate_probe(
 
 def probe_rank(probe: dict[str, Any]) -> tuple[int, int, int, float, float]:
     if not probe.get("finite", False):
-        return (0, 0, 0, float("-inf"), float("-inf"))
+        return (0, 0, 0, 0.0, 0.0)
     return (
         1,
         int(probe["nonconstant_class_count"]),
