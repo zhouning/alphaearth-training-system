@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -122,6 +123,51 @@ def sample_prompt_batch(
         targets=target_tensor,
         empty_count=int(target_tensor.flatten(1).sum(dim=1).eq(0).sum()),
         voluntary_empty_count=voluntary_empty_count,
+    )
+
+
+def prompt_batch_from_class_names(
+    masks: torch.Tensor,
+    class_names: Sequence[str],
+    config: PromptConfig,
+    *,
+    generator: torch.Generator | None = None,
+) -> PromptBatch:
+    if masks.ndim != 3:
+        raise ValueError("masks must have shape [B,H,W]")
+
+    selected_names = tuple(class_names)
+    if len(selected_names) != int(masks.shape[0]):
+        raise ValueError("class_names must have one entry per mask")
+    unsupported = sorted(set(selected_names) - set(PROMPT_TARGET_CLASS_IDS))
+    if unsupported:
+        raise ValueError(
+            "unsupported prompt target classes: " + ", ".join(unsupported)
+        )
+
+    prompts: list[str] = []
+    targets: list[torch.Tensor] = []
+    for mask, name in zip(masks, selected_names):
+        validate_landcoverai_mask(mask)
+        prompt_values = config.classes[name].training
+        prompt_index = int(torch.randint(len(prompt_values), (), generator=generator))
+        prompts.append(prompt_values[prompt_index])
+        targets.append(multiclass_to_binary(mask, PROMPT_TARGET_CLASS_IDS[name]))
+
+    target_tensor = (
+        torch.stack(targets) if targets else masks.to(dtype=torch.float32)
+    )
+    empty_count = int(target_tensor.flatten(1).sum(dim=1).eq(0).sum())
+    return PromptBatch(
+        class_ids=torch.tensor(
+            [PROMPT_TARGET_CLASS_IDS[name] for name in selected_names],
+            dtype=torch.long,
+        ),
+        class_names=selected_names,
+        prompts=tuple(prompts),
+        targets=target_tensor,
+        empty_count=empty_count,
+        voluntary_empty_count=empty_count,
     )
 
 

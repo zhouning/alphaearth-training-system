@@ -51,6 +51,27 @@ class TrainingProbeSplit:
         )
 
 
+@dataclass(frozen=True)
+class PromptAssignment:
+    source_index: int
+    class_name: str
+    empty_target: bool
+
+
+class AssignedPromptDataset:
+    def __init__(self, dataset, assignments: tuple[PromptAssignment, ...]) -> None:
+        self.dataset = dataset
+        self.assignments = assignments
+
+    def __len__(self) -> int:
+        return len(self.assignments)
+
+    def __getitem__(self, index: int):
+        assignment = self.assignments[index]
+        image, mask = self.dataset[assignment.source_index]
+        return image, mask, assignment.class_name
+
+
 def scan_target_present_pool(dataset) -> TargetPresentPool:
     source_size = len(dataset)
     samples = []
@@ -165,3 +186,134 @@ def reserve_training_probe(
         probe_indices_by_class=probe_indices_by_class,
         probe_sha256=probe_sha256,
     )
+
+
+def _balanced_names(
+    count: int,
+    names: tuple[str, ...],
+    generator: torch.Generator,
+) -> list[str]:
+    if count < 0:
+        raise ValueError("count must be nonnegative")
+    if count == 0:
+        return []
+    if not names:
+        raise ValueError("names must not be empty when count is positive")
+
+    permutation = torch.randperm(len(names), generator=generator).tolist()
+    shuffled_names = [names[index] for index in permutation]
+    return [shuffled_names[index % len(shuffled_names)] for index in range(count)]
+
+
+def _draw_source(
+    candidates: tuple[int, ...],
+    generator: torch.Generator,
+) -> int:
+    if not candidates:
+        raise ValueError("source candidates must not be empty")
+    index = int(torch.randint(len(candidates), (), generator=generator))
+    return candidates[index]
+
+
+def build_epoch_assignments(
+    split: TrainingProbeSplit,
+    *,
+    batch_size: int,
+    empty_target_cap: float,
+    seed: int,
+) -> tuple[PromptAssignment, ...]:
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    if not 0.0 <= empty_target_cap <= 1.0:
+        raise ValueError("empty_target_cap must be between 0 and 1")
+
+    present_by_index = {
+        sample.source_index: sample.present_classes
+        for sample in split.training_samples
+    }
+    positive_candidates = {
+        class_name: tuple(
+            source_index
+            for source_index, present_classes in present_by_index.items()
+            if class_name in present_classes
+        )
+        for class_name in CLASS_NAMES
+    }
+    missing_classes = [
+        class_name
+        for class_name in CLASS_NAMES
+        if not positive_candidates[class_name]
+    ]
+    if missing_classes:
+        raise ValueError(
+            "training split has no positive candidates for: "
+            + ", ".join(missing_classes)
+        )
+
+    negative_candidates = {
+        class_name: tuple(
+            source_index
+            for source_index, present_classes in present_by_index.items()
+            if class_name not in present_classes
+        )
+        for class_name in CLASS_NAMES
+    }
+    negative_names = tuple(
+        class_name
+        for class_name in CLASS_NAMES
+        if negative_candidates[class_name]
+    )
+
+    epoch_size = len(split.training_samples)
+    batch_sizes = [
+        min(batch_size, epoch_size - offset)
+        for offset in range(0, epoch_size, batch_size)
+    ]
+    empty_counts = [
+        int(size * empty_target_cap) if negative_names else 0
+        for size in batch_sizes
+    ]
+    total_empty_count = sum(empty_counts)
+    generator = torch.Generator().manual_seed(seed)
+    nonempty_names = _balanced_names(
+        epoch_size - total_empty_count,
+        CLASS_NAMES,
+        generator,
+    )
+    empty_names = _balanced_names(
+        total_empty_count,
+        negative_names,
+        generator,
+    )
+
+    assignments: list[PromptAssignment] = []
+    nonempty_offset = 0
+    empty_offset = 0
+    for size, empty_count in zip(batch_sizes, empty_counts):
+        batch: list[PromptAssignment] = []
+        for name in nonempty_names[
+            nonempty_offset : nonempty_offset + size - empty_count
+        ]:
+            batch.append(
+                PromptAssignment(
+                    source_index=_draw_source(positive_candidates[name], generator),
+                    class_name=name,
+                    empty_target=False,
+                )
+            )
+        nonempty_offset += size - empty_count
+
+        for name in empty_names[empty_offset : empty_offset + empty_count]:
+            batch.append(
+                PromptAssignment(
+                    source_index=_draw_source(negative_candidates[name], generator),
+                    class_name=name,
+                    empty_target=True,
+                )
+            )
+        empty_offset += empty_count
+
+        permutation = torch.randperm(size, generator=generator).tolist()
+        assignments.extend(batch[index] for index in permutation)
+
+    return tuple(assignments)

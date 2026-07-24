@@ -9,6 +9,7 @@ from geoadapter.data.prompt_segmentation import (
     load_prompt_config,
     multiclass_to_binary,
     normalize_landcoverai_image,
+    prompt_batch_from_class_names,
     sample_prompt_batch,
 )
 
@@ -111,3 +112,53 @@ def test_sample_prompt_batch_rejects_invalid_empty_cap():
     config = load_prompt_config(CONFIG)
     with pytest.raises(ValueError, match="empty_cap"):
         sample_prompt_batch(torch.zeros(1, 2, 2), config, empty_cap=1.5)
+
+
+def test_prompt_batch_from_class_names_uses_explicit_schedule():
+    masks = torch.stack(
+        [
+            torch.tensor([[1, 0], [0, 0]]),
+            torch.tensor([[3, 3], [0, 0]]),
+            torch.tensor([[4, 0], [4, 0]]),
+        ]
+    )
+    config = load_prompt_config(CONFIG)
+
+    batch = prompt_batch_from_class_names(
+        masks,
+        ("water", "water", "road"),
+        config,
+        generator=torch.Generator().manual_seed(7),
+    )
+
+    assert batch.class_names == ("water", "water", "road")
+    assert batch.class_ids.tolist() == [3, 3, 4]
+    assert batch.empty_count == 1
+    assert batch.voluntary_empty_count == 1
+    assert batch.targets.flatten(1).sum(dim=1).tolist() == [0.0, 2.0, 2.0]
+    assert all(
+        prompt in config.classes[class_name].training
+        for class_name, prompt in zip(batch.class_names, batch.prompts)
+    )
+
+
+def test_prompt_batch_from_class_names_rejects_wrong_schedule_length():
+    config = load_prompt_config(CONFIG)
+
+    with pytest.raises(ValueError, match="class_names"):
+        prompt_batch_from_class_names(
+            torch.zeros(2, 2, 2),
+            ("building",),
+            config,
+        )
+
+
+def test_prompt_batch_from_class_names_rejects_unsupported_class():
+    config = load_prompt_config(CONFIG)
+
+    with pytest.raises(ValueError, match="unsupported"):
+        prompt_batch_from_class_names(
+            torch.zeros(1, 2, 2),
+            ("woodland",),
+            config,
+        )
