@@ -981,6 +981,12 @@ def geovlm_prompt_notebook() -> dict:
                 ARCHIVE_FAILED_RUN = False
                 RESULTS_SCHEMA_V2 = "paper12.geovlm_prompt_results.v2"
                 TRAINING_CONTRACT_V2 = "paper12.geovlm_prompt_training.v2"
+                REQUIRED_METHODS = (
+                    "siglip_film_dense_similarity_houlsby",
+                    "no_text_three_binary_heads_houlsby",
+                )
+                REQUIRED_SEEDS = (42, 123, 456)
+                REQUIRED_CLASSES = ("building", "road", "water")
                 FAILED_ARCHIVE_DIR = DRIVE_RESULTS_DIR / "failed_seed42_20260724"
                 FAILED_STAGING_DIR = (
                     DRIVE_RESULTS_DIR / ".failed_seed42_20260724.incomplete"
@@ -1019,6 +1025,33 @@ def geovlm_prompt_notebook() -> dict:
                                 for row in rows
                             )
                         )
+                        if compatible_v2_raw:
+                            seen = set()
+                            classes_by_pair = {}
+                            for row in rows:
+                                method = row.get("method")
+                                seed = row.get("seed")
+                                class_name = row.get("class_name")
+                                key = (method, seed, class_name)
+                                if (
+                                    method not in REQUIRED_METHODS
+                                    or isinstance(seed, bool)
+                                    or not isinstance(seed, int)
+                                    or seed not in REQUIRED_SEEDS
+                                    or class_name not in REQUIRED_CLASSES
+                                    or key in seen
+                                ):
+                                    compatible_v2_raw = False
+                                    break
+                                seen.add(key)
+                                classes_by_pair.setdefault((method, seed), set()).add(
+                                    class_name
+                                )
+                            if compatible_v2_raw:
+                                compatible_v2_raw = all(
+                                    classes == set(REQUIRED_CLASSES)
+                                    for classes in classes_by_pair.values()
+                                )
 
                 archive_sources = [
                     path

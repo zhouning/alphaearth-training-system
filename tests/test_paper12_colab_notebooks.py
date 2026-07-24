@@ -24,6 +24,8 @@ GEOVLM_ARCHIVE_CELL_MARKER = (
 GEOVLM_RESULTS_SCHEMA_V2 = "paper12.geovlm_prompt_results.v2"
 GEOVLM_TRAINING_CONTRACT_V2 = "paper12.geovlm_prompt_training.v2"
 GEOVLM_LEGACY_CHECKPOINT = "siglip_film_dense_similarity_houlsby__seed42.pt"
+GEOVLM_PROMPT_METHOD = "siglip_film_dense_similarity_houlsby"
+GEOVLM_REQUIRED_CLASSES = ("building", "road", "water")
 
 
 def read_notebook_text(path: Path) -> str:
@@ -77,6 +79,32 @@ def geovlm_archive_namespace(tmp_path: Path) -> dict[str, object]:
         "DRIVE_SUMMARY_JSON": drive_results_dir / summary_json.name,
         "shutil": shutil,
     }
+
+
+def geovlm_complete_v2_rows() -> list[dict[str, object]]:
+    return [
+        {
+            "training_contract": GEOVLM_TRAINING_CONTRACT_V2,
+            "method": GEOVLM_PROMPT_METHOD,
+            "seed": 42,
+            "class_name": class_name,
+        }
+        for class_name in GEOVLM_REQUIRED_CLASSES
+    ]
+
+
+def geovlm_v2_payload_bytes(rows: list[dict[str, object]]) -> bytes:
+    return (
+        json.dumps(
+            {
+                "schema": GEOVLM_RESULTS_SCHEMA_V2,
+                "training_contract": GEOVLM_TRAINING_CONTRACT_V2,
+                "rows": rows,
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
 
 
 def test_paper12_loveda_full_finetune_colab_notebook_contract():
@@ -271,20 +299,7 @@ def test_paper12_geovlm_prompt_segmentation_colab_contract():
 
 def test_geovlm_archive_cell_resumes_compatible_v2_results(tmp_path):
     namespace = geovlm_archive_namespace(tmp_path)
-    raw_bytes = (
-        json.dumps(
-            {
-                "schema": GEOVLM_RESULTS_SCHEMA_V2,
-                "training_contract": GEOVLM_TRAINING_CONTRACT_V2,
-                "rows": [
-                    {"training_contract": GEOVLM_TRAINING_CONTRACT_V2},
-                    {"training_contract": GEOVLM_TRAINING_CONTRACT_V2},
-                ],
-            },
-            sort_keys=True,
-        )
-        + "\n"
-    ).encode("utf-8")
+    raw_bytes = geovlm_v2_payload_bytes(geovlm_complete_v2_rows())
     summary_bytes = b'{"mvp_status": "incomplete"}\n'
     preview_bytes = b"current preview"
     namespace["DRIVE_RAW_JSON"].write_bytes(raw_bytes)
@@ -302,6 +317,64 @@ def test_geovlm_archive_cell_resumes_compatible_v2_results(tmp_path):
     assert namespace["SUMMARY_JSON"].read_bytes() == summary_bytes
     assert preview.read_bytes() == preview_bytes
     assert archive_sentinel.read_bytes() == b"completed archive"
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        pytest.param(geovlm_complete_v2_rows()[:2], id="partial-pair"),
+        pytest.param(
+            geovlm_complete_v2_rows() + [geovlm_complete_v2_rows()[0]],
+            id="duplicate-identity",
+        ),
+        pytest.param(
+            [
+                {**row, "method": "unsupported_method"}
+                for row in geovlm_complete_v2_rows()
+            ],
+            id="invalid-method",
+        ),
+        pytest.param(
+            [{**row, "seed": True} for row in geovlm_complete_v2_rows()],
+            id="bool-seed",
+        ),
+        pytest.param(
+            [{**row, "seed": 999} for row in geovlm_complete_v2_rows()],
+            id="invalid-seed",
+        ),
+        pytest.param(
+            [
+                {**row, "class_name": "woodland"}
+                for row in geovlm_complete_v2_rows()
+            ],
+            id="invalid-class",
+        ),
+    ],
+)
+def test_geovlm_archive_cell_archives_v2_rows_with_invalid_identity(
+    tmp_path, rows
+):
+    namespace = geovlm_archive_namespace(tmp_path)
+    raw_bytes = geovlm_v2_payload_bytes(rows)
+    drive_raw = namespace["DRIVE_RAW_JSON"]
+    drive_raw.write_bytes(raw_bytes)
+
+    with pytest.raises(RuntimeError, match="archive it before recovery"):
+        exec(geovlm_archive_cell_source(), namespace)
+
+    assert drive_raw.read_bytes() == raw_bytes
+    assert not namespace["RAW_JSON"].exists()
+
+    exec(geovlm_archive_cell_source(archive_failed_run=True), namespace)
+
+    failed_archive = namespace["DRIVE_RESULTS_DIR"] / "failed_seed42_20260724"
+    staging_archive = (
+        namespace["DRIVE_RESULTS_DIR"] / ".failed_seed42_20260724.incomplete"
+    )
+    assert not drive_raw.exists()
+    assert not namespace["RAW_JSON"].exists()
+    assert not staging_archive.exists()
+    assert (failed_archive / drive_raw.name).read_bytes() == raw_bytes
 
 
 def test_geovlm_archive_cell_resumes_interrupted_staging_move(
