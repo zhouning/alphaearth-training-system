@@ -368,6 +368,121 @@ def _train_one_epoch(
     return float(sum(losses) / max(1, len(losses)))
 
 
+def _probe_condition(
+    method: str, class_name: str, prompt_config: PromptConfig
+) -> list[str] | torch.Tensor:
+    if method == PROMPT_METHOD:
+        return [prompt_config.classes[class_name].training[0]]
+    if method == BASELINE_METHOD:
+        return torch.tensor(
+            [PROMPT_TARGET_CLASS_IDS[class_name]], dtype=torch.long
+        )
+    raise ValueError(f"unsupported GeoVLM method: {method}")
+
+
+def _evaluate_probe(
+    trainer,
+    train,
+    probe_indices_by_class,
+    prompt_config: PromptConfig,
+    weights: dict[str, float],
+    method: str,
+) -> dict[str, Any]:
+    class_names = tuple(PROMPT_TARGET_CLASS_IDS)
+    classes = {}
+    losses = []
+    class_changes = []
+    finite = True
+    for class_index, class_name in enumerate(class_names):
+        wrong_name = class_names[(class_index + 1) % len(class_names)]
+        correct_condition = _probe_condition(method, class_name, prompt_config)
+        wrong_condition = _probe_condition(method, wrong_name, prompt_config)
+        probability_min = None
+        probability_max = None
+        probability_changes = []
+        for source_index in probe_indices_by_class[class_name]:
+            image, mask = train[source_index]
+            target = multiclass_to_binary(
+                mask, PROMPT_TARGET_CLASS_IDS[class_name]
+            ).unsqueeze(0)
+            correct = trainer.predict(image.unsqueeze(0), correct_condition)
+            wrong = trainer.predict(image.unsqueeze(0), wrong_condition)
+            loss = trainer.criterion(
+                correct,
+                target.to(trainer.device),
+                torch.tensor(
+                    [weights[class_name]],
+                    dtype=torch.float32,
+                    device=trainer.device,
+                ),
+            )
+            correct_probability = correct.sigmoid().detach().cpu()
+            wrong_probability = wrong.sigmoid().detach().cpu()
+            change = (correct_probability - wrong_probability).abs().mean()
+            finite = bool(
+                finite
+                and torch.isfinite(correct).all()
+                and torch.isfinite(wrong).all()
+                and torch.isfinite(loss).all()
+                and torch.isfinite(change).all()
+            )
+            losses.append(float(loss.detach().cpu()))
+            probability_changes.append(float(change))
+            sample_min = float(correct_probability.min())
+            sample_max = float(correct_probability.max())
+            probability_min = (
+                sample_min if probability_min is None else min(probability_min, sample_min)
+            )
+            probability_max = (
+                sample_max if probability_max is None else max(probability_max, sample_max)
+            )
+
+        prediction_range = (
+            0.0
+            if probability_min is None or probability_max is None
+            else probability_max - probability_min
+        )
+        mean_change = (
+            sum(probability_changes) / len(probability_changes)
+            if probability_changes
+            else 0.0
+        )
+        class_changes.append(mean_change)
+        classes[class_name] = {
+            "prediction_range": float(prediction_range),
+            "prediction_nonconstant": bool(prediction_range > 0.0),
+            "mean_prompt_probability_change": float(mean_change),
+            "prompt_map_changed": bool(mean_change > 0.0),
+        }
+
+    return {
+        "finite": bool(finite),
+        "mean_loss": float(sum(losses) / len(losses)) if losses else 0.0,
+        "nonconstant_class_count": int(
+            sum(value["prediction_nonconstant"] for value in classes.values())
+        ),
+        "prompt_map_changed_class_count": int(
+            sum(value["prompt_map_changed"] for value in classes.values())
+        ),
+        "mean_prompt_probability_change": float(
+            sum(class_changes) / len(class_changes)
+        ),
+        "classes": classes,
+    }
+
+
+def probe_rank(probe: dict[str, Any]) -> tuple[int, int, int, float, float]:
+    if not probe.get("finite", False):
+        return (0, 0, 0, float("-inf"), float("-inf"))
+    return (
+        1,
+        int(probe["nonconstant_class_count"]),
+        int(probe["prompt_map_changed_class_count"]),
+        float(probe["mean_prompt_probability_change"]),
+        -float(probe["mean_loss"]),
+    )
+
+
 def _all_prompt_values(prompt_config: PromptConfig, class_name: str, split: str):
     prompt_class = prompt_config.classes[class_name]
     return prompt_class.training if split == "seen" else prompt_class.held_out

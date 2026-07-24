@@ -9,11 +9,15 @@ from torch.utils.data import Dataset
 
 from geoadapter.bench.run_geovlm_prompt_segmentation import (
     BASELINE_METHOD,
+    PROMPT_METHOD,
+    _evaluate_probe,
+    _probe_condition,
     _train_one_epoch,
     build_trainer,
     checkpoint_metadata,
     completed_keys,
     estimate_positive_weights,
+    probe_rank,
     run_experiment,
     seed42_smoke_checks,
     sha256_file,
@@ -277,6 +281,79 @@ class _TinyConditionalModel(nn.Module):
         logits = self.conv(images)[:, 0]
         indices = torch.tensor(self._condition_indices(conditions), device=images.device)
         return logits + self.condition_bias[indices, None, None]
+
+
+def test_training_probe_is_finite_nonconstant_and_prompt_dependent():
+    class RecordingDataset(_TinyPromptDataset):
+        def __init__(self):
+            super().__init__()
+            self.accessed_indices = []
+
+        def __getitem__(self, index):
+            self.accessed_indices.append(index)
+            return super().__getitem__(index)
+
+    config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    prompt_config = load_prompt_config(
+        Path("geoadapter/bench/configs/geovlm_prompts.yaml")
+    )
+    train = RecordingDataset()
+    trainer = build_trainer(_TinyConditionalModel(), config, "cpu")
+    with torch.no_grad():
+        trainer.model.condition_bias.copy_(torch.tensor([0.0, 1.0, 2.0]))
+
+    prompt_condition = _probe_condition(PROMPT_METHOD, "building", prompt_config)
+    baseline_condition = _probe_condition(BASELINE_METHOD, "building", prompt_config)
+    probe = _evaluate_probe(
+        trainer,
+        train,
+        {"building": [0], "water": [1], "road": [2]},
+        prompt_config,
+        {"building": 1.0, "water": 1.0, "road": 1.0},
+        PROMPT_METHOD,
+    )
+
+    assert prompt_condition == [prompt_config.classes["building"].training[0]]
+    assert prompt_condition[0] not in prompt_config.classes["building"].held_out
+    assert baseline_condition.dtype == torch.long
+    assert baseline_condition.device.type == "cpu"
+    assert baseline_condition.tolist() == [1]
+    assert train.accessed_indices == [0, 1, 2]
+    assert probe["finite"] is True
+    assert probe["mean_loss"] > 0.0
+    assert probe["nonconstant_class_count"] == 3
+    assert probe["prompt_map_changed_class_count"] == 3
+    assert probe["mean_prompt_probability_change"] > 0.0
+    assert list(probe["classes"]) == ["building", "water", "road"]
+    assert json.loads(json.dumps(probe, allow_nan=False)) == probe
+    rank = probe_rank(probe)
+    assert rank[:3] == (1, 3, 3)
+    assert rank[3] > 0.0
+    assert rank[4] == -probe["mean_loss"]
+
+
+def test_probe_rank_uses_lexicographic_checkpoint_policy():
+    base = {
+        "finite": True,
+        "nonconstant_class_count": 3,
+        "prompt_map_changed_class_count": 3,
+        "mean_prompt_probability_change": 0.2,
+        "mean_loss": 1.0,
+    }
+
+    base_rank = probe_rank(base)
+
+    assert probe_rank({**base, "mean_prompt_probability_change": 0.3, "mean_loss": 2.0}) > base_rank
+    assert probe_rank({**base, "mean_loss": 0.5}) > base_rank
+    assert probe_rank(
+        {
+            "finite": False,
+            "nonconstant_class_count": 999,
+            "prompt_map_changed_class_count": 999,
+            "mean_prompt_probability_change": float("nan"),
+            "mean_loss": float("nan"),
+        }
+    ) == (0, 0, 0, float("-inf"), float("-inf"))
 
 
 def test_runner_appends_skips_and_reloads_with_injected_builders(tmp_path):
