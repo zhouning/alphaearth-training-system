@@ -976,15 +976,51 @@ def geovlm_prompt_notebook() -> dict:
             dedented_code_cell(
                 """
                 # Archive the failed seed-42 artifacts once before running the v2 recovery.
+                import json
+
                 ARCHIVE_FAILED_RUN = False
+                RESULTS_SCHEMA_V2 = "paper12.geovlm_prompt_results.v2"
+                TRAINING_CONTRACT_V2 = "paper12.geovlm_prompt_training.v2"
                 FAILED_ARCHIVE_DIR = DRIVE_RESULTS_DIR / "failed_seed42_20260724"
+                FAILED_STAGING_DIR = (
+                    DRIVE_RESULTS_DIR / ".failed_seed42_20260724.incomplete"
+                )
                 FAILED_RAW_JSON = DRIVE_RAW_JSON
                 FAILED_SUMMARY_JSON = DRIVE_SUMMARY_JSON
                 FAILED_CHECKPOINT = (
                     CHECKPOINT_DIR / "siglip_film_dense_similarity_houlsby__seed42.pt"
                 )
                 FAILED_PREVIEWS = sorted(PREVIEW_DIR.glob("seed42__*.png"))
-                failed_artifacts = [
+
+                compatible_v2_raw = False
+                if DRIVE_RAW_JSON.exists():
+                    try:
+                        drive_raw_payload = json.loads(
+                            DRIVE_RAW_JSON.read_text(encoding="utf-8")
+                        )
+                    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+                        print("Drive raw is not compatible recovery state:", exc)
+                    else:
+                        rows = (
+                            drive_raw_payload.get("rows")
+                            if isinstance(drive_raw_payload, dict)
+                            else None
+                        )
+                        compatible_v2_raw = (
+                            isinstance(drive_raw_payload, dict)
+                            and drive_raw_payload.get("schema") == RESULTS_SCHEMA_V2
+                            and drive_raw_payload.get("training_contract")
+                            == TRAINING_CONTRACT_V2
+                            and isinstance(rows, list)
+                            and all(
+                                isinstance(row, dict)
+                                and row.get("training_contract")
+                                == TRAINING_CONTRACT_V2
+                                for row in rows
+                            )
+                        )
+
+                archive_sources = [
                     path
                     for path in (
                         FAILED_RAW_JSON,
@@ -993,18 +1029,46 @@ def geovlm_prompt_notebook() -> dict:
                     )
                     if path.exists()
                 ] + FAILED_PREVIEWS
-                if failed_artifacts and not ARCHIVE_FAILED_RUN:
+                compatible_recovery = (
+                    compatible_v2_raw
+                    and not FAILED_CHECKPOINT.exists()
+                    and not FAILED_STAGING_DIR.exists()
+                )
+                failed_artifacts = [] if compatible_recovery else archive_sources
+                archive_pending = bool(failed_artifacts) or FAILED_STAGING_DIR.exists()
+                if archive_pending and not ARCHIVE_FAILED_RUN:
+                    pending_paths = failed_artifacts + (
+                        [FAILED_STAGING_DIR] if FAILED_STAGING_DIR.exists() else []
+                    )
                     raise RuntimeError(
                         "Failed seed-42 artifacts still exist; set ARCHIVE_FAILED_RUN = True "
                         "once to archive it before recovery: "
-                        + ", ".join(str(path) for path in failed_artifacts)
+                        + ", ".join(str(path) for path in pending_paths)
                     )
-                if failed_artifacts:
-                    FAILED_ARCHIVE_DIR.mkdir(parents=True, exist_ok=False)
+                if archive_pending:
+                    if FAILED_ARCHIVE_DIR.exists():
+                        raise RuntimeError(
+                            "Failed-run archive already exists while recovery artifacts are "
+                            "pending; resolve the archive collision before retrying: "
+                            + str(FAILED_ARCHIVE_DIR)
+                        )
+                    FAILED_STAGING_DIR.mkdir(parents=True, exist_ok=True)
                     for source in failed_artifacts:
-                        destination = FAILED_ARCHIVE_DIR / source.name
+                        destination = FAILED_STAGING_DIR / source.name
+                        if not source.exists():
+                            continue
+                        if destination.exists():
+                            raise RuntimeError(
+                                "Failed artifact source and staged destination both exist; "
+                                "refusing to overwrite either path: "
+                                + str(source)
+                                + " | "
+                                + str(destination)
+                            )
                         shutil.move(str(source), str(destination))
                         print("Archived", source, "to", destination)
+                    FAILED_STAGING_DIR.rename(FAILED_ARCHIVE_DIR)
+                    print("Finalized failed-run archive:", FAILED_ARCHIVE_DIR)
                 for source, destination in (
                     (DRIVE_RAW_JSON, RAW_JSON),
                     (DRIVE_SUMMARY_JSON, SUMMARY_JSON),

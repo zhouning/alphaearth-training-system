@@ -124,6 +124,11 @@ Drive locations:
    share, best epoch, full loss history, and selected loss prefix.
 6. Keep `RUN_FULL_MATRIX = False` unless all four unchanged smoke checks pass.
 
+The archive cell first moves artifacts into
+`.failed_seed42_20260724.incomplete`. If a move is interrupted, keep
+`ARCHIVE_FAILED_RUN = True` and rerun the archive cell until the staging
+directory is finalized as `failed_seed42_20260724`.
+
 The `.last.pt` checkpoint is the only resume source. The `.best.pt` checkpoint
 is the only evaluation or inference source. Official validation remains
 complete; recovery must not truncate or subsample it. If seed 42 fails again,

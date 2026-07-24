@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import ast
 import json
+import shutil
 from pathlib import Path
 
+import pytest
 import yaml
 
 from scripts.make_paper12_colab_notebooks import (
@@ -16,6 +18,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 COLAB_DIR = REPO_ROOT / "colab"
 CONFIG_DIR = REPO_ROOT / "geoadapter" / "bench" / "configs"
 PAPER12_RESULTS_BRANCH = "paper12-results-colab-20260619"
+GEOVLM_ARCHIVE_CELL_MARKER = (
+    "# Archive the failed seed-42 artifacts once before running the v2 recovery."
+)
+GEOVLM_RESULTS_SCHEMA_V2 = "paper12.geovlm_prompt_results.v2"
+GEOVLM_TRAINING_CONTRACT_V2 = "paper12.geovlm_prompt_training.v2"
+GEOVLM_LEGACY_CHECKPOINT = "siglip_film_dense_similarity_houlsby__seed42.pt"
 
 
 def read_notebook_text(path: Path) -> str:
@@ -24,6 +32,51 @@ def read_notebook_text(path: Path) -> str:
         "".join(cell.get("source", []))
         for cell in notebook.get("cells", [])
     )
+
+
+def geovlm_archive_cell_source(*, archive_failed_run: bool = False) -> str:
+    path = COLAB_DIR / "paper12_geovlm_prompt_segmentation_colab.ipynb"
+    notebook = json.loads(path.read_text(encoding="utf-8"))
+    matches = [
+        "".join(cell.get("source", []))
+        for cell in notebook.get("cells", [])
+        if cell.get("cell_type") == "code"
+        and GEOVLM_ARCHIVE_CELL_MARKER in "".join(cell.get("source", []))
+    ]
+    assert len(matches) == 1
+    source = matches[0]
+    if archive_failed_run:
+        assignment = "ARCHIVE_FAILED_RUN = False"
+        assert source.count(assignment) == 1
+        source = source.replace(assignment, "ARCHIVE_FAILED_RUN = True", 1)
+    return source
+
+
+def geovlm_archive_namespace(tmp_path: Path) -> dict[str, object]:
+    drive_results_dir = tmp_path / "drive_results"
+    checkpoint_dir = tmp_path / "checkpoints"
+    preview_dir = tmp_path / "previews"
+    local_results_dir = tmp_path / "local_results"
+    for path in (
+        drive_results_dir,
+        checkpoint_dir,
+        preview_dir,
+        local_results_dir,
+    ):
+        path.mkdir()
+
+    raw_json = local_results_dir / "geovlm_prompt_segmentation.json"
+    summary_json = local_results_dir / "geovlm_prompt_segmentation_summary.json"
+    return {
+        "DRIVE_RESULTS_DIR": drive_results_dir,
+        "CHECKPOINT_DIR": checkpoint_dir,
+        "PREVIEW_DIR": preview_dir,
+        "RAW_JSON": raw_json,
+        "SUMMARY_JSON": summary_json,
+        "DRIVE_RAW_JSON": drive_results_dir / raw_json.name,
+        "DRIVE_SUMMARY_JSON": drive_results_dir / summary_json.name,
+        "shutil": shutil,
+    }
 
 
 def test_paper12_loveda_full_finetune_colab_notebook_contract():
@@ -214,6 +267,133 @@ def test_paper12_geovlm_prompt_segmentation_colab_contract():
     assert "archive it before recovery" in text
     assert "siglip_film_dense_similarity_houlsby__seed42.best.pt" in text
     assert "siglip_film_dense_similarity_houlsby__seed42.pt" in text
+
+
+def test_geovlm_archive_cell_resumes_compatible_v2_results(tmp_path):
+    namespace = geovlm_archive_namespace(tmp_path)
+    raw_bytes = (
+        json.dumps(
+            {
+                "schema": GEOVLM_RESULTS_SCHEMA_V2,
+                "training_contract": GEOVLM_TRAINING_CONTRACT_V2,
+                "rows": [
+                    {"training_contract": GEOVLM_TRAINING_CONTRACT_V2},
+                    {"training_contract": GEOVLM_TRAINING_CONTRACT_V2},
+                ],
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+    summary_bytes = b'{"mvp_status": "incomplete"}\n'
+    preview_bytes = b"current preview"
+    namespace["DRIVE_RAW_JSON"].write_bytes(raw_bytes)
+    namespace["DRIVE_SUMMARY_JSON"].write_bytes(summary_bytes)
+    preview = namespace["PREVIEW_DIR"] / "seed42__water.png"
+    preview.write_bytes(preview_bytes)
+    failed_archive = namespace["DRIVE_RESULTS_DIR"] / "failed_seed42_20260724"
+    failed_archive.mkdir()
+    archive_sentinel = failed_archive / "archived.txt"
+    archive_sentinel.write_bytes(b"completed archive")
+
+    exec(geovlm_archive_cell_source(), namespace)
+
+    assert namespace["RAW_JSON"].read_bytes() == raw_bytes
+    assert namespace["SUMMARY_JSON"].read_bytes() == summary_bytes
+    assert preview.read_bytes() == preview_bytes
+    assert archive_sentinel.read_bytes() == b"completed archive"
+
+
+def test_geovlm_archive_cell_resumes_interrupted_staging_move(
+    tmp_path, monkeypatch
+):
+    namespace = geovlm_archive_namespace(tmp_path)
+    preview = namespace["PREVIEW_DIR"] / "seed42__building.png"
+    legacy_checkpoint = namespace["CHECKPOINT_DIR"] / GEOVLM_LEGACY_CHECKPOINT
+    source_payloads = {
+        namespace["DRIVE_RAW_JSON"]: b'{"schema": "legacy.v1"}\n',
+        namespace["DRIVE_SUMMARY_JSON"]: b'{"status": "failed"}\n',
+        legacy_checkpoint: b"legacy checkpoint",
+        preview: b"failed preview",
+    }
+    for path, payload in source_payloads.items():
+        path.write_bytes(payload)
+
+    real_move = shutil.move
+    move_calls = []
+
+    def fail_second_move(source, destination):
+        move_calls.append((source, destination))
+        if len(move_calls) == 2:
+            raise OSError("injected archive move failure")
+        return real_move(source, destination)
+
+    monkeypatch.setattr(shutil, "move", fail_second_move)
+    with pytest.raises(OSError, match="injected archive move failure"):
+        exec(geovlm_archive_cell_source(archive_failed_run=True), namespace)
+
+    failed_archive = namespace["DRIVE_RESULTS_DIR"] / "failed_seed42_20260724"
+    staging_archive = (
+        namespace["DRIVE_RESULTS_DIR"] / ".failed_seed42_20260724.incomplete"
+    )
+    assert not failed_archive.exists()
+    assert staging_archive.is_dir()
+    assert namespace["DRIVE_RAW_JSON"].name in {
+        path.name for path in staging_archive.iterdir()
+    }
+    assert any(path.exists() for path in source_payloads)
+
+    monkeypatch.setattr(shutil, "move", real_move)
+    exec(geovlm_archive_cell_source(archive_failed_run=True), namespace)
+
+    assert not staging_archive.exists()
+    assert failed_archive.is_dir()
+    assert {path.name for path in failed_archive.iterdir()} == {
+        path.name for path in source_payloads
+    }
+    for source, payload in source_payloads.items():
+        assert not source.exists()
+        assert (failed_archive / source.name).read_bytes() == payload
+
+
+def test_geovlm_archive_cell_rejects_completed_archive_collision(tmp_path):
+    namespace = geovlm_archive_namespace(tmp_path)
+    failed_raw = namespace["DRIVE_RAW_JSON"]
+    failed_raw.write_bytes(b'{"schema": "legacy.v1"}\n')
+    failed_archive = namespace["DRIVE_RESULTS_DIR"] / "failed_seed42_20260724"
+    failed_archive.mkdir()
+    sentinel = failed_archive / "archived.txt"
+    sentinel.write_bytes(b"completed archive")
+
+    with pytest.raises(RuntimeError, match="archive already exists"):
+        exec(geovlm_archive_cell_source(archive_failed_run=True), namespace)
+
+    assert failed_raw.read_bytes() == b'{"schema": "legacy.v1"}\n'
+    assert sentinel.read_bytes() == b"completed archive"
+    assert not (
+        namespace["DRIVE_RESULTS_DIR"] / ".failed_seed42_20260724.incomplete"
+    ).exists()
+
+
+def test_geovlm_archive_cell_rejects_source_and_staging_collision(tmp_path):
+    namespace = geovlm_archive_namespace(tmp_path)
+    failed_raw = namespace["DRIVE_RAW_JSON"]
+    failed_raw.write_bytes(b'{"schema": "legacy.v1"}\n')
+    staging_archive = (
+        namespace["DRIVE_RESULTS_DIR"] / ".failed_seed42_20260724.incomplete"
+    )
+    staging_archive.mkdir()
+    staged_raw = staging_archive / failed_raw.name
+    staged_raw.write_bytes(b"previous partial move")
+
+    with pytest.raises(RuntimeError, match="source and staged destination both exist"):
+        exec(geovlm_archive_cell_source(archive_failed_run=True), namespace)
+
+    assert failed_raw.read_bytes() == b'{"schema": "legacy.v1"}\n'
+    assert staged_raw.read_bytes() == b"previous partial move"
+    assert not (
+        namespace["DRIVE_RESULTS_DIR"] / "failed_seed42_20260724"
+    ).exists()
 
 
 def test_notebook_generator_preserves_newlines_and_execution_artifacts():
