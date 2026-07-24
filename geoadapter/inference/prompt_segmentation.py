@@ -14,9 +14,11 @@ from PIL import Image
 
 from geoadapter.bench.run_geovlm_prompt_segmentation import (
     PROMPT_METHOD,
+    _validate_checkpoint_role,
     build_model,
     checkpoint_metadata,
     load_config,
+    validate_checkpoint_best_selection,
     validate_checkpoint_metadata,
 )
 
@@ -92,8 +94,35 @@ def load_prompt_checkpoint(
     metadata = dict(state["metadata"])
     if metadata.get("method") != PROMPT_METHOD:
         raise ValueError("offline prompt inference requires a prompt checkpoint")
+    _validate_checkpoint_role(state, "best")
+    checkpoint_epoch = state.get("epoch")
+    _, _, best_epoch, _ = validate_checkpoint_best_selection(
+        state, checkpoint_epoch
+    )
+    if checkpoint_epoch != best_epoch:
+        raise ValueError(
+            "checkpoint best selection mismatch: best checkpoint epoch"
+        )
+    positive_weights = state.get("positive_weights")
+    if not isinstance(positive_weights, dict) or set(positive_weights) != {
+        "building",
+        "water",
+        "road",
+    }:
+        raise ValueError("best checkpoint positive_weights are invalid")
+    weight_values = np.asarray(list(positive_weights.values()), dtype=float)
+    if not np.isfinite(weight_values).all() or not (weight_values > 0).all():
+        raise ValueError("best checkpoint positive_weights are invalid")
 
     resolved_config = _config_copy(config)
+    if resolved_config["text_encoder"].get("revision") is None:
+        checkpoint_revision = metadata.get("siglip_revision")
+        if not isinstance(checkpoint_revision, str) or not checkpoint_revision.strip():
+            raise ValueError(
+                "prompt checkpoint siglip_revision must be non-empty when "
+                "config text_encoder.revision is null"
+            )
+        resolved_config["text_encoder"]["revision"] = checkpoint_revision
     resolved_config["text_encoder"]["local_files_only"] = bool(local_files_only)
     expected = checkpoint_metadata(
         resolved_config,

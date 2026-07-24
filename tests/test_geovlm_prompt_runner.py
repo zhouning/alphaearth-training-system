@@ -709,13 +709,21 @@ def _fake_evaluation_rows(method, seed):
     ]
 
 
-def _complete_identity_rows(method=BASELINE_METHOD, seed=42):
+def _complete_identity_rows(
+    method=BASELINE_METHOD,
+    seed=42,
+    *,
+    siglip_model_id="google/siglip-base-patch16-224",
+    siglip_revision=None,
+):
     return [
         {
             "training_contract": TRAINING_CONTRACT,
             "method": method,
             "seed": seed,
             "class_name": class_name,
+            "siglip_model_id": siglip_model_id,
+            "siglip_revision": siglip_revision,
         }
         for class_name in ("building", "road", "water")
     ]
@@ -735,6 +743,7 @@ def _resume_state(
     probe_sha256,
     positive_weights,
     best_epoch,
+    checkpoint_role="last",
 ):
     best_rank = list(probe_rank(probes[best_epoch - 1]))
     metadata = checkpoint_metadata(config, method, seed)
@@ -747,6 +756,7 @@ def _resume_state(
     state = trainer.state_dict(epoch=epoch, metadata=metadata)
     state.update(
         {
+            "checkpoint_role": checkpoint_role,
             "loss_history": list(losses),
             "probe_history": copy.deepcopy(probes),
             "training_stats": copy.deepcopy(training_stats),
@@ -850,6 +860,7 @@ def test_runner_rejects_full_source_positive_weight_drift_before_writing(
         probe_sha256=probe_sha256,
         positive_weights=positive_weights,
         best_epoch=1,
+        checkpoint_role="best",
     )
     base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
     last_path = base.with_suffix(".last.pt")
@@ -930,6 +941,7 @@ def test_runner_rejects_checkpoint_training_sample_count_mismatch(
         probe_sha256=probe_sha256,
         positive_weights=positive_weights,
         best_epoch=1,
+        checkpoint_role="best",
     )
     base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
     last_path = base.with_suffix(".last.pt")
@@ -1026,7 +1038,9 @@ def test_runner_recomputes_best_selection_from_last_probe_history(
     last_path = base.with_suffix(".last.pt")
     best_path = base.with_suffix(".best.pt")
     torch.save(last, last_path)
-    torch.save(copy.deepcopy(last), best_path)
+    best_copy = copy.deepcopy(last)
+    best_copy["checkpoint_role"] = "best"
+    torch.save(best_copy, best_path)
     before = {path: path.read_bytes() for path in (last_path, best_path)}
     monkeypatch.setattr(
         runner,
@@ -1076,7 +1090,9 @@ def test_runner_rejects_last_metadata_best_selection_mismatch(tmp_path):
     last_path = base.with_suffix(".last.pt")
     best_path = base.with_suffix(".best.pt")
     torch.save(last, last_path)
-    torch.save(copy.deepcopy(last), best_path)
+    best_copy = copy.deepcopy(last)
+    best_copy["checkpoint_role"] = "best"
+    torch.save(best_copy, best_path)
     before = {path: path.read_bytes() for path in (last_path, best_path)}
 
     with pytest.raises(ValueError, match="best selection mismatch"):
@@ -1135,6 +1151,7 @@ def test_runner_rejects_best_history_that_is_not_last_prefix(
         probe_sha256=probe_sha256,
         positive_weights=positive_weights,
         best_epoch=1,
+        checkpoint_role="best",
     )
     if corrupted_field == "loss_history":
         best["loss_history"] = [9.0]
@@ -1175,6 +1192,135 @@ def test_runner_rejects_best_history_that_is_not_last_prefix(
         )
 
     assert {path: path.read_bytes() for path in before} == before
+
+
+@pytest.mark.parametrize(
+    ("checkpoint_name", "invalid_role"),
+    [("last", "best"), ("best", "last")],
+)
+def test_runner_rejects_resume_checkpoint_role_mismatch(
+    monkeypatch, tmp_path, checkpoint_name, invalid_role
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    dataset = _TinyPromptDataset()
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    (
+        last,
+        probes,
+        probe_indices,
+        probe_sha256,
+        positive_weights,
+    ) = _two_epoch_resume_contract(
+        config, dataset, model_builder, best_epoch=1
+    )
+    best = _resume_state(
+        config,
+        model_builder,
+        method=BASELINE_METHOD,
+        seed=123,
+        epoch=1,
+        losses=[2.0],
+        probes=probes[:1],
+        training_stats={
+            key: value
+            for key, value in _epoch_stats(2.0).items()
+            if key != "loss"
+        },
+        probe_indices=probe_indices,
+        probe_sha256=probe_sha256,
+        positive_weights=positive_weights,
+        best_epoch=1,
+        checkpoint_role="best",
+    )
+    states = {"last": last, "best": best}
+    states[checkpoint_name]["checkpoint_role"] = invalid_role
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    paths = {
+        role: base.with_suffix(f".{role}.pt") for role in ("last", "best")
+    }
+    for role, state in states.items():
+        torch.save(state, paths[role])
+    before = {path: path.read_bytes() for path in paths.values()}
+    monkeypatch.setattr(runner, "_checkpoint_reproduces", lambda *_args: True)
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+
+    with pytest.raises(ValueError, match=f"{checkpoint_name} checkpoint role"):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            checkpoint_dir,
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
+
+
+def test_runner_validates_best_role_on_final_reload(monkeypatch, tmp_path):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path, epochs=1)
+    dataset = _TinyPromptDataset()
+    real_save_checkpoint = runner._save_checkpoint
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    def corrupt_best_role(path, state):
+        saved_state = copy.deepcopy(state)
+        if Path(path).name.endswith(".best.pt"):
+            saved_state["checkpoint_role"] = "last"
+        real_save_checkpoint(path, saved_state)
+
+    monkeypatch.setattr(runner, "_save_checkpoint", corrupt_best_role)
+    monkeypatch.setattr(
+        runner,
+        "_train_one_epoch",
+        lambda *_args, **_kwargs: _epoch_stats(1.0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_probe",
+        lambda *_args, **_kwargs: _finite_probe(1.0, 1.0),
+    )
+    monkeypatch.setattr(runner, "_checkpoint_reproduces", lambda *_args: True)
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+
+    with pytest.raises(ValueError, match="best checkpoint role"):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            tmp_path / "checkpoints",
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
 
 
 def test_runner_rejects_legacy_and_lone_best_checkpoints_before_building(tmp_path):
@@ -1386,6 +1532,180 @@ def test_runner_preflights_checkpoint_for_already_completed_pair(tmp_path):
     assert not summary_output.exists()
 
 
+def _write_valid_resume_pair(config, dataset, checkpoint_dir, model_builder):
+    (
+        last,
+        probes,
+        probe_indices,
+        probe_sha256,
+        positive_weights,
+    ) = _two_epoch_resume_contract(
+        config, dataset, model_builder, best_epoch=1
+    )
+    best = _resume_state(
+        config,
+        model_builder,
+        method=BASELINE_METHOD,
+        seed=123,
+        epoch=1,
+        losses=[2.0],
+        probes=probes[:1],
+        training_stats={
+            key: value
+            for key, value in _epoch_stats(2.0).items()
+            if key != "loss"
+        },
+        probe_indices=probe_indices,
+        probe_sha256=probe_sha256,
+        positive_weights=positive_weights,
+        best_epoch=1,
+        checkpoint_role="best",
+    )
+    base = Path(checkpoint_dir) / f"{BASELINE_METHOD}__seed123"
+    paths = {
+        "last": base.with_suffix(".last.pt"),
+        "best": base.with_suffix(".best.pt"),
+    }
+    torch.save(last, paths["last"])
+    torch.save(best, paths["best"])
+    return paths
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    ["v1-metadata", "corrupt-bytes", "cross-prefix", "invalid-epoch"],
+)
+def test_runner_content_preflights_later_full_pair_before_any_mutation(
+    tmp_path, corruption
+):
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [PROMPT_METHOD, BASELINE_METHOD]
+    config["experiment"]["seeds"] = [42, 123]
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    dataset = _TinyPromptDataset()
+
+    def fixture_model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    paths = _write_valid_resume_pair(
+        config, dataset, checkpoint_dir, fixture_model_builder
+    )
+    if corruption == "v1-metadata":
+        state = torch.load(paths["last"], map_location="cpu", weights_only=False)
+        state["metadata"]["training_contract"] = (
+            "paper12.geovlm_prompt_training.v1"
+        )
+        torch.save(state, paths["last"])
+    elif corruption == "corrupt-bytes":
+        paths["last"].write_bytes(b"not-a-torch-checkpoint")
+    elif corruption == "cross-prefix":
+        state = torch.load(paths["best"], map_location="cpu", weights_only=False)
+        state["loss_history"] = [9.0]
+        state["probe_history"][0]["training_loss"] = 9.0
+        torch.save(state, paths["best"])
+    else:
+        state = torch.load(paths["last"], map_location="cpu", weights_only=False)
+        state["epoch"] = None
+        torch.save(state, paths["last"])
+    before = {path: path.read_bytes() for path in paths.values()}
+    output = tmp_path / "rows.json"
+    summary_output = tmp_path / "summary.json"
+    model_calls = []
+    dataset_calls = []
+
+    def dataset_builder(_config):
+        dataset_calls.append(True)
+        return dataset, dataset
+
+    def forbidden_model_builder(_config, method, _device):
+        model_calls.append(method)
+        raise AssertionError("model builder must not run before content preflight")
+
+    with pytest.raises(ValueError, match="archive.*before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=checkpoint_dir,
+            preview_dir=tmp_path / "previews",
+            stage="full",
+            dataset_builder=dataset_builder,
+            model_builder=forbidden_model_builder,
+        )
+
+    assert dataset_calls == [True]
+    assert model_calls == []
+    assert {path: path.read_bytes() for path in before} == before
+    assert set(checkpoint_dir.iterdir()) == set(paths.values())
+    assert not output.exists()
+    assert not summary_output.exists()
+
+
+def test_runner_content_preflights_already_completed_pair(tmp_path):
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [BASELINE_METHOD]
+    config["experiment"]["seeds"] = [123]
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    dataset = _TinyPromptDataset()
+
+    def fixture_model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    paths = _write_valid_resume_pair(
+        config, dataset, checkpoint_dir, fixture_model_builder
+    )
+    state = torch.load(paths["last"], map_location="cpu", weights_only=False)
+    state["metadata"]["training_contract"] = (
+        "paper12.geovlm_prompt_training.v1"
+    )
+    torch.save(state, paths["last"])
+    output = tmp_path / "rows.json"
+    output.write_text(
+        json.dumps(
+            {
+                "schema": "paper12.geovlm_prompt_results.v2",
+                "training_contract": TRAINING_CONTRACT,
+                "rows": _complete_identity_rows(seed=123),
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = {
+        output: output.read_bytes(),
+        **{path: path.read_bytes() for path in paths.values()},
+    }
+    dataset_calls = []
+    model_calls = []
+
+    def dataset_builder(_config):
+        dataset_calls.append(True)
+        return dataset, dataset
+
+    def forbidden_model_builder(_config, method, _device):
+        model_calls.append(method)
+        raise AssertionError("completed pair preflight must not build a model")
+
+    summary_output = tmp_path / "summary.json"
+    with pytest.raises(ValueError, match="archive.*before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=checkpoint_dir,
+            preview_dir=tmp_path / "previews",
+            stage="full",
+            dataset_builder=dataset_builder,
+            model_builder=forbidden_model_builder,
+        )
+
+    assert dataset_calls == [True]
+    assert model_calls == []
+    assert {path: path.read_bytes() for path in before} == before
+    assert not summary_output.exists()
+
+
 def test_runner_rejects_old_raw_results_without_modifying_them(tmp_path):
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     output = tmp_path / "failed.json"
@@ -1585,6 +1905,55 @@ def test_runner_rejects_invalid_raw_row_identity_without_mutation(tmp_path, rows
     assert not (tmp_path / "checkpoints").exists()
 
 
+def test_runner_rejects_raw_siglip_revision_drift_before_dataset_or_writes(
+    tmp_path,
+):
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [BASELINE_METHOD]
+    config["experiment"]["seeds"] = [42, 123]
+    config["text_encoder"]["revision"] = "expected-revision"
+    rows = [
+        *_complete_identity_rows(
+            seed=42, siglip_revision="expected-revision"
+        ),
+        *_complete_identity_rows(
+            seed=123, siglip_revision="different-revision"
+        ),
+    ]
+    output = tmp_path / "rows.json"
+    original = json.dumps(
+        {
+            "schema": "paper12.geovlm_prompt_results.v2",
+            "training_contract": TRAINING_CONTRACT,
+            "rows": rows,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    output.write_bytes(original)
+    summary_output = tmp_path / "summary.json"
+    dataset_called = False
+
+    def dataset_builder(_config):
+        nonlocal dataset_called
+        dataset_called = True
+        raise AssertionError("dataset must not be built for revision drift")
+
+    with pytest.raises(ValueError, match="archive.*before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=tmp_path / "checkpoints",
+            preview_dir=tmp_path / "previews",
+            stage="full",
+            dataset_builder=dataset_builder,
+        )
+
+    assert output.read_bytes() == original
+    assert dataset_called is False
+    assert not summary_output.exists()
+
+
 def test_runner_continues_pending_full_pair_from_compatible_raw_rows(
     monkeypatch, tmp_path
 ):
@@ -1671,6 +2040,11 @@ def test_runner_continues_pending_full_pair_from_compatible_raw_rows(
     assert raw["schema"] == "paper12.geovlm_prompt_results.v2"
     assert raw["training_contract"] == TRAINING_CONTRACT
     assert len(raw["rows"]) == 6
+    assert all(
+        row["siglip_model_id"] == config["text_encoder"]["model_id"]
+        and row["siglip_revision"] == config["text_encoder"]["revision"]
+        for row in raw["rows"]
+    )
     assert (tmp_path / "summary.json").exists()
 
 
@@ -1767,8 +2141,10 @@ def test_runner_evaluates_best_probe_checkpoint_when_later_epoch_degrades(
     )
     assert train_calls == [(123, 6), (124, 6)]
     assert last["epoch"] == 2
+    assert last["checkpoint_role"] == "last"
     assert last["trainable_model"]["condition_bias"].tolist() == [2.0] * 3
     assert best["epoch"] == 1
+    assert best["checkpoint_role"] == "best"
     assert best["trainable_model"]["condition_bias"].tolist() == [1.0] * 3
     assert evaluation_calls == [(10, [1.0, 1.0, 1.0])]
     assert last["best_epoch"] == best["best_epoch"] == 1
@@ -1877,6 +2253,7 @@ def test_runner_resumes_last_checkpoint_without_replacing_better_epoch_one(
     state = trainer.state_dict(epoch=1, metadata=metadata)
     state.update(
         {
+            "checkpoint_role": "last",
             "loss_history": [2.0],
             "probe_history": [first_probe],
             "training_stats": {
@@ -1893,7 +2270,9 @@ def test_runner_resumes_last_checkpoint_without_replacing_better_epoch_one(
     )
     base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
     torch.save(state, base.with_suffix(".last.pt"))
-    torch.save(state, base.with_suffix(".best.pt"))
+    best_state = copy.deepcopy(state)
+    best_state["checkpoint_role"] = "best"
+    torch.save(best_state, base.with_suffix(".best.pt"))
     train_calls = []
 
     def fake_train_one_epoch(

@@ -14,6 +14,7 @@ from geoadapter.bench.run_geovlm_prompt_segmentation import (
     BASELINE_METHOD,
     PROMPT_METHOD,
     checkpoint_metadata,
+    probe_rank,
 )
 from geoadapter.inference.prompt_segmentation import (
     load_prompt_checkpoint,
@@ -37,6 +38,25 @@ class _TinyPromptModel(nn.Module):
         return images[:, 0] * self.scale + self.bias
 
 
+def _finite_probe(change=0.5, loss=1.0):
+    return {
+        "finite": True,
+        "mean_loss": float(loss),
+        "nonconstant_class_count": 3,
+        "prompt_map_changed_class_count": 3,
+        "mean_prompt_probability_change": float(change),
+        "classes": {
+            class_name: {
+                "prediction_range": 1.0,
+                "prediction_nonconstant": True,
+                "mean_prompt_probability_change": float(change),
+                "prompt_map_changed": True,
+            }
+            for class_name in ("building", "water", "road")
+        },
+    }
+
+
 def _checkpoint_fixture(tmp_path, *, method=PROMPT_METHOD):
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     prithvi = tmp_path / "Prithvi_100M.pt"
@@ -45,11 +65,27 @@ def _checkpoint_fixture(tmp_path, *, method=PROMPT_METHOD):
     config["experiment"]["prompt_config"] = str(
         Path("geoadapter/bench/configs/geovlm_prompts.yaml").resolve()
     )
+    config["text_encoder"]["revision"] = "fixture-siglip-sha"
     model = _TinyPromptModel()
-    checkpoint = tmp_path / "prompt.pt"
+    checkpoint = tmp_path / "prompt.best.pt"
+    probe = {
+        **_finite_probe(),
+        "epoch": 1,
+        "training_loss": 1.0,
+    }
+    best_rank = list(probe_rank(probe))
+    metadata = checkpoint_metadata(config, method, 42)
+    metadata.update({"best_epoch": 1, "best_probe_rank": best_rank})
     torch.save(
         {
-            "metadata": checkpoint_metadata(config, method, 42),
+            "metadata": metadata,
+            "checkpoint_role": "best",
+            "epoch": 1,
+            "best_epoch": 1,
+            "best_probe_rank": best_rank,
+            "loss_history": [1.0],
+            "probe_history": [probe],
+            "positive_weights": {"building": 2.0, "water": 3.0, "road": 4.0},
             "trainable_model": {
                 name: value.detach().clone()
                 for name, value in model.named_parameters()
@@ -176,6 +212,101 @@ def test_checkpoint_loader_rejects_baseline_and_hash_mismatch(tmp_path):
     config, checkpoint = _checkpoint_fixture(tmp_path)
     Path(config["prithvi"]["checkpoint"]).write_bytes(b"different")
     with pytest.raises(ValueError, match="prithvi_sha256"):
+        load_prompt_checkpoint(
+            checkpoint,
+            config,
+            device="cpu",
+            model_builder=_model_builder,
+        )
+
+
+def test_checkpoint_loader_restores_missing_config_revision_from_metadata(
+    tmp_path,
+):
+    config, checkpoint = _checkpoint_fixture(tmp_path)
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    state["metadata"]["siglip_revision"] = "checkpoint-resolved-sha"
+    torch.save(state, checkpoint)
+    config["text_encoder"]["revision"] = None
+    captured = {}
+
+    def capturing_builder(resolved_config, _method, device):
+        captured["revision"] = resolved_config["text_encoder"]["revision"]
+        return _TinyPromptModel().to(device)
+
+    load_prompt_checkpoint(
+        checkpoint,
+        config,
+        device="cpu",
+        model_builder=capturing_builder,
+    )
+
+    assert captured["revision"] == "checkpoint-resolved-sha"
+
+
+def test_checkpoint_loader_rejects_explicit_revision_drift(tmp_path):
+    config, checkpoint = _checkpoint_fixture(tmp_path)
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    state["metadata"]["siglip_revision"] = "checkpoint-resolved-sha"
+    torch.save(state, checkpoint)
+    config["text_encoder"]["revision"] = "different-explicit-sha"
+
+    with pytest.raises(ValueError, match="siglip_revision"):
+        load_prompt_checkpoint(
+            checkpoint,
+            config,
+            device="cpu",
+            model_builder=_model_builder,
+        )
+
+
+def test_checkpoint_loader_rejects_last_checkpoint_even_with_best_metadata(
+    tmp_path,
+):
+    config, checkpoint = _checkpoint_fixture(tmp_path)
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    state["checkpoint_role"] = "last"
+    torch.save(state, checkpoint)
+
+    with pytest.raises(ValueError, match="best checkpoint.*role"):
+        load_prompt_checkpoint(
+            checkpoint,
+            config,
+            device="cpu",
+            model_builder=_model_builder,
+        )
+
+
+@pytest.mark.parametrize("forgery", ["metadata", "history"])
+def test_checkpoint_loader_rejects_forged_best_selection_contract(
+    tmp_path, forgery
+):
+    config, checkpoint = _checkpoint_fixture(tmp_path)
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    if forgery == "metadata":
+        state["metadata"]["best_epoch"] = 2
+    else:
+        second_probe = {
+            **_finite_probe(change=0.1, loss=2.0),
+            "epoch": 2,
+            "training_loss": 2.0,
+        }
+        second_rank = list(probe_rank(second_probe))
+        state.update(
+            {
+                "epoch": 2,
+                "best_epoch": 2,
+                "best_probe_rank": second_rank,
+                "loss_history": [1.0, 2.0],
+                "probe_history": [state["probe_history"][0], second_probe],
+            }
+        )
+        state["metadata"].update(
+            {"best_epoch": 2, "best_probe_rank": second_rank}
+        )
+    torch.save(state, checkpoint)
+
+    with pytest.raises(ValueError, match="best selection"):
         load_prompt_checkpoint(
             checkpoint,
             config,

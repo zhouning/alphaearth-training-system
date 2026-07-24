@@ -966,6 +966,8 @@ def geovlm_prompt_notebook() -> dict:
                 SUMMARY_JSON = LOCAL_RESULTS_DIR / "geovlm_prompt_segmentation_summary.json"
                 DRIVE_RAW_JSON = DRIVE_RESULTS_DIR / RAW_JSON.name
                 DRIVE_SUMMARY_JSON = DRIVE_RESULTS_DIR / SUMMARY_JSON.name
+                SIGLIP_REVISION_PIN = HF_CACHE_DIR / "resolved_revision.txt"
+                DRIVE_CONFIG_COLAB = DRIVE_RESULTS_DIR / "geovlm_prompt_segmentation_colab.yaml"
                 os.environ["HF_HOME"] = str(HF_CACHE_DIR)
                 print("Results:", DRIVE_RESULTS_DIR)
                 print("Checkpoints:", CHECKPOINT_DIR)
@@ -987,6 +989,7 @@ def geovlm_prompt_notebook() -> dict:
                 )
                 REQUIRED_SEEDS = (42, 123, 456)
                 REQUIRED_CLASSES = ("building", "road", "water")
+                SIGLIP_MODEL_ID = "google/siglip-base-patch16-224"
                 FAILED_ARCHIVE_DIR = DRIVE_RESULTS_DIR / "failed_seed42_20260724"
                 FAILED_STAGING_DIR = (
                     DRIVE_RESULTS_DIR / ".failed_seed42_20260724.incomplete"
@@ -1022,6 +1025,7 @@ def geovlm_prompt_notebook() -> dict:
                                 isinstance(row, dict)
                                 and row.get("training_contract")
                                 == TRAINING_CONTRACT_V2
+                                and row.get("siglip_model_id") == SIGLIP_MODEL_ID
                                 for row in rows
                             )
                         )
@@ -1052,6 +1056,22 @@ def geovlm_prompt_notebook() -> dict:
                                     classes == set(REQUIRED_CLASSES)
                                     for classes in classes_by_pair.values()
                                 )
+                            if compatible_v2_raw:
+                                revisions = {row.get("siglip_revision") for row in rows}
+                                compatible_v2_raw = (
+                                    len(revisions) == 1
+                                    and all(
+                                        isinstance(revision, str) and revision.strip()
+                                        for revision in revisions
+                                    )
+                                )
+                            if compatible_v2_raw and SIGLIP_REVISION_PIN.exists():
+                                pinned_revision = SIGLIP_REVISION_PIN.read_text(
+                                    encoding="utf-8"
+                                ).strip()
+                                compatible_v2_raw = bool(pinned_revision) and revisions == {
+                                    pinned_revision
+                                }
 
                 archive_sources = [
                     path
@@ -1193,7 +1213,22 @@ def geovlm_prompt_notebook() -> dict:
                 from huggingface_hub import model_info, snapshot_download
 
                 SIGLIP_MODEL_ID = "google/siglip-base-patch16-224"
-                SIGLIP_REVISION = model_info(SIGLIP_MODEL_ID).sha
+                if SIGLIP_REVISION_PIN.exists():
+                    SIGLIP_REVISION = SIGLIP_REVISION_PIN.read_text(
+                        encoding="utf-8"
+                    ).strip()
+                    if not SIGLIP_REVISION:
+                        raise ValueError("SigLIP revision pin must be non-empty")
+                else:
+                    SIGLIP_REVISION = getattr(model_info(SIGLIP_MODEL_ID), "sha", None)
+                    if not isinstance(SIGLIP_REVISION, str) or not SIGLIP_REVISION.strip():
+                        raise ValueError("resolved SigLIP revision must be non-empty")
+                    SIGLIP_REVISION = SIGLIP_REVISION.strip()
+                    revision_staging = SIGLIP_REVISION_PIN.with_suffix(".txt.tmp")
+                    revision_staging.write_text(
+                        SIGLIP_REVISION + "\\n", encoding="utf-8"
+                    )
+                    revision_staging.replace(SIGLIP_REVISION_PIN)
                 SIGLIP_CACHE_PATH = snapshot_download(
                     repo_id=SIGLIP_MODEL_ID,
                     revision=SIGLIP_REVISION,
@@ -1243,14 +1278,16 @@ def geovlm_prompt_notebook() -> dict:
                 config["text_encoder"]["local_files_only"] = True
                 config["text_encoder"]["cache_dir"] = str(HF_CACHE_DIR)
                 CONFIG_COLAB.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+                shutil.copy2(CONFIG_COLAB, DRIVE_CONFIG_COLAB)
                 print(CONFIG_COLAB.read_text(encoding="utf-8"))
+                print("Persisted config:", DRIVE_CONFIG_COLAB)
                 """
             ),
             dedented_code_cell(
                 """
                 # 9. Run focused offline contract tests before real training.
                 %cd /content/AlphaEarth-System
-                !python -m pytest tests/test_prompt_segmentation_data.py tests/test_prithvi_position_embeddings.py tests/test_prompt_segmentation_model.py tests/test_prompt_segmentation_engine.py tests/test_geovlm_prompt_summary.py tests/test_geovlm_prompt_runner.py tests/test_geovlm_prompt_inference.py -v
+                !python -m pytest tests/test_prompt_segmentation_data.py tests/test_prithvi_position_embeddings.py tests/test_prompt_segmentation_model.py tests/test_prompt_segmentation_engine.py tests/test_geovlm_training.py tests/test_geovlm_prompt_summary.py tests/test_geovlm_prompt_runner.py tests/test_geovlm_prompt_inference.py -v
                 """
             ),
             dedented_code_cell(

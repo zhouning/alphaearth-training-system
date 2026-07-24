@@ -70,7 +70,13 @@ def _incompatible_result_artifact(path):
     )
 
 
-def _rows_from_compatible_payload(payload, path, training_contract):
+def _rows_from_compatible_payload(
+    payload,
+    path,
+    training_contract,
+    expected_siglip_model_id,
+    expected_siglip_revision,
+):
     rows = payload.get("rows") if isinstance(payload, dict) else None
     if (
         not isinstance(payload, dict)
@@ -80,6 +86,8 @@ def _rows_from_compatible_payload(payload, path, training_contract):
         or any(
             not isinstance(row, dict)
             or row.get("training_contract") != training_contract
+            or row.get("siglip_model_id") != expected_siglip_model_id
+            or row.get("siglip_revision") != expected_siglip_revision
             for row in rows
         )
     ):
@@ -958,18 +966,22 @@ def _validate_checkpoint_training_sample_count(
         )
 
 
-def _restore_checkpoint_history(
-    state,
-    *,
-    checkpoint_epoch,
-    total_epochs,
-    probe_indices_by_class,
-    probe_sha256,
-):
-    if not 1 <= checkpoint_epoch <= total_epochs:
+def _validate_checkpoint_role(state, expected_role):
+    if state.get("checkpoint_role") != expected_role:
         raise ValueError(
-            f"checkpoint epoch {checkpoint_epoch} is outside 1..{total_epochs}"
+            f"{expected_role} checkpoint role mismatch: expected "
+            f"{expected_role!r}, got {state.get('checkpoint_role')!r}"
         )
+
+
+def validate_checkpoint_best_selection(state, checkpoint_epoch):
+    if isinstance(checkpoint_epoch, bool) or not isinstance(
+        checkpoint_epoch, (int, np.integer)
+    ):
+        raise ValueError("checkpoint epoch must be an integer")
+    checkpoint_epoch = int(checkpoint_epoch)
+    if checkpoint_epoch <= 0:
+        raise ValueError("checkpoint epoch must be positive")
     losses = [float(value) for value in state.get("loss_history", [])]
     probe_history = state.get("probe_history", [])
     if len(losses) != checkpoint_epoch:
@@ -988,15 +1000,6 @@ def _restore_checkpoint_history(
                 "checkpoint probe training loss must match loss_history"
             )
 
-    stored_probe_indices = _normalize_checkpoint_probe_indices(
-        state.get("probe_indices_by_class")
-    )
-    if stored_probe_indices != probe_indices_by_class:
-        raise ValueError("checkpoint probe split does not match current dataset")
-    if state.get("probe_sha256") != probe_sha256:
-        raise ValueError("checkpoint probe_sha256 does not match current split")
-
-    training_stats = _normalize_training_stats(state.get("training_stats"))
     best_epoch = state.get("best_epoch")
     if isinstance(best_epoch, bool) or not isinstance(
         best_epoch, (int, np.integer)
@@ -1029,7 +1032,171 @@ def _restore_checkpoint_history(
         raise ValueError(
             "checkpoint best selection mismatch: metadata best_probe_rank"
         )
+    return losses, list(probe_history), best_epoch, best_rank
+
+
+def _restore_checkpoint_history(
+    state,
+    *,
+    checkpoint_epoch,
+    total_epochs,
+    probe_indices_by_class,
+    probe_sha256,
+):
+    losses, probe_history, best_epoch, best_rank = (
+        validate_checkpoint_best_selection(state, checkpoint_epoch)
+    )
+    if checkpoint_epoch > total_epochs:
+        raise ValueError(
+            f"checkpoint epoch {checkpoint_epoch} is outside 1..{total_epochs}"
+        )
+
+    stored_probe_indices = _normalize_checkpoint_probe_indices(
+        state.get("probe_indices_by_class")
+    )
+    if stored_probe_indices != probe_indices_by_class:
+        raise ValueError("checkpoint probe split does not match current dataset")
+    if state.get("probe_sha256") != probe_sha256:
+        raise ValueError("checkpoint probe_sha256 does not match current split")
+
+    training_stats = _normalize_training_stats(state.get("training_stats"))
     return losses, list(probe_history), training_stats, best_epoch, best_rank
+
+
+def _load_checkpoint_state(path, device):
+    try:
+        state = torch.load(path, map_location=device, weights_only=False)
+    except Exception as exc:
+        raise ValueError(
+            f"incompatible GeoVLM checkpoint {path}; "
+            "archive it before recovery"
+        ) from exc
+    if not isinstance(state, dict):
+        raise ValueError(
+            f"incompatible GeoVLM checkpoint {path}; "
+            "archive it before recovery"
+        )
+    return state
+
+
+def _validate_resume_checkpoint_pair(
+    config,
+    method,
+    seed,
+    checkpoint_dir,
+    *,
+    weights,
+    split,
+    device,
+):
+    checkpoint_base = Path(checkpoint_dir) / f"{method}__seed{seed}"
+    last_checkpoint_path = checkpoint_base.with_suffix(".last.pt")
+    best_checkpoint_path = checkpoint_base.with_suffix(".best.pt")
+    total_epochs = int(config["experiment"]["epochs"])
+    probe_indices_by_class = _plain_probe_indices(
+        split.probe_indices_by_class
+    )
+    metadata = checkpoint_metadata(config, method, seed)
+
+    state = _load_checkpoint_state(last_checkpoint_path, device)
+    _validate_checkpoint_role(state, "last")
+    validate_checkpoint_metadata(state.get("metadata", {}), metadata)
+    _validate_checkpoint_positive_weights(state, weights)
+    checkpoint_epoch = state.get("epoch")
+    (
+        losses,
+        probe_history,
+        training_stats,
+        best_epoch,
+        best_rank,
+    ) = _restore_checkpoint_history(
+        state,
+        checkpoint_epoch=checkpoint_epoch,
+        total_epochs=total_epochs,
+        probe_indices_by_class=probe_indices_by_class,
+        probe_sha256=split.probe_sha256,
+    )
+    _validate_checkpoint_training_sample_count(
+        training_stats, checkpoint_epoch, len(split.training_samples)
+    )
+
+    best_state = _load_checkpoint_state(best_checkpoint_path, device)
+    _validate_checkpoint_role(best_state, "best")
+    validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
+    _validate_checkpoint_positive_weights(best_state, weights)
+    best_state_epoch = best_state.get("epoch")
+    (
+        best_losses,
+        best_probe_history,
+        best_training_stats,
+        stored_best_epoch,
+        stored_best_rank,
+    ) = _restore_checkpoint_history(
+        best_state,
+        checkpoint_epoch=best_state_epoch,
+        total_epochs=total_epochs,
+        probe_indices_by_class=probe_indices_by_class,
+        probe_sha256=split.probe_sha256,
+    )
+    _validate_checkpoint_training_sample_count(
+        best_training_stats,
+        best_state_epoch,
+        len(split.training_samples),
+    )
+    if best_state_epoch != best_epoch:
+        raise ValueError("best checkpoint epoch does not match last checkpoint")
+    if stored_best_epoch != best_epoch or stored_best_rank != best_rank:
+        raise ValueError("best checkpoint references do not match last checkpoint")
+    if best_losses != losses[:best_epoch]:
+        raise ValueError("best checkpoint history mismatch: loss_history")
+    if best_probe_history != probe_history[:best_epoch]:
+        raise ValueError("best checkpoint history mismatch: probe_history")
+    return {
+        "last_state": state,
+        "best_state": best_state,
+        "checkpoint_epoch": int(checkpoint_epoch),
+        "losses": losses,
+        "probe_history": probe_history,
+        "training_stats": training_stats,
+        "best_epoch": best_epoch,
+        "best_rank": best_rank,
+    }
+
+
+def _preflight_existing_checkpoint_contents(
+    config, pairs, train, checkpoint_dir, device
+):
+    weights = estimate_positive_weights(
+        (train[index][1] for index in range(len(train))),
+        clip=tuple(config["training"]["positive_weight_clip"]),
+    )
+    pool = scan_target_present_pool(train)
+    for method, seed in pairs:
+        checkpoint_base = Path(checkpoint_dir) / f"{method}__seed{seed}"
+        if not checkpoint_base.with_suffix(".last.pt").exists():
+            continue
+        split = reserve_training_probe(
+            pool,
+            seed=seed,
+            positives_per_class=int(
+                config["experiment"]["probe_positives_per_class"]
+            ),
+        )
+        try:
+            _validate_resume_checkpoint_pair(
+                config,
+                method,
+                seed,
+                checkpoint_dir,
+                weights=weights,
+                split=split,
+                device=device,
+            )
+        except ValueError as exc:
+            raise ValueError(
+                f"incompatible GeoVLM checkpoint pair {method}/seed{seed}; "
+                f"archive it before recovery: {exc}"
+            ) from exc
 
 
 def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_dir, device, model_builder):
@@ -1067,8 +1234,6 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
     probe_indices_by_class = _plain_probe_indices(
         split.probe_indices_by_class
     )
-    model = model_builder(config, method, device)
-    trainer = build_trainer(model, config, device)
     losses = []
     probe_history = []
     training_stats = _empty_training_stats()
@@ -1076,68 +1241,30 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
     best_epoch = None
     metadata = checkpoint_metadata(config, method, seed)
     start_epoch = 0
+    resume = None
     if last_checkpoint_path.exists():
-        state = torch.load(
-            last_checkpoint_path, map_location=device, weights_only=False
+        resume = _validate_resume_checkpoint_pair(
+            config,
+            method,
+            seed,
+            checkpoint_dir,
+            weights=weights,
+            split=split,
+            device=device,
         )
-        validate_checkpoint_metadata(state.get("metadata", {}), metadata)
-        _validate_checkpoint_positive_weights(state, weights)
-        start_epoch, _ = trainer.load_state_dict(state)
-        (
-            losses,
-            probe_history,
-            training_stats,
-            best_epoch,
-            best_rank,
-        ) = _restore_checkpoint_history(
-            state,
-            checkpoint_epoch=start_epoch,
-            total_epochs=total_epochs,
-            probe_indices_by_class=probe_indices_by_class,
-            probe_sha256=split.probe_sha256,
-        )
-        _validate_checkpoint_training_sample_count(
-            training_stats, start_epoch, len(split.training_samples)
-        )
-        best_state = torch.load(
-            best_checkpoint_path, map_location=device, weights_only=False
-        )
-        validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
-        _validate_checkpoint_positive_weights(best_state, weights)
-        best_state_epoch = int(best_state.get("epoch", -1))
-        (
-            best_losses,
-            best_probe_history,
-            _,
-            stored_best_epoch,
-            stored_best_rank,
-        ) = _restore_checkpoint_history(
-            best_state,
-            checkpoint_epoch=best_state_epoch,
-            total_epochs=total_epochs,
-            probe_indices_by_class=probe_indices_by_class,
-            probe_sha256=split.probe_sha256,
-        )
-        best_training_stats = _normalize_training_stats(
-            best_state.get("training_stats")
-        )
-        _validate_checkpoint_training_sample_count(
-            best_training_stats,
-            best_state_epoch,
-            len(split.training_samples),
-        )
-        if best_state_epoch != best_epoch:
-            raise ValueError("best checkpoint epoch does not match last checkpoint")
-        if stored_best_epoch != best_epoch or stored_best_rank != best_rank:
-            raise ValueError("best checkpoint references do not match last checkpoint")
-        if best_losses != losses[:best_epoch]:
-            raise ValueError(
-                "best checkpoint history mismatch: loss_history"
-            )
-        if best_probe_history != probe_history[:best_epoch]:
-            raise ValueError(
-                "best checkpoint history mismatch: probe_history"
-            )
+        start_epoch = resume["checkpoint_epoch"]
+        losses = resume["losses"]
+        probe_history = resume["probe_history"]
+        training_stats = resume["training_stats"]
+        best_epoch = resume["best_epoch"]
+        best_rank = resume["best_rank"]
+
+    model = model_builder(config, method, device)
+    trainer = build_trainer(model, config, device)
+    if resume is not None:
+        loaded_epoch, _ = trainer.load_state_dict(resume["last_state"])
+        if loaded_epoch != start_epoch:
+            raise ValueError("last checkpoint epoch changed during model reload")
 
     batch_size = int(config["experiment"]["batch_size"])
     empty_target_cap = float(config["experiment"]["empty_target_cap"])
@@ -1236,14 +1363,19 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
             }
         )
         if is_best:
-            _save_checkpoint(best_checkpoint_path, state)
-        _save_checkpoint(last_checkpoint_path, state)
+            _save_checkpoint(
+                best_checkpoint_path, {**state, "checkpoint_role": "best"}
+            )
+        _save_checkpoint(
+            last_checkpoint_path, {**state, "checkpoint_role": "last"}
+        )
 
     if best_epoch is None or best_rank is None or not best_checkpoint_path.exists():
         raise RuntimeError("GeoVLM training did not produce a best checkpoint")
     best_state = torch.load(
         best_checkpoint_path, map_location=device, weights_only=False
     )
+    _validate_checkpoint_role(best_state, "best")
     validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
     _validate_checkpoint_positive_weights(best_state, weights)
     if best_state.get("probe_sha256") != split.probe_sha256:
@@ -1296,6 +1428,8 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
         row.update(
             {
                 "training_contract": metadata["training_contract"],
+                "siglip_model_id": metadata["siglip_model_id"],
+                "siglip_revision": metadata["siglip_revision"],
                 "checkpoint_reproduced": reproduced,
                 "source_training_size": pool.source_size,
                 "target_present_pool_size": len(pool.samples),
@@ -1372,7 +1506,11 @@ def run_experiment(
         except (UnicodeDecodeError, json.JSONDecodeError):
             payload = None
         rows = _rows_from_compatible_payload(
-            payload, output_path, training_contract
+            payload,
+            output_path,
+            training_contract,
+            config["text_encoder"]["model_id"],
+            config["text_encoder"].get("revision"),
         )
     if stage == "seed42":
         pairs = [(PROMPT_METHOD, 42)]
@@ -1387,6 +1525,13 @@ def run_experiment(
     _preflight_checkpoint_layouts(checkpoint_dir, pairs)
     done = completed_keys(rows)
     pending = [(method, seed) for method, seed in pairs if (method, seed) not in done]
+    existing_checkpoint_pairs = [
+        (method, seed)
+        for method, seed in pairs
+        if (
+            Path(checkpoint_dir) / f"{method}__seed{seed}"
+        ).with_suffix(".last.pt").exists()
+    ]
     if any(
         row.get("method") == PROMPT_METHOD and int(row.get("seed", -1)) == 42
         for row in rows
@@ -1396,8 +1541,18 @@ def run_experiment(
             raise RuntimeError(
                 "seed42 smoke checks failed: " + ", ".join(smoke["failed_checks"])
             )
-    if pending:
+    train = validation = None
+    if pending or existing_checkpoint_pairs:
         train, validation = dataset_builder(config)
+    if existing_checkpoint_pairs:
+        _preflight_existing_checkpoint_contents(
+            config,
+            pairs,
+            train,
+            checkpoint_dir,
+            device,
+        )
+    if pending:
         for method, seed in pending:
             new_rows = _run_pair(
                 config,

@@ -82,7 +82,7 @@ pip install torchgeo
 Run the complete offline-focused set:
 
 ```bash
-python -m pytest tests/test_prompt_segmentation_data.py tests/test_prithvi_position_embeddings.py tests/test_prompt_segmentation_model.py tests/test_prompt_segmentation_engine.py tests/test_geovlm_prompt_summary.py tests/test_geovlm_prompt_runner.py tests/test_geovlm_prompt_inference.py tests/test_paper12_colab_notebooks.py -v
+python -m pytest tests/test_prompt_segmentation_data.py tests/test_prithvi_position_embeddings.py tests/test_prompt_segmentation_model.py tests/test_prompt_segmentation_engine.py tests/test_geovlm_training.py tests/test_geovlm_prompt_summary.py tests/test_geovlm_prompt_runner.py tests/test_geovlm_prompt_inference.py tests/test_paper12_colab_notebooks.py -v
 ```
 
 These tests inject tiny local models and datasets. They do not download or
@@ -95,7 +95,8 @@ master branch. The notebook:
 
 1. records the Git commit and dependency versions;
 2. stages and hashes `Prithvi_100M.pt`;
-3. resolves and caches the exact SigLIP revision;
+3. resolves the SigLIP revision once, pins it in Drive, and always downloads
+   the pinned snapshot into the persistent cache;
 4. downloads LandCoverAI and verifies mask values are within `{0,1,2,3,4}`;
 5. writes an absolute-path config with `allow_synthetic_fallback: false`;
 6. runs the seed-42 smoke stage;
@@ -110,7 +111,14 @@ Drive locations:
 /content/drive/MyDrive/paper12_checkpoints/geovlm_prompt_segmentation
 /content/drive/MyDrive/paper12_previews/geovlm_prompt_segmentation
 /content/drive/MyDrive/huggingface_cache/paper12_geovlm
+/content/drive/MyDrive/huggingface_cache/paper12_geovlm/resolved_revision.txt
+/content/drive/MyDrive/paper12_results/geovlm_prompt_segmentation_colab.yaml
 ```
+
+The revision pin prevents a later Colab session from silently following a new
+Hub HEAD. The generated absolute-path config is copied to Drive after every
+write so the exact model revision and cache contract used by the run remain
+available for reproduction.
 
 ## Seed-42 recovery
 
@@ -196,7 +204,7 @@ gates. Only a complete matrix with every gate true may report `passed`.
 python scripts/run_geovlm_prompt_segmentation.py \
   --image sample.tif \
   --prompt "segment all water bodies" \
-  --checkpoint /path/to/checkpoint.pt \
+  --checkpoint /path/to/checkpoint.best.pt \
   --output-dir results/geovlm_prompt_inference \
   --threshold 0.5 \
   --local-files-only
@@ -206,3 +214,10 @@ For PNG/JPEG inputs the CLI writes a PNG mask, a float32 NumPy probability
 array, a preview, and metadata JSON. For a GeoTIFF with CRS and affine transform
 it writes a one-band uint8 GeoTIFF mask preserving the source georeferencing.
 It never invents spatial metadata for non-georeferenced inputs.
+
+Offline inference accepts only a checkpoint whose stored role and complete
+history identify it as the selected best epoch. When the supplied config leaves
+`text_encoder.revision` null, the loader restores the non-empty revision from
+checkpoint metadata before building SigLIP. An explicit config revision is
+never overwritten and must match the checkpoint. The persisted Drive config
+can be supplied directly when reproducing the Colab run.

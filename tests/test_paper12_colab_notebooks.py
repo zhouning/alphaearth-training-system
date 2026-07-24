@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import json
 import shutil
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -25,7 +27,12 @@ GEOVLM_RESULTS_SCHEMA_V2 = "paper12.geovlm_prompt_results.v2"
 GEOVLM_TRAINING_CONTRACT_V2 = "paper12.geovlm_prompt_training.v2"
 GEOVLM_LEGACY_CHECKPOINT = "siglip_film_dense_similarity_houlsby__seed42.pt"
 GEOVLM_PROMPT_METHOD = "siglip_film_dense_similarity_houlsby"
+GEOVLM_SIGLIP_MODEL_ID = "google/siglip-base-patch16-224"
+GEOVLM_SIGLIP_REVISION = "siglip-revision-a"
 GEOVLM_REQUIRED_CLASSES = ("building", "road", "water")
+GEOVLM_SIGLIP_CELL_MARKER = (
+    "# 6. Pre-cache the frozen SigLIP text tower and record its resolved revision."
+)
 
 
 def read_notebook_text(path: Path) -> str:
@@ -54,6 +61,19 @@ def geovlm_archive_cell_source(*, archive_failed_run: bool = False) -> str:
     return source
 
 
+def geovlm_siglip_cell_source() -> str:
+    path = COLAB_DIR / "paper12_geovlm_prompt_segmentation_colab.ipynb"
+    notebook = json.loads(path.read_text(encoding="utf-8"))
+    matches = [
+        "".join(cell.get("source", []))
+        for cell in notebook.get("cells", [])
+        if cell.get("cell_type") == "code"
+        and GEOVLM_SIGLIP_CELL_MARKER in "".join(cell.get("source", []))
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
 def geovlm_archive_namespace(tmp_path: Path) -> dict[str, object]:
     drive_results_dir = tmp_path / "drive_results"
     checkpoint_dir = tmp_path / "checkpoints"
@@ -77,6 +97,7 @@ def geovlm_archive_namespace(tmp_path: Path) -> dict[str, object]:
         "SUMMARY_JSON": summary_json,
         "DRIVE_RAW_JSON": drive_results_dir / raw_json.name,
         "DRIVE_SUMMARY_JSON": drive_results_dir / summary_json.name,
+        "SIGLIP_REVISION_PIN": tmp_path / "resolved_revision.txt",
         "shutil": shutil,
     }
 
@@ -88,6 +109,8 @@ def geovlm_complete_v2_rows() -> list[dict[str, object]]:
             "method": GEOVLM_PROMPT_METHOD,
             "seed": 42,
             "class_name": class_name,
+            "siglip_model_id": GEOVLM_SIGLIP_MODEL_ID,
+            "siglip_revision": GEOVLM_SIGLIP_REVISION,
         }
         for class_name in GEOVLM_REQUIRED_CLASSES
     ]
@@ -289,6 +312,12 @@ def test_paper12_geovlm_prompt_segmentation_colab_contract():
         in text
     )
     assert 'config["text_encoder"]["cache_dir"] = str(HF_CACHE_DIR)' in text
+    assert 'SIGLIP_REVISION_PIN = HF_CACHE_DIR / "resolved_revision.txt"' in text
+    assert (
+        'DRIVE_CONFIG_COLAB = DRIVE_RESULTS_DIR / "geovlm_prompt_segmentation_colab.yaml"'
+        in text
+    )
+    assert "shutil.copy2(CONFIG_COLAB, DRIVE_CONFIG_COLAB)" in text
     assert "paper12.geovlm_prompt_training.v2" in text
     assert "ARCHIVE_FAILED_RUN = False" in text
     assert "failed_seed42_20260724" in text
@@ -297,8 +326,101 @@ def test_paper12_geovlm_prompt_segmentation_colab_contract():
     assert "siglip_film_dense_similarity_houlsby__seed42.pt" in text
 
 
+def test_geovlm_focused_commands_include_training_contract_tests():
+    notebook_text = read_notebook_text(
+        COLAB_DIR / "paper12_geovlm_prompt_segmentation_colab.ipynb"
+    )
+    docs_text = (
+        REPO_ROOT / "docs" / "geovlm_prompt_segmentation_mvp.md"
+    ).read_text(encoding="utf-8")
+
+    assert "tests/test_geovlm_training.py" in notebook_text
+    assert "tests/test_geovlm_training.py" in docs_text
+
+
+def test_geovlm_siglip_cell_pins_first_revision_and_reuses_it_after_restart(
+    tmp_path, monkeypatch
+):
+    pin = tmp_path / "resolved_revision.txt"
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    model_info_calls = []
+    snapshot_calls = []
+
+    def model_info(model_id):
+        model_info_calls.append(model_id)
+        return types.SimpleNamespace(sha="first-resolved-sha")
+
+    def snapshot_download(**kwargs):
+        snapshot_calls.append(kwargs)
+        return str(cache / kwargs["revision"])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        types.SimpleNamespace(
+            model_info=model_info,
+            snapshot_download=snapshot_download,
+        ),
+    )
+    first_namespace = {
+        "HF_CACHE_DIR": cache,
+        "SIGLIP_REVISION_PIN": pin,
+    }
+    exec(geovlm_siglip_cell_source(), first_namespace)
+
+    assert pin.read_text(encoding="utf-8") == "first-resolved-sha\n"
+    assert model_info_calls == [GEOVLM_SIGLIP_MODEL_ID]
+    assert snapshot_calls[-1]["revision"] == "first-resolved-sha"
+
+    def changed_model_info(_model_id):
+        raise AssertionError("Hub HEAD must not be queried when a revision pin exists")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        types.SimpleNamespace(
+            model_info=changed_model_info,
+            snapshot_download=snapshot_download,
+        ),
+    )
+    restarted_namespace = {
+        "HF_CACHE_DIR": cache,
+        "SIGLIP_REVISION_PIN": pin,
+    }
+    exec(geovlm_siglip_cell_source(), restarted_namespace)
+
+    assert restarted_namespace["SIGLIP_REVISION"] == "first-resolved-sha"
+    assert snapshot_calls[-1]["revision"] == "first-resolved-sha"
+
+
+def test_geovlm_siglip_cell_rejects_empty_revision_pin(tmp_path, monkeypatch):
+    pin = tmp_path / "resolved_revision.txt"
+    pin.write_text(" \n", encoding="utf-8")
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        types.SimpleNamespace(
+            model_info=lambda _model_id: types.SimpleNamespace(sha="new-sha"),
+            snapshot_download=lambda **_kwargs: "unused",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="revision pin.*non-empty"):
+        exec(
+            geovlm_siglip_cell_source(),
+            {
+                "HF_CACHE_DIR": tmp_path / "cache",
+                "SIGLIP_REVISION_PIN": pin,
+            },
+        )
+
+
 def test_geovlm_archive_cell_resumes_compatible_v2_results(tmp_path):
     namespace = geovlm_archive_namespace(tmp_path)
+    namespace["SIGLIP_REVISION_PIN"].write_text(
+        GEOVLM_SIGLIP_REVISION + "\n", encoding="utf-8"
+    )
     raw_bytes = geovlm_v2_payload_bytes(geovlm_complete_v2_rows())
     summary_bytes = b'{"mvp_status": "incomplete"}\n'
     preview_bytes = b"current preview"
@@ -348,6 +470,20 @@ def test_geovlm_archive_cell_resumes_compatible_v2_results(tmp_path):
                 for row in geovlm_complete_v2_rows()
             ],
             id="invalid-class",
+        ),
+        pytest.param(
+            [
+                {
+                    **row,
+                    "siglip_revision": (
+                        "siglip-revision-b"
+                        if row["class_name"] == "water"
+                        else row["siglip_revision"]
+                    ),
+                }
+                for row in geovlm_complete_v2_rows()
+            ],
+            id="mixed-siglip-revision",
         ),
     ],
 )
