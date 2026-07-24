@@ -12,6 +12,7 @@ from geoadapter.bench.run_geovlm_prompt_segmentation import (
     BASELINE_METHOD,
     PROMPT_METHOD,
     _atomic_json,
+    _checkpoint_reproduces,
     _evaluate_probe,
     _probe_condition,
     _train_one_epoch,
@@ -149,6 +150,9 @@ def test_checkpoint_metadata_hashes_external_contracts(tmp_path):
     assert metadata["best_checkpoint_policy"] == (
         "finite_nonconstant_prompt_change_loss_v1"
     )
+    assert metadata["positive_weight_policy"] == (
+        "full_source_training_split_v1"
+    )
     assert metadata["prithvi_sha256"] == sha256_file(prithvi)
     assert metadata["prompt_config_sha256"] == sha256_file(prompts)
     assert metadata["class_mapping"] == {"building": 1, "water": 3, "road": 4}
@@ -163,6 +167,7 @@ def test_checkpoint_metadata_hashes_external_contracts(tmp_path):
         "empty_target_cap",
         "probe_positives_per_class",
         "best_checkpoint_policy",
+        "positive_weight_policy",
     ):
         invalid = dict(metadata)
         invalid[field] = "mismatch"
@@ -255,6 +260,46 @@ def test_train_epoch_uses_scheduled_conditions_and_reports_actual_stats():
         "prompt_counts": {"building": 1, "water": 1, "road": 1},
         "nonempty_prompt_counts": {"building": 1, "water": 0, "road": 1},
     }
+
+
+def test_train_epoch_weights_loss_by_actual_batch_size():
+    class _RecordingTrainer:
+        device = "cpu"
+
+        def __init__(self):
+            self.losses = iter((1.0, 4.0))
+            self.scheduler = type("Scheduler", (), {"step": lambda _self: None})()
+
+        def train_step(self, _images, _conditions, _targets, _positive_weights):
+            return next(self.losses)
+
+    images = torch.zeros(3, 3, 8, 8)
+    masks = torch.stack(
+        (
+            torch.ones(8, 8, dtype=torch.long),
+            torch.full((8, 8), 3, dtype=torch.long),
+            torch.full((8, 8), 4, dtype=torch.long),
+        )
+    )
+    loader = [
+        (images[:2], masks[:2], ("building", "water")),
+        (images[2:], masks[2:], ("road",)),
+    ]
+    prompt_config = load_prompt_config(
+        Path("geoadapter/bench/configs/geovlm_prompts.yaml")
+    )
+
+    stats = _train_one_epoch(
+        _RecordingTrainer(),
+        loader,
+        prompt_config,
+        {"building": 1.0, "road": 1.0, "water": 1.0},
+        42,
+        BASELINE_METHOD,
+    )
+
+    assert stats["sample_count"] == 3
+    assert stats["loss"] == pytest.approx(2.0)
 
 
 class _TinyPromptDataset(Dataset):
@@ -506,6 +551,69 @@ def test_baseline_probe_uses_spatial_range_and_restores_model_mode():
     )
 
 
+@pytest.mark.parametrize("method", [PROMPT_METHOD, BASELINE_METHOD])
+def test_checkpoint_reproduction_checks_all_target_conditions(method, tmp_path):
+    class _RecordingConditionalModel(_TinyConditionalModel):
+        def __init__(self):
+            super().__init__()
+            self.condition_calls = []
+
+        def forward(self, images, conditions):
+            self.condition_calls.append(tuple(self._condition_indices(conditions)))
+            return super().forward(images, conditions)
+
+    class _RecordingValidation(_TinyPromptDataset):
+        def __init__(self):
+            super().__init__()
+            self.accessed_indices = []
+
+        def __getitem__(self, index):
+            self.accessed_indices.append(index)
+            return super().__getitem__(index)
+
+    config = _runner_test_config(tmp_path, epochs=1)
+    prompt_config = load_prompt_config(
+        Path("geoadapter/bench/configs/geovlm_prompts.yaml")
+    )
+    active_model = _RecordingConditionalModel()
+    active_trainer = build_trainer(active_model, config, "cpu")
+    checkpoint_model = _TinyConditionalModel()
+    checkpoint_model.load_state_dict(active_model.state_dict())
+    with torch.no_grad():
+        checkpoint_model.condition_bias[1].add_(1.0)
+    checkpoint_trainer = build_trainer(checkpoint_model, config, "cpu")
+    checkpoint_path = tmp_path / f"{method}.pt"
+    torch.save(
+        checkpoint_trainer.state_dict(epoch=1, metadata={}),
+        checkpoint_path,
+    )
+    clones = []
+
+    def model_builder(_config, _method, device):
+        clone = _RecordingConditionalModel().to(device)
+        clones.append(clone)
+        return clone
+
+    validation = _RecordingValidation()
+    reproduced = _checkpoint_reproduces(
+        config,
+        method,
+        123,
+        checkpoint_path,
+        active_trainer,
+        model_builder,
+        validation,
+        prompt_config,
+        "cpu",
+    )
+
+    expected_calls = [(0,), (1,), (2,)]
+    assert validation.accessed_indices == [0]
+    assert active_model.condition_calls == expected_calls
+    assert clones[0].condition_calls == expected_calls
+    assert reproduced is False
+
+
 @pytest.mark.parametrize(
     ("probe_indices", "message"),
     [
@@ -612,6 +720,7 @@ def _resume_state(
     training_stats,
     probe_indices,
     probe_sha256,
+    positive_weights,
     best_epoch,
 ):
     best_rank = list(probe_rank(probes[best_epoch - 1]))
@@ -630,6 +739,7 @@ def _resume_state(
             "training_stats": copy.deepcopy(training_stats),
             "probe_indices_by_class": copy.deepcopy(probe_indices),
             "probe_sha256": probe_sha256,
+            "positive_weights": dict(positive_weights),
             "best_epoch": best_epoch,
             "best_probe_rank": best_rank,
         }
@@ -657,6 +767,10 @@ def _two_epoch_resume_contract(config, dataset, model_builder, *, best_epoch):
             "training_loss": 3.0,
         },
     ]
+    positive_weights = estimate_positive_weights(
+        (dataset[index][1] for index in range(len(dataset))),
+        clip=tuple(config["training"]["positive_weight_clip"]),
+    )
     last = _resume_state(
         config,
         model_builder,
@@ -672,9 +786,211 @@ def _two_epoch_resume_contract(config, dataset, model_builder, *, best_epoch):
         },
         probe_indices=probe_indices,
         probe_sha256=split.probe_sha256,
+        positive_weights=positive_weights,
         best_epoch=best_epoch,
     )
-    return last, probes, probe_indices, split.probe_sha256
+    return (
+        last,
+        probes,
+        probe_indices,
+        split.probe_sha256,
+        positive_weights,
+    )
+
+
+def test_runner_rejects_full_source_positive_weight_drift_before_writing(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    dataset = _TinyPromptDataset()
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    (
+        last,
+        probes,
+        probe_indices,
+        probe_sha256,
+        positive_weights,
+    ) = _two_epoch_resume_contract(
+        config, dataset, model_builder, best_epoch=1
+    )
+    best = _resume_state(
+        config,
+        model_builder,
+        method=BASELINE_METHOD,
+        seed=123,
+        epoch=1,
+        losses=[2.0],
+        probes=probes[:1],
+        training_stats={
+            key: value
+            for key, value in _epoch_stats(2.0).items()
+            if key != "loss"
+        },
+        probe_indices=probe_indices,
+        probe_sha256=probe_sha256,
+        positive_weights=positive_weights,
+        best_epoch=1,
+    )
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    last_path = base.with_suffix(".last.pt")
+    best_path = base.with_suffix(".best.pt")
+    torch.save(last, last_path)
+    torch.save(best, best_path)
+    before = {path: path.read_bytes() for path in (last_path, best_path)}
+
+    dataset.masks[0].fill_(1)
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="positive weights mismatch.*full source",
+    ):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            checkpoint_dir,
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
+
+
+def test_runner_rejects_checkpoint_training_sample_count_mismatch(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    dataset = _TinyPromptDataset()
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    (
+        last,
+        probes,
+        probe_indices,
+        probe_sha256,
+        positive_weights,
+    ) = _two_epoch_resume_contract(
+        config, dataset, model_builder, best_epoch=1
+    )
+    last["training_stats"] = {
+        key: value
+        for key, value in _epoch_stats(3.0, sample_count=9).items()
+        if key != "loss"
+    }
+    best = _resume_state(
+        config,
+        model_builder,
+        method=BASELINE_METHOD,
+        seed=123,
+        epoch=1,
+        losses=[2.0],
+        probes=probes[:1],
+        training_stats={
+            key: value
+            for key, value in _epoch_stats(2.0).items()
+            if key != "loss"
+        },
+        probe_indices=probe_indices,
+        probe_sha256=probe_sha256,
+        positive_weights=positive_weights,
+        best_epoch=1,
+    )
+    base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
+    last_path = base.with_suffix(".last.pt")
+    best_path = base.with_suffix(".best.pt")
+    torch.save(last, last_path)
+    torch.save(best, best_path)
+    before = {path: path.read_bytes() for path in (last_path, best_path)}
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="checkpoint training sample count mismatch.*checkpoint epoch",
+    ):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            checkpoint_dir,
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
+
+
+def test_runner_rejects_new_epoch_training_sample_count_mismatch(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path, epochs=1)
+    dataset = _TinyPromptDataset()
+    checkpoint_dir = tmp_path / "checkpoints"
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    monkeypatch.setattr(
+        runner,
+        "_train_one_epoch",
+        lambda *_args, **_kwargs: _epoch_stats(1.0, sample_count=3),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_probe",
+        lambda *_args, **_kwargs: _finite_probe(1.0, 1.0),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="training epoch sample count mismatch",
+    ):
+        runner._run_pair(
+            config,
+            BASELINE_METHOD,
+            123,
+            dataset,
+            dataset,
+            checkpoint_dir,
+            tmp_path / "previews",
+            "cpu",
+            model_builder,
+        )
+
+    assert not list(checkpoint_dir.glob("*.pt"))
 
 
 def test_runner_recomputes_best_selection_from_last_probe_history(
@@ -690,7 +1006,7 @@ def test_runner_recomputes_best_selection_from_last_probe_history(
     def model_builder(_config, _method, device):
         return _TinyConditionalModel().to(device)
 
-    last, _, _, _ = _two_epoch_resume_contract(
+    last, _, _, _, _ = _two_epoch_resume_contract(
         config, dataset, model_builder, best_epoch=2
     )
     base = checkpoint_dir / f"{BASELINE_METHOD}__seed123"
@@ -734,7 +1050,7 @@ def test_runner_rejects_last_metadata_best_selection_mismatch(tmp_path):
     def model_builder(_config, _method, device):
         return _TinyConditionalModel().to(device)
 
-    last, probes, _, _ = _two_epoch_resume_contract(
+    last, probes, _, _, _ = _two_epoch_resume_contract(
         config, dataset, model_builder, best_epoch=1
     )
     last["metadata"].update(
@@ -780,7 +1096,13 @@ def test_runner_rejects_best_history_that_is_not_last_prefix(
     def model_builder(_config, _method, device):
         return _TinyConditionalModel().to(device)
 
-    last, probes, probe_indices, probe_sha256 = _two_epoch_resume_contract(
+    (
+        last,
+        probes,
+        probe_indices,
+        probe_sha256,
+        positive_weights,
+    ) = _two_epoch_resume_contract(
         config, dataset, model_builder, best_epoch=1
     )
     best = _resume_state(
@@ -798,6 +1120,7 @@ def test_runner_rejects_best_history_that_is_not_last_prefix(
         },
         probe_indices=probe_indices,
         probe_sha256=probe_sha256,
+        positive_weights=positive_weights,
         best_epoch=1,
     )
     if corrupted_field == "loss_history":
@@ -944,6 +1267,10 @@ def test_runner_evaluates_best_probe_checkpoint_when_later_epoch_degrades(
         base.with_suffix(".best.pt"), map_location="cpu", weights_only=False
     )
     expected_rank = list(probe_rank(_finite_probe(1.0, 1.0)))
+    expected_weights = estimate_positive_weights(
+        (dataset[index][1] for index in range(len(dataset))),
+        clip=tuple(config["training"]["positive_weight_clip"]),
+    )
     assert train_calls == [(123, 6), (124, 6)]
     assert last["epoch"] == 2
     assert last["trainable_model"]["condition_bias"].tolist() == [2.0] * 3
@@ -953,6 +1280,12 @@ def test_runner_evaluates_best_probe_checkpoint_when_later_epoch_degrades(
     assert last["best_epoch"] == best["best_epoch"] == 1
     assert last["best_probe_rank"] == best["best_probe_rank"] == expected_rank
     assert last["metadata"]["best_epoch"] == best["metadata"]["best_epoch"] == 1
+    assert last["positive_weights"] == best["positive_weights"] == expected_weights
+    assert (
+        last["metadata"]["positive_weight_policy"]
+        == best["metadata"]["positive_weight_policy"]
+        == "full_source_training_split_v1"
+    )
     assert (
         last["metadata"]["best_probe_rank"]
         == best["metadata"]["best_probe_rank"]
@@ -962,6 +1295,53 @@ def test_runner_evaluates_best_probe_checkpoint_when_later_epoch_degrades(
     assert all(row["best_epoch"] == 1 for row in rows)
     assert all(row["full_loss_history"] == [1.0, 2.0] for row in rows)
     assert all(row["loss_history"] == [1.0] for row in rows)
+
+
+def test_runner_rows_have_independent_best_probe_diagnostics(monkeypatch, tmp_path):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path, epochs=1)
+    dataset = _TinyPromptDataset()
+
+    def model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    monkeypatch.setattr(
+        runner,
+        "_train_one_epoch",
+        lambda *_args, **_kwargs: _epoch_stats(1.0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_probe",
+        lambda *_args, **_kwargs: _finite_probe(1.0, 1.0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+    monkeypatch.setattr(runner, "_checkpoint_reproduces", lambda *_args: True)
+
+    rows = runner._run_pair(
+        config,
+        BASELINE_METHOD,
+        123,
+        dataset,
+        dataset,
+        tmp_path / "checkpoints",
+        tmp_path / "previews",
+        "cpu",
+        model_builder,
+    )
+
+    rows[0]["best_probe"]["classes"]["building"]["prediction_range"] = 99.0
+
+    assert len(rows) == 3
+    assert rows[1]["best_probe"]["classes"]["building"]["prediction_range"] == 1.0
+    assert rows[2]["best_probe"]["classes"]["building"]["prediction_range"] == 1.0
 
 
 def test_runner_resumes_last_checkpoint_without_replacing_better_epoch_one(
@@ -994,6 +1374,10 @@ def test_runner_resumes_last_checkpoint_without_replacing_better_epoch_one(
     trainer = build_trainer(
         model_builder(config, BASELINE_METHOD, "cpu"), config, "cpu"
     )
+    positive_weights = estimate_positive_weights(
+        (dataset[index][1] for index in range(len(dataset))),
+        clip=tuple(config["training"]["positive_weight_clip"]),
+    )
     with torch.no_grad():
         trainer.model.condition_bias.fill_(1.0)
     state = trainer.state_dict(epoch=1, metadata=metadata)
@@ -1008,6 +1392,7 @@ def test_runner_resumes_last_checkpoint_without_replacing_better_epoch_one(
             },
             "probe_indices_by_class": probe_indices,
             "probe_sha256": split.probe_sha256,
+            "positive_weights": positive_weights,
             "best_epoch": 1,
             "best_probe_rank": best_rank,
         }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib.metadata
 import argparse
@@ -100,6 +101,7 @@ def checkpoint_metadata(config: dict[str, Any], method: str, seed: int) -> dict[
             config["experiment"]["probe_positives_per_class"]
         ),
         "best_checkpoint_policy": "finite_nonconstant_prompt_change_loss_v1",
+        "positive_weight_policy": "full_source_training_split_v1",
         "method": method,
         "seed": int(seed),
         "prithvi_sha256": sha256_file(prithvi_path),
@@ -275,6 +277,7 @@ def validate_checkpoint_metadata(actual: dict[str, Any], expected: dict[str, Any
         "empty_target_cap",
         "probe_positives_per_class",
         "best_checkpoint_policy",
+        "positive_weight_policy",
         "method",
         "seed",
         "prithvi_sha256",
@@ -358,7 +361,7 @@ def _train_one_epoch(
     method: str,
 ):
     generator = torch.Generator().manual_seed(seed)
-    losses = []
+    loss_sum = 0.0
     stats = {
         "sample_count": 0,
         "empty_target_count": 0,
@@ -376,8 +379,12 @@ def _train_one_epoch(
         )
         conditions = batch.prompts if method == PROMPT_METHOD else batch.class_ids
         positive_weights = _positive_weights_for_batch(batch.class_names, weights, trainer.device)
-        losses.append(trainer.train_step(images, conditions, batch.targets, positive_weights))
-        stats["sample_count"] += len(batch.class_names)
+        batch_size = len(batch.class_names)
+        batch_loss = trainer.train_step(
+            images, conditions, batch.targets, positive_weights
+        )
+        loss_sum += batch_loss * batch_size
+        stats["sample_count"] += batch_size
         stats["empty_target_count"] += batch.empty_count
         nonempty = batch.targets.flatten(1).sum(dim=1).ne(0).tolist()
         for class_name, target_is_nonempty in zip(batch.class_names, nonempty):
@@ -387,7 +394,7 @@ def _train_one_epoch(
             )
     trainer.scheduler.step()
     return {
-        "loss": float(sum(losses) / max(1, len(losses))),
+        "loss": float(loss_sum / max(1, stats["sample_count"])),
         **stats,
     }
 
@@ -740,13 +747,13 @@ def _checkpoint_reproduces(
     state = torch.load(checkpoint_path, map_location=device, weights_only=False)
     clone_trainer.load_state_dict(state)
     image, mask = validation[0]
-    if method == PROMPT_METHOD:
-        condition = [prompt_config.classes["building"].training[0]]
-    else:
-        condition = torch.tensor([1])
-    before = trainer.predict(image.unsqueeze(0), condition)
-    after = clone_trainer.predict(image.unsqueeze(0), condition)
-    return bool(torch.allclose(before, after, atol=1e-6))
+    comparisons = []
+    for class_name in PROMPT_TARGET_CLASS_IDS:
+        condition = _probe_condition(method, class_name, prompt_config)
+        before = trainer.predict(image.unsqueeze(0), condition)
+        after = clone_trainer.predict(image.unsqueeze(0), condition)
+        comparisons.append(torch.allclose(before, after, atol=1e-6))
+    return bool(all(comparisons))
 
 
 def _empty_training_stats():
@@ -837,6 +844,36 @@ def _normalize_checkpoint_probe_indices(value):
             raise ValueError("checkpoint probe indices must be integers")
         normalized[class_name] = [int(index) for index in indices]
     return normalized
+
+
+def _validate_checkpoint_positive_weights(state, expected):
+    actual = state.get("positive_weights")
+    if not isinstance(actual, dict) or set(actual) != set(PROMPT_TARGET_CLASS_IDS):
+        raise ValueError(
+            "checkpoint positive weights mismatch for full source training split; "
+            "archive checkpoints and restart recovery"
+        )
+    actual = {name: float(actual[name]) for name in PROMPT_TARGET_CLASS_IDS}
+    if actual != expected or not np.isfinite(
+        np.asarray(list(actual.values()), dtype=float)
+    ).all():
+        raise ValueError(
+            "checkpoint positive weights mismatch for full source training split; "
+            "archive checkpoints and restart recovery"
+        )
+
+
+def _validate_checkpoint_training_sample_count(
+    training_stats, checkpoint_epoch, epoch_sample_count
+):
+    expected = checkpoint_epoch * epoch_sample_count
+    if training_stats["sample_count"] != expected:
+        raise ValueError(
+            "checkpoint training sample count mismatch: expected "
+            f"checkpoint epoch {checkpoint_epoch} * split size "
+            f"{epoch_sample_count} = {expected}, got "
+            f"{training_stats['sample_count']}"
+        )
 
 
 def _restore_checkpoint_history(
@@ -962,6 +999,7 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
             last_checkpoint_path, map_location=device, weights_only=False
         )
         validate_checkpoint_metadata(state.get("metadata", {}), metadata)
+        _validate_checkpoint_positive_weights(state, weights)
         start_epoch, _ = trainer.load_state_dict(state)
         (
             losses,
@@ -976,10 +1014,14 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
             probe_indices_by_class=probe_indices_by_class,
             probe_sha256=split.probe_sha256,
         )
+        _validate_checkpoint_training_sample_count(
+            training_stats, start_epoch, len(split.training_samples)
+        )
         best_state = torch.load(
             best_checkpoint_path, map_location=device, weights_only=False
         )
         validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
+        _validate_checkpoint_positive_weights(best_state, weights)
         best_state_epoch = int(best_state.get("epoch", -1))
         (
             best_losses,
@@ -993,6 +1035,14 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
             total_epochs=total_epochs,
             probe_indices_by_class=probe_indices_by_class,
             probe_sha256=split.probe_sha256,
+        )
+        best_training_stats = _normalize_training_stats(
+            best_state.get("training_stats")
+        )
+        _validate_checkpoint_training_sample_count(
+            best_training_stats,
+            best_state_epoch,
+            len(split.training_samples),
         )
         if best_state_epoch != best_epoch:
             raise ValueError("best checkpoint epoch does not match last checkpoint")
@@ -1044,6 +1094,12 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
                 )
             }
         )
+        if epoch_counts["sample_count"] != len(split.training_samples):
+            raise ValueError(
+                "training epoch sample count mismatch: expected split size "
+                f"{len(split.training_samples)}, got "
+                f"{epoch_counts['sample_count']}"
+            )
         _merge_training_stats(training_stats, epoch_counts)
         probe = _evaluate_probe(
             trainer,
@@ -1092,6 +1148,7 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
                     for name, indices in probe_indices_by_class.items()
                 },
                 "probe_sha256": split.probe_sha256,
+                "positive_weights": dict(weights),
                 "best_epoch": best_epoch,
                 "best_probe_rank": list(best_rank),
             }
@@ -1106,10 +1163,19 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
         best_checkpoint_path, map_location=device, weights_only=False
     )
     validate_checkpoint_metadata(best_state.get("metadata", {}), metadata)
+    _validate_checkpoint_positive_weights(best_state, weights)
     if best_state.get("probe_sha256") != split.probe_sha256:
         raise ValueError("best checkpoint probe_sha256 does not match current split")
     if int(best_state.get("epoch", -1)) != best_epoch:
         raise ValueError("best checkpoint epoch does not match selected epoch")
+    final_best_training_stats = _normalize_training_stats(
+        best_state.get("training_stats")
+    )
+    _validate_checkpoint_training_sample_count(
+        final_best_training_stats,
+        best_epoch,
+        len(split.training_samples),
+    )
     trainer.load_state_dict(best_state)
     trainable_params, frozen_params = _parameter_counts(model)
     reproduced = _checkpoint_reproduces(
@@ -1176,7 +1242,7 @@ def _run_pair(config, method, seed, train, validation, checkpoint_dir, preview_d
                 ),
                 "best_epoch": best_epoch,
                 "best_probe_rank": list(best_rank),
-                "best_probe": dict(best_probe),
+                "best_probe": copy.deepcopy(best_probe),
                 "full_loss_history": list(losses),
                 "loss_history": list(selected_losses),
                 "loss_first": selected_losses[0],
