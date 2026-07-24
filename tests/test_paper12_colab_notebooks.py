@@ -441,6 +441,25 @@ def test_geovlm_archive_cell_resumes_compatible_v2_results(tmp_path):
     assert archive_sentinel.read_bytes() == b"completed archive"
 
 
+def test_geovlm_archive_cell_resumes_empty_v2_results_without_revision_pin(
+    tmp_path,
+):
+    namespace = geovlm_archive_namespace(tmp_path)
+    raw_bytes = geovlm_v2_payload_bytes([])
+    namespace["DRIVE_RAW_JSON"].write_bytes(raw_bytes)
+
+    exec(geovlm_archive_cell_source(), namespace)
+
+    assert namespace["DRIVE_RAW_JSON"].read_bytes() == raw_bytes
+    assert namespace["RAW_JSON"].read_bytes() == raw_bytes
+    assert not namespace["SIGLIP_REVISION_PIN"].exists()
+    assert not any(
+        path.name.startswith("failed_seed42_")
+        for path in namespace["DRIVE_RESULTS_DIR"].iterdir()
+        if path.is_dir()
+    )
+
+
 @pytest.mark.parametrize(
     "rows",
     [

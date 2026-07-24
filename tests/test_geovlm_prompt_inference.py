@@ -313,3 +313,45 @@ def test_checkpoint_loader_rejects_forged_best_selection_contract(
             device="cpu",
             model_builder=_model_builder,
         )
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    [
+        pytest.param("null-loss-history", id="null-loss-history"),
+        pytest.param("null-probe-history", id="null-probe-history"),
+        pytest.param("nonmapping-probe", id="nonmapping-probe"),
+        pytest.param("missing-rank-field", id="missing-rank-field"),
+        pytest.param("invalid-training-loss", id="invalid-training-loss"),
+        pytest.param("invalid-best-rank", id="invalid-best-rank"),
+    ],
+)
+def test_checkpoint_loader_rejects_malformed_history_as_value_error(
+    tmp_path, corruption
+):
+    config, checkpoint = _checkpoint_fixture(tmp_path)
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    if corruption == "null-loss-history":
+        state["loss_history"] = None
+    elif corruption == "null-probe-history":
+        state["probe_history"] = None
+    elif corruption == "nonmapping-probe":
+        state["probe_history"][0] = None
+    elif corruption == "missing-rank-field":
+        state["probe_history"][0].pop("nonconstant_class_count")
+    elif corruption == "invalid-training-loss":
+        state["probe_history"][0]["training_loss"] = None
+    else:
+        state["best_probe_rank"][0] = {"invalid": True}
+    torch.save(state, checkpoint)
+
+    with pytest.raises(
+        ValueError,
+        match="checkpoint .*history|checkpoint probe|checkpoint best_probe_rank",
+    ):
+        load_prompt_checkpoint(
+            checkpoint,
+            config,
+            device="cpu",
+            model_builder=_model_builder,
+        )

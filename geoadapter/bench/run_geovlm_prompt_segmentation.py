@@ -982,8 +982,16 @@ def validate_checkpoint_best_selection(state, checkpoint_epoch):
     checkpoint_epoch = int(checkpoint_epoch)
     if checkpoint_epoch <= 0:
         raise ValueError("checkpoint epoch must be positive")
-    losses = [float(value) for value in state.get("loss_history", [])]
+    loss_history = state.get("loss_history", [])
     probe_history = state.get("probe_history", [])
+    if not isinstance(loss_history, (list, tuple)):
+        raise ValueError("checkpoint loss_history must be a list or tuple")
+    if not isinstance(probe_history, (list, tuple)):
+        raise ValueError("checkpoint probe_history must be a list or tuple")
+    try:
+        losses = [float(value) for value in loss_history]
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("checkpoint loss_history values must be numeric") from exc
     if len(losses) != checkpoint_epoch:
         raise ValueError("checkpoint loss_history length must equal checkpoint epoch")
     if len(probe_history) != checkpoint_epoch or not all(
@@ -995,7 +1003,15 @@ def validate_checkpoint_best_selection(state, checkpoint_epoch):
     for index, (loss, probe) in enumerate(zip(losses, probe_history), start=1):
         if probe.get("epoch") != index:
             raise ValueError("checkpoint probe_history epochs must be consecutive")
-        if float(probe.get("training_loss", float("nan"))) != loss:
+        try:
+            probe_training_loss = float(
+                probe.get("training_loss", float("nan"))
+            )
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                "checkpoint probe_history training_loss must be numeric"
+            ) from exc
+        if probe_training_loss != loss:
             raise ValueError(
                 "checkpoint probe training loss must match loss_history"
             )
@@ -1012,12 +1028,23 @@ def validate_checkpoint_best_selection(state, checkpoint_epoch):
     if not isinstance(best_rank_value, (list, tuple)) or len(best_rank_value) != 5:
         raise ValueError("checkpoint best_probe_rank must contain five values")
     best_rank = tuple(best_rank_value)
-    if not np.isfinite(np.asarray(best_rank, dtype=float)).all():
+    try:
+        best_rank_array = np.asarray(best_rank, dtype=float)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "checkpoint best_probe_rank values must be numeric"
+        ) from exc
+    if not np.isfinite(best_rank_array).all():
         raise ValueError("checkpoint best_probe_rank must be finite")
     expected_best_epoch = None
     expected_best_rank = None
     for epoch, probe in enumerate(probe_history, start=1):
-        rank = probe_rank(probe)
+        try:
+            rank = probe_rank(probe)
+        except (TypeError, ValueError, KeyError, OverflowError) as exc:
+            raise ValueError(
+                "checkpoint probe_history rank fields are invalid"
+            ) from exc
         if expected_best_rank is None or rank > expected_best_rank:
             expected_best_epoch = epoch
             expected_best_rank = rank
@@ -1164,7 +1191,7 @@ def _validate_resume_checkpoint_pair(
 
 
 def _preflight_existing_checkpoint_contents(
-    config, pairs, train, checkpoint_dir, device
+    config, pairs, train, checkpoint_dir, device, model_builder
 ):
     weights = estimate_positive_weights(
         (train[index][1] for index in range(len(train))),
@@ -1183,7 +1210,7 @@ def _preflight_existing_checkpoint_contents(
             ),
         )
         try:
-            _validate_resume_checkpoint_pair(
+            resume = _validate_resume_checkpoint_pair(
                 config,
                 method,
                 seed,
@@ -1192,7 +1219,16 @@ def _preflight_existing_checkpoint_contents(
                 split=split,
                 device=device,
             )
-        except ValueError as exc:
+            model = model_builder(config, method, device)
+            trainer = build_trainer(model, config, device)
+            for role in ("last", "best"):
+                state = resume[f"{role}_state"]
+                loaded_epoch, _ = trainer.load_state_dict(state)
+                if loaded_epoch != state["epoch"]:
+                    raise ValueError(
+                        f"{role} checkpoint epoch changed during preflight load"
+                    )
+        except Exception as exc:
             raise ValueError(
                 f"incompatible GeoVLM checkpoint pair {method}/seed{seed}; "
                 f"archive it before recovery: {exc}"
@@ -1551,6 +1587,7 @@ def run_experiment(
             train,
             checkpoint_dir,
             device,
+            model_builder,
         )
     if pending:
         for method, seed in pending:

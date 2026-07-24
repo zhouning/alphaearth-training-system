@@ -1573,7 +1573,15 @@ def _write_valid_resume_pair(config, dataset, checkpoint_dir, model_builder):
 
 @pytest.mark.parametrize(
     "corruption",
-    ["v1-metadata", "corrupt-bytes", "cross-prefix", "invalid-epoch"],
+    [
+        "v1-metadata",
+        "corrupt-bytes",
+        "cross-prefix",
+        "invalid-epoch",
+        "null-loss-history",
+        "nonmapping-probe",
+        "missing-rank-field",
+    ],
 )
 def test_runner_content_preflights_later_full_pair_before_any_mutation(
     tmp_path, corruption
@@ -1604,9 +1612,18 @@ def test_runner_content_preflights_later_full_pair_before_any_mutation(
         state["loss_history"] = [9.0]
         state["probe_history"][0]["training_loss"] = 9.0
         torch.save(state, paths["best"])
-    else:
+    elif corruption == "invalid-epoch":
         state = torch.load(paths["last"], map_location="cpu", weights_only=False)
         state["epoch"] = None
+        torch.save(state, paths["last"])
+    else:
+        state = torch.load(paths["last"], map_location="cpu", weights_only=False)
+        if corruption == "null-loss-history":
+            state["loss_history"] = None
+        elif corruption == "nonmapping-probe":
+            state["probe_history"][0] = None
+        else:
+            state["probe_history"][0].pop("nonconstant_class_count")
         torch.save(state, paths["last"])
     before = {path: path.read_bytes() for path in paths.values()}
     output = tmp_path / "rows.json"
@@ -1636,6 +1653,89 @@ def test_runner_content_preflights_later_full_pair_before_any_mutation(
 
     assert dataset_calls == [True]
     assert model_calls == []
+    assert {path: path.read_bytes() for path in before} == before
+    assert set(checkpoint_dir.iterdir()) == set(paths.values())
+    assert not output.exists()
+    assert not summary_output.exists()
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    [
+        pytest.param("missing-trainable", id="last-missing-trainable"),
+        pytest.param("missing-optimizer", id="last-missing-optimizer"),
+        pytest.param("missing-scheduler", id="last-missing-scheduler"),
+        pytest.param("best-shape", id="best-incompatible-trainable-shape"),
+    ],
+)
+def test_runner_full_state_preflights_later_pair_before_any_pair_runs(
+    monkeypatch, tmp_path, corruption
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path)
+    config["methods"] = [PROMPT_METHOD, BASELINE_METHOD]
+    config["experiment"]["seeds"] = [42, 123]
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    dataset = _TinyPromptDataset()
+
+    def fixture_model_builder(_config, _method, device):
+        return _TinyConditionalModel().to(device)
+
+    paths = _write_valid_resume_pair(
+        config, dataset, checkpoint_dir, fixture_model_builder
+    )
+    target_role = "best" if corruption == "best-shape" else "last"
+    state = torch.load(
+        paths[target_role], map_location="cpu", weights_only=False
+    )
+    if corruption == "missing-trainable":
+        state["trainable_model"].pop("condition_bias")
+    elif corruption == "missing-optimizer":
+        state.pop("optimizer")
+    elif corruption == "missing-scheduler":
+        state.pop("scheduler")
+    else:
+        state["trainable_model"]["condition_bias"] = torch.zeros(2)
+    torch.save(state, paths[target_role])
+
+    before = {path: path.read_bytes() for path in paths.values()}
+    output = tmp_path / "rows.json"
+    summary_output = tmp_path / "summary.json"
+    dataset_calls = []
+    model_calls = []
+    pair_calls = []
+
+    def dataset_builder(_config):
+        dataset_calls.append(True)
+        return dataset, dataset
+
+    def model_builder(_config, method, device):
+        model_calls.append(method)
+        return _TinyConditionalModel().to(device)
+
+    def forbidden_run_pair(*args, **_kwargs):
+        pair_calls.append((args[1], args[2]))
+        raise AssertionError("no pair may run before full checkpoint preflight")
+
+    monkeypatch.setattr(runner, "_run_pair", forbidden_run_pair)
+
+    with pytest.raises(ValueError, match="archive it before recovery"):
+        run_experiment(
+            config,
+            output_path=output,
+            summary_output_path=summary_output,
+            checkpoint_dir=checkpoint_dir,
+            preview_dir=tmp_path / "previews",
+            stage="full",
+            dataset_builder=dataset_builder,
+            model_builder=model_builder,
+        )
+
+    assert dataset_calls == [True]
+    assert model_calls == [BASELINE_METHOD]
+    assert pair_calls == []
     assert {path: path.read_bytes() for path in before} == before
     assert set(checkpoint_dir.iterdir()) == set(paths.values())
     assert not output.exists()
@@ -1952,6 +2052,74 @@ def test_runner_rejects_raw_siglip_revision_drift_before_dataset_or_writes(
     assert output.read_bytes() == original
     assert dataset_called is False
     assert not summary_output.exists()
+
+
+def test_runner_continues_pending_pair_from_empty_v2_raw(
+    monkeypatch, tmp_path
+):
+    import geoadapter.bench.run_geovlm_prompt_segmentation as runner
+
+    config = _runner_test_config(tmp_path, epochs=1)
+    config["methods"] = [BASELINE_METHOD]
+    config["experiment"]["seeds"] = [42]
+    output = tmp_path / "rows.json"
+    output.write_text(
+        json.dumps(
+            {
+                "schema": "paper12.geovlm_prompt_results.v2",
+                "training_contract": TRAINING_CONTRACT,
+                "rows": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    dataset_calls = []
+    model_calls = []
+
+    def dataset_builder(_config):
+        dataset_calls.append(True)
+        dataset = _TinyPromptDataset()
+        return dataset, dataset
+
+    def model_builder(_config, method, device):
+        model_calls.append(method)
+        return _TinyConditionalModel().to(device)
+
+    monkeypatch.setattr(
+        runner,
+        "_train_one_epoch",
+        lambda *_args, **_kwargs: _epoch_stats(1.0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_probe",
+        lambda *_args, **_kwargs: _finite_probe(1.0, 1.0),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_evaluate_method",
+        lambda _trainer, _validation, _prompts, method, seed, *_args: (
+            _fake_evaluation_rows(method, seed)
+        ),
+    )
+    monkeypatch.setattr(runner, "_checkpoint_reproduces", lambda *_args: True)
+
+    rows = run_experiment(
+        config,
+        output_path=output,
+        summary_output_path=tmp_path / "summary.json",
+        checkpoint_dir=tmp_path / "checkpoints",
+        preview_dir=tmp_path / "previews",
+        stage="full",
+        dataset_builder=dataset_builder,
+        model_builder=model_builder,
+    )
+
+    assert dataset_calls == [True]
+    assert model_calls == [BASELINE_METHOD]
+    assert completed_keys(rows) == {(BASELINE_METHOD, 42)}
+    assert len(rows) == 3
+    assert (tmp_path / "summary.json").exists()
 
 
 def test_runner_continues_pending_full_pair_from_compatible_raw_rows(
@@ -2436,6 +2604,8 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(
     assert summary["mvp_status"] == "incomplete"
 
     calls_after_first_run = len(build_calls)
+    train_calls_after_first_run = len(train_calls)
+    probe_calls_after_first_run = len(probe_calls)
     repeated = run_experiment(
         config,
         output_path=output,
@@ -2448,4 +2618,6 @@ def test_runner_appends_skips_and_reloads_with_injected_builders(
         model_builder=model_builder,
     )
     assert repeated == rows
-    assert len(build_calls) == calls_after_first_run
+    assert build_calls[calls_after_first_run:] == config["methods"]
+    assert len(train_calls) == train_calls_after_first_run
+    assert len(probe_calls) == probe_calls_after_first_run

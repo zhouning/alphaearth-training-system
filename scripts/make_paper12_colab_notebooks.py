@@ -1056,7 +1056,7 @@ def geovlm_prompt_notebook() -> dict:
                                     classes == set(REQUIRED_CLASSES)
                                     for classes in classes_by_pair.values()
                                 )
-                            if compatible_v2_raw:
+                            if compatible_v2_raw and rows:
                                 revisions = {row.get("siglip_revision") for row in rows}
                                 compatible_v2_raw = (
                                     len(revisions) == 1
@@ -1065,13 +1065,13 @@ def geovlm_prompt_notebook() -> dict:
                                         for revision in revisions
                                     )
                                 )
-                            if compatible_v2_raw and SIGLIP_REVISION_PIN.exists():
-                                pinned_revision = SIGLIP_REVISION_PIN.read_text(
-                                    encoding="utf-8"
-                                ).strip()
-                                compatible_v2_raw = bool(pinned_revision) and revisions == {
-                                    pinned_revision
-                                }
+                                if compatible_v2_raw and SIGLIP_REVISION_PIN.exists():
+                                    pinned_revision = SIGLIP_REVISION_PIN.read_text(
+                                        encoding="utf-8"
+                                    ).strip()
+                                    compatible_v2_raw = bool(pinned_revision) and revisions == {
+                                        pinned_revision
+                                    }
 
                 archive_sources = [
                     path
