@@ -89,6 +89,45 @@ def test_reserve_training_probe_is_seed_deterministic_and_deduplicated():
     assert first.probe_sha256 == expected_hash
 
 
+def test_reserve_training_probe_class_indices_are_immutable():
+    pool = scan_target_present_pool(
+        [
+            _sample(1, 3, 4),
+            _sample(1, 3, 4),
+            _sample(1, 3, 4),
+        ]
+    )
+
+    split = reserve_training_probe(pool, seed=42)
+
+    with pytest.raises(TypeError):
+        split.probe_indices_by_class["building"] = ()
+
+
+def test_reserve_training_probe_uses_seed():
+    pool = scan_target_present_pool(
+        [
+            _sample(1, 3, 4),
+            _sample(1),
+            _sample(3),
+            _sample(4),
+            _sample(1, 3, 4),
+            _sample(1, 3),
+            _sample(3, 4),
+            _sample(1, 4),
+            _sample(1, 3, 4),
+        ]
+    )
+
+    seed_42 = reserve_training_probe(pool, seed=42)
+    seed_43 = reserve_training_probe(pool, seed=43)
+
+    assert (
+        seed_42.probe_indices_by_class != seed_43.probe_indices_by_class
+        or seed_42.probe_indices != seed_43.probe_indices
+    )
+
+
 def test_reserve_training_probe_rejects_nonpositive_count():
     pool = scan_target_present_pool(
         [_sample(1, 3, 4), _sample(1, 3, 4), _sample(1, 3, 4)]

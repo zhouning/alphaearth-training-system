@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import torch
 
@@ -38,8 +40,15 @@ class TargetPresentPool:
 class TrainingProbeSplit:
     training_samples: tuple[TargetPresentSample, ...]
     probe_indices: tuple[int, ...]
-    probe_indices_by_class: dict[str, tuple[int, ...]]
+    probe_indices_by_class: Mapping[str, tuple[int, ...]]
     probe_sha256: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "probe_indices_by_class",
+            MappingProxyType(dict(self.probe_indices_by_class)),
+        )
 
 
 def scan_target_present_pool(dataset) -> TargetPresentPool:
